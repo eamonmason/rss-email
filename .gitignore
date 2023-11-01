@@ -1,0 +1,6 @@
+.env
+*/cdk.out/*
+cdk.out/*
+**/feed_urls.json
+**/__pycache__
+.vscode

@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "rss_email"
+version = "0.1.0"
+description = "Delivers your daily RSS news via email."
+authors = ["Eamon Mason <eamon.mason@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+boto3 = "^1.28.49"
+feedparser = "^6.0.10"
+PyRSS2Gen = "^1.1"
+beautifulsoup4 = "^4.12.2"
+
+[tool.poetry.group.dev.dependencies]
+flake8 = "^6.1.0"
+prospector= "^0.12.2"
+pydocstyle = "^6.3.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.flake8]
+max-line-length = 120
