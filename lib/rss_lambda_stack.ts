@@ -1,6 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as events from 'aws-cdk-lib/aws-events'
+import { SnsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as targets from 'aws-cdk-lib/aws-events-targets'
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -31,6 +32,27 @@ export class RSSEmailStack extends cdk.Stack {
 
     const receive_topic = new sns.Topic(this, SNS_RECEIVE_EMAIL);
 
+    const MyTopicPolicy = new sns.TopicPolicy(this, 'RSSTopicSNSPolicy', {
+      topics: [receive_topic],
+    }); 
+    
+    MyTopicPolicy.document.addStatements(new iam.PolicyStatement({
+      sid: "0",
+      actions: ["SNS:Publish"],
+      principals: [new iam.ServicePrincipal('ses.amazonaws.com')],
+      resources: [receive_topic.topicArn],
+      conditions: 
+        {
+          "StringEquals": {
+            "AWS:SourceAccount": process.env.CDK_DEFAULT_ACCOUNT,
+          },
+          "StringLike": {
+            "AWS:SourceArn": "arn:aws:ses:*"
+          }
+        }
+      }
+    ));
+
     const receipt_rule_set = new ses.ReceiptRuleSet(this, RSS_RULE_SET_NAME, {
       rules: [
         { 
@@ -46,7 +68,7 @@ export class RSSEmailStack extends cdk.Stack {
         }          
       ]}
     )
-    
+
     const role = new iam.Role(this, 'RSSLambdaRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
@@ -129,7 +151,7 @@ export class RSSEmailStack extends cdk.Stack {
       schedule: events.Schedule.cron({ minute: '30', hour: '7', weekDay: '1-5' }),
     });
     emailerEventRule.addTarget(new targets.LambdaFunction(RSSEMailerFunction))
-    emailerEventRule.addTarget(new targets.SnsTopic(receive_topic))
+    RSSEMailerFunction.addEventSource(new SnsEventSource(receive_topic));
 
     const rssGenerationLogGroup = new logs.LogGroup(this, 'rssGenerationLogGroup', {
       logGroupName: `/aws/lambda/${RSSGenerationFunction.functionName}`,
