@@ -148,7 +148,7 @@ export class RSSEmailStack extends cdk.Stack {
     });
 
     const emailerEventRule = new events.Rule(this, 'emailerEventRule', {
-      schedule: events.Schedule.cron({ minute: '30', hour: '7', weekDay: '1-5' }),
+      schedule: events.Schedule.cron({ minute: '30', hour: '7', weekDay: '2-6' }),
     });
     emailerEventRule.addTarget(new targets.LambdaFunction(RSSEMailerFunction))
     RSSEMailerFunction.addEventSource(new SnsEventSource(receive_topic));
