@@ -4,3 +4,5 @@ cdk.out/*
 **/feed_urls.json
 **/__pycache__
 .vscode
+**/.pytest_cache
+.venv
