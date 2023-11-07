@@ -28,27 +28,25 @@ from botocore.exceptions import ClientError
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+CHARACTER_ENCODING = "utf-8"
 REMOTE_SERVER = "www.google.com"
 DAYS_OF_NEWS = 3
 FEED_DEFINITIONS_FILE = './feed_urls.json'
 
 
-def get_feed_items(url):
+def get_feed_items(url, timestamp):
     """Slurps feed url."""
-    timestamp = datetime.utcnow() - timedelta(days=3)
-    format_time = timestamp.strftime('%a, %d %b %Y %H:%M:%S GMT')
 
     feed_items = ''
     user_agent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_3) ' \
         'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.1916.47 Safari/537.36'
 
-    # with contextlib.closing(urllib2.urlopen(urllib2.Request(
     req_check_new = urllib.request.Request(
         url,
         data=None,
         headers={
             'User-Agent': user_agent,
-            'If-Modified-Since': format_time
+            'If-Modified-Since': timestamp.strftime('%a, %d %b %Y %H:%M:%S GMT')
         })
 
     req_retrieve = urllib.request.Request(
@@ -119,7 +117,7 @@ def get_feed(url, item, update_date):
     return articles
 
 
-def set_update_date(days=DAYS_OF_NEWS):
+def get_update_date(days=DAYS_OF_NEWS):
     """Get 3 days old RSS if no date/time available..."""
     time_three_days_ago = datetime.now()-timedelta(days)
     lookback_date = datetime(
@@ -129,7 +127,7 @@ def set_update_date(days=DAYS_OF_NEWS):
 
 
 def generate_rss(articles):
-    """Generate RSS output file."""
+    """Generate RSS output."""
     output = []
     if not articles:
         return
@@ -156,7 +154,7 @@ def generate_rss(articles):
         items=output)
 
     logger.debug("Found %s items", len(output))
-    return rss.to_xml('utf-8')
+    return rss.to_xml(CHARACTER_ENCODING)
 
 
 def is_connected():
@@ -174,7 +172,7 @@ def is_connected():
     return False
 
 
-def main(feed_file):
+def retrieve_rss_feeds(feed_file, update_date):
     """Run main orchestration function."""
     # Check there is an intenet connection, otherwise bail
 
@@ -188,7 +186,7 @@ def main(feed_file):
     with ThreadPoolExecutor(max_workers=5) as executor:
         # Start the load operations and mark each future with its URL
         future_to_url = {executor.submit(
-            get_feed_items, url): url for url in rss_urls}
+            get_feed_items, url, update_date): url for url in rss_urls}
         for future in concurrent.futures.as_completed(future_to_url):
             url = future_to_url[future]
             try:
@@ -197,7 +195,7 @@ def main(feed_file):
             except Exception as exc:
                 logger.warning('%r generated an exception: %s', url, exc)
 
-    update_date = set_update_date()
+    
     filtered_entries = []
     for item_url, item in rss_items.items():
         for f_item in get_feed(item_url, item, update_date):
@@ -207,11 +205,14 @@ def main(feed_file):
 
 def create_rss(event, context):
     """
-    Copy RSS XML to S3 bucket using Lambda.
+    Entry point for Lambda.
+
+    Copy generated RSS XML to S3 bucket.
 
     Expects environment variables set for BUCKET and KEY.
     """
-    content = main(FEED_DEFINITIONS_FILE)
+    update_date = get_update_date(DAYS_OF_NEWS)
+    content = retrieve_rss_feeds(FEED_DEFINITIONS_FILE, update_date)
     logger.debug("Uploading RSS content to S3 bucket")
     bucket = os.environ["BUCKET"]
     key = os.environ["KEY"]
@@ -220,8 +221,8 @@ def create_rss(event, context):
             Key=key,
             Body=content,
             Bucket=bucket,
-            ContentType='application/rss+xml; charset=utf-8',
-            ContentEncoding='utf-8')
+            ContentType=f'application/rss+xml; charset={CHARACTER_ENCODING}',
+            ContentEncoding=CHARACTER_ENCODING)
         logger.debug("RSS file uploaded to the S3 bucket")
     except ClientError as exc:
         logging.error(exc)
@@ -244,4 +245,6 @@ if __name__ == "__main__":
     ch.setFormatter(formatter)
     logger.addHandler(ch)
     logger.setLevel(logging.DEBUG)
-    print(main(args.feed_file))
+    update_date = get_update_date()
+
+    print(retrieve_rss_feeds(args.feed_file, update_date))
