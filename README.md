@@ -1,5 +1,7 @@
 # RSS Emailer
 
+![Lint and Unit Testing](https://github.com/eamonmason/rss-email/actions/workflows/lint_and_test.yml/badge.svg)
+
 Sends an aggregated bunch of feeds to you via email.
 
 ## Prepare for deployment
