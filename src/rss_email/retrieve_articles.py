@@ -130,7 +130,7 @@ def generate_rss(articles):
     """Generate RSS output."""
     output = []
     if not articles:
-        return
+        return ""
     output_list = []
     for source_article in articles:
         if source_article not in output_list:

@@ -93,10 +93,9 @@ def generate_html(last_run_date, s3_bucket, s3_prefix):
         logger.error(f"Error retrieving RSS file: {s3_bucket}/{s3_prefix}".format(e))
         return "Internal error retrieving RSS file."
 
-    root = ElementTree.fromstring(rss_file)
     all_items = []
     logger.debug("Retrieved RSS file. Last run date: %s", last_run_date)
-    for item in root.findall('.//item'):
+    for item in ElementTree.fromstring(rss_file).findall('.//item'):
         item_dict = {}
         for name in ['title', 'link', 'description', 'pubDate']:
             add_attribute_to_dict(item, name, item_dict)
@@ -109,12 +108,10 @@ def generate_html(last_run_date, s3_bucket, s3_prefix):
         if datetime.fromtimestamp(published_date) > last_run_date:
             all_items.append(item_dict)
 
-    sorted_items = sorted(all_items, key=lambda k: k['sortDate'], reverse=True)
-
     list_output = u""
 
     previous_day = ""
-    for item in sorted_items:
+    for item in sorted(all_items, key=lambda k: k['sortDate'], reverse=True):
         day = item['pubDate'][:3]
         if day != previous_day:
             list_output += f"<p><b>{day}</b></p>\n"
