@@ -33,15 +33,8 @@ def test_create_rss():
     print(obj)
     assert obj['Body'].read().decode('ASCII') == content
 
-def test_get_feed_urls():
-    """Tests that the feed URLs are returned correctly."""
-    feed_urls = get_feed_urls(os.path.join(os.path.dirname(__file__), 'test_urls.json'))
-    assert len(feed_urls) == 2
-    assert feed_urls[0] == 'https://foo.com/feed/'
-    assert feed_urls[1] == 'https://bar.com/posts.atom'
-
 @patch('rss_email.retrieve_articles.files')
-def test_get_feed_urls2(mock_file):
+def test_get_feed_urls(mock_file):
     """Tests that the feed URLs are returned correctly."""
     mock_file_obj = MagicMock()
     mock_file_obj.read_text.return_value = '''{
