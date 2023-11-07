@@ -16,7 +16,7 @@ beautifulsoup4 = "^4.12.2"
 flake8 = "^6.1.0"
 prospector= "^0.12.2"
 pydocstyle = "^6.3.0"
-pytest = "^6.2.5"
+pytest = "^7.4.3"
 moto = "^4.2.7"
 pylint = "^3.0.2"
 
