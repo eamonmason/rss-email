@@ -70,3 +70,15 @@ To retrieve the last 3 days of articles from a set of sources to the console (do
 and to retrieve the articles from a file in S3, and format an email, but not actually send it:
 
 ```poetry run python src/rss_email/email_articles.py```
+
+## Deploying the Pipeline
+
+Add a GitHub personal token to AWS Secrets Manager, for the github repo, called `github-token`.
+
+Deploy the pipeline itself.
+
+```sh
+cdk deploy --app "npx ts-node bin/pipeline-cdk.ts"
+```
+
+See [https://docs.aws.amazon.com/cdk/v2/guide/cdk_pipeline.html#cdk_pipeline_security](https://docs.aws.amazon.com/cdk/v2/guide/cdk_pipeline.html#cdk_pipeline_security) for more info.
