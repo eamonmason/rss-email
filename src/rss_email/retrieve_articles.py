@@ -195,7 +195,7 @@ def retrieve_rss_feeds(feed_file, update_date):
             except Exception as exc:
                 logger.warning('%r generated an exception: %s', url, exc)
 
-    
+
     filtered_entries = []
     for item_url, item in rss_items.items():
         for f_item in get_feed(item_url, item, update_date):
@@ -203,7 +203,7 @@ def retrieve_rss_feeds(feed_file, update_date):
     return generate_rss(sorted(filtered_entries, key=itemgetter('pubdate'), reverse=True))
 
 
-def create_rss(event, context):
+def create_rss(event, context): # pylint: disable=unused-argument
     """
     Entry point for Lambda.
 
@@ -227,16 +227,19 @@ def create_rss(event, context):
     except ClientError as exc:
         logging.error(exc)
         logging.error(
-            """Error uploading object {} from bucket {}.
-            Make sure they exist and your bucket is in the same region as this function.""".format(
-                key, bucket))
+            """Error uploading object %s from bucket %s.
+            Make sure they exist and your bucket is in the same region as this function.""",
+                key, bucket)
         raise exc
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Grabs a bunch of RSS feeds')
     parser.add_argument(
-        'feed_file', metavar='I', type=str, help='JSON file containing a list of names/urls, e.g. ./feed_urls.json')
+        'feed_file',
+        metavar='I',
+        type=str,
+        help='JSON file containing a list of names/urls, e.g. ./feed_urls.json')
     args = parser.parse_args()
     ch = logging.StreamHandler(sys.stdout)
     # ch.setLevel(logging.DEBUG)
@@ -245,6 +248,6 @@ if __name__ == "__main__":
     ch.setFormatter(formatter)
     logger.addHandler(ch)
     logger.setLevel(logging.DEBUG)
-    update_date = get_update_date()
+    retrieval_date = get_update_date()
 
-    print(retrieve_rss_feeds(args.feed_file, update_date))
+    print(retrieve_rss_feeds(args.feed_file, retrieval_date))

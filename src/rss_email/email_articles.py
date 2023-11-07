@@ -53,8 +53,8 @@ def get_last_run(parameter_name):
         parameter = ssm.get_parameter(Name=parameter_name)
         return datetime.strptime(parameter['Parameter']['Value'], "%Y-%m-%dT%H:%M:%S.%f")
     except ClientError as e:
-        logger.warn(e)
-        logger.warn("Error retrieving parameter from parameter store, retrieving default days.")
+        logger.warning(e)
+        logger.warning("Error retrieving parameter from parameter store, retrieving default days.")
         return (datetime.today() - timedelta(days=DAYS_OF_NEWS))
 
 
@@ -95,7 +95,7 @@ def generate_html(last_run_date, s3_bucket, s3_prefix):
 
     root = ElementTree.fromstring(rss_file)
     all_items = []
-    logger.debug(f"Retrieved RSS file. Last run date: {last_run_date}")
+    logger.debug("Retrieved RSS file. Last run date: %s", last_run_date)
     for item in root.findall('.//item'):
         item_dict = {}
         for name in ['title', 'link', 'description', 'pubDate']:
@@ -109,7 +109,7 @@ def generate_html(last_run_date, s3_bucket, s3_prefix):
         if datetime.fromtimestamp(published_date) > last_run_date:
             all_items.append(item_dict)
 
-    sorted_items = (sorted(all_items, key=lambda k: k['sortDate'], reverse=True))
+    sorted_items = sorted(all_items, key=lambda k: k['sortDate'], reverse=True)
 
     list_output = u""
 
@@ -133,19 +133,21 @@ def generate_html(last_run_date, s3_bucket, s3_prefix):
 
 def is_valid_email(event_dict, valid_emails):
     """Check if the email address is valid."""
-    if "Records" in event_dict and len(event_dict["Records"]) > 0 and "Sns" in event_dict["Records"][0]:
+    if ("Records" in event_dict
+        and len(event_dict["Records"]) > 0
+        and "Sns" in event_dict["Records"][0]):
         ses_notification = event_dict["Records"][0]["Sns"]["Message"]
         json_ses = json.loads(ses_notification)
         if json_ses["mail"]["source"].lower() not in [email.lower() for email in valid_emails]:
-            logger.warn("Invalid email address: {}".format(json_ses["mail"]["source"]))
+            logger.warning("Invalid email address: %s", json_ses["mail"]["source"])
             return False
 
     return True
 
 
-def send_email(event, context):
+def send_email(event, context): # pylint: disable=unused-argument
     """Send the email."""
-    logger.info("Event body: {}".format(event))
+    logger.debug("Event body: %s", event)
 
     bucket = os.environ["BUCKET"]
     key = os.environ["KEY"]
@@ -154,9 +156,9 @@ def send_email(event, context):
     parameter_name = os.environ["LAST_RUN_PARAMETER"]
     if not is_valid_email(event, [to_email_address]):
         return
-    last_run_date = get_last_run(parameter_name)
+    run_date = get_last_run(parameter_name)
 
-    body = generate_html(last_run_date, bucket, key)
+    body = generate_html(run_date, bucket, key)
 
     # Create a new SES resource
     client = boto3.client('ses')
@@ -189,20 +191,22 @@ def send_email(event, context):
             Source=source_email_address,
         )
     except ClientError as e:
-        logger.warn(f"got an error: {e.response}")
+        logger.warning("got an error: %s", e.response)
     else:
-        logger.debug("Email sent! Message ID: {}".format(response['MessageId']))
+        logger.debug("Email sent! Message ID: %s", response['MessageId'])
         set_last_run(parameter_name)
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Creates a HTML version of RSS for email delivery.')
+def main():
+    """Main function when invoked from command line and not lambda."""
+    parser = argparse.ArgumentParser(
+        description='Creates a HTML version of RSS for email delivery.')
     parser.add_argument(
         'rss_host', type=str, help='XML RSS S3 bucket, e.g. myfeedbucket')
     parser.add_argument(
         'rss_prefix', type=str, help='XML RSS file, e.g. rss.xml')
     args = parser.parse_args()
-    last_run_date = datetime.today() - timedelta(days=DAYS_OF_NEWS)
+    run_date = datetime.today() - timedelta(days=DAYS_OF_NEWS)
     ch = logging.StreamHandler(sys.stdout)
     ch.setLevel(logging.DEBUG)
     formatter = logging.Formatter(
@@ -210,4 +214,7 @@ if __name__ == "__main__":
     ch.setFormatter(formatter)
     logger.addHandler(ch)
     logger.setLevel(logging.DEBUG)
-    logger.info(generate_html(last_run_date, args.rss_host, args.rss_prefix))
+    logger.info(generate_html(run_date, args.rss_host, args.rss_prefix))
+
+if __name__ == "__main__":
+    main()
