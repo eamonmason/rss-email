@@ -44,7 +44,7 @@ def test_create_rss():
     # Call create_rss function, with appropriate env variables
     os.environ['BUCKET'] = bucket_name
     os.environ['KEY'] = key
-
+    os.environ['FEED_DEFINITIONS_FILE'] = 'test-file'
     create_rss(None, None)
 
     # Check that the file was uploaded to S3
