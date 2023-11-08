@@ -16,7 +16,7 @@ export class RSSPipelineStack extends cdk.Stack {
       })
     });
 
-    const testingStage = pipeline.addStage(new RSSPipelineAppStage(this, "test", {
+    const testingStage = pipeline.addStage(new RSSPipelineAppStage(this, "cd", {
         env: {
             account: process.env.AWS_ACCOUNT_ID,
             region: process.env.AWS_REGION
