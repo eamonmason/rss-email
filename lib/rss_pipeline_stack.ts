@@ -1,9 +1,9 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { CodePipeline, CodePipelineSource, ShellStep } from 'aws-cdk-lib/pipelines';
-import { BuildEnvironmentVariableType } from '@aws-cdk/aws-codebuild'
+import { CodePipeline, CodePipelineSource, CodeBuildStep } from 'aws-cdk-lib/pipelines';
 import { RSSPipelineAppStage } from './rss_pipeline_app_stage';
 import { ManualApprovalStep } from 'aws-cdk-lib/pipelines';
+import {BuildEnvironmentVariableType} from 'aws-cdk-lib/aws-codebuild';
 
 export class RSSPipelineStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -11,11 +11,9 @@ export class RSSPipelineStack extends cdk.Stack {
 
     const pipeline = new CodePipeline(this, 'Pipeline', {
       pipelineName: 'RSSPipeline',
-      synth: new ShellStep('Synth', {
+      synth: new CodeBuildStep('Synth', {
         input: CodePipelineSource.gitHub('eamonmason/rss-email', 'main'),
-        commands: ['npm ci', 'npx cdk synth']
-      }),
-      codeBuildDefaults: {
+        commands: ['npm ci', 'npx cdk synth'],
         buildEnvironment: {
           environmentVariables: {
             SOURCE_DOMAIN: { value: 'rss-email-SOURCE_DOMAIN', type: BuildEnvironmentVariableType.PARAMETER_STORE},
@@ -26,7 +24,7 @@ export class RSSPipelineStack extends cdk.Stack {
             AWS_REGION: {value: 'rss-email-AWS_REGION', type: BuildEnvironmentVariableType.PARAMETER_STORE},
           }
         }
-      }
+      })        
     });
 
     const testingStage = pipeline.addStage(new RSSPipelineAppStage(this, "cd", {
