@@ -12,7 +12,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "aws-cdk": "^2.104.0",
+    "aws-cdk-lib": "^2.104.0",
     "dotenv": "^16.3.1"
   }
 }
