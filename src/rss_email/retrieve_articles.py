@@ -31,8 +31,6 @@ logger.setLevel(logging.INFO)
 CHARACTER_ENCODING = "utf-8"
 REMOTE_SERVER = "www.google.com"
 DAYS_OF_NEWS = 3
-FEED_DEFINITIONS_FILE = './feed_urls.json'
-
 
 def get_feed_items(url, timestamp):
     """Slurps feed url."""
@@ -78,9 +76,20 @@ def get_feed_items(url, timestamp):
 
 
 def get_feed_urls(feed_file):
-    """Extract feed urls from a given section in an OPML file, defaults to RSS."""
+    """
+    Extract feed urls from a json file containing a list of items 'url'.
+    It detects whether the file is local or on S3.
+    """
     url_list = []
-    data = json.loads(files("rss_email").joinpath(feed_file).read_text())
+    text_data = ""
+    if feed_file.startswith("s3://"):
+        bucket, feed_file = feed_file[5:].split("/", 1)
+        text_data = boto3.client('s3').get_object(
+            Bucket=bucket,
+            Key=feed_file).get('Body').read().decode('utf-8')
+    else:
+        text_data = files("rss_email").joinpath(feed_file).read_text()
+    data = json.loads(text_data)
     for i in data['feeds']:
         if 'url' in i:
             url_list.append(i['url'])
@@ -212,10 +221,11 @@ def create_rss(event, context): # pylint: disable=unused-argument
     Expects environment variables set for BUCKET and KEY.
     """
     update_date = get_update_date(DAYS_OF_NEWS)
-    content = retrieve_rss_feeds(FEED_DEFINITIONS_FILE, update_date)
     logger.debug("Uploading RSS content to S3 bucket")
     bucket = os.environ["BUCKET"]
     key = os.environ["KEY"]
+    feeds_file = os.environ["FEED_DEFINITIONS_FILE"]
+    content = retrieve_rss_feeds(feeds_file, update_date)
     try:
         boto3.client('s3').put_object(
             Key=key,

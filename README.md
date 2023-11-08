@@ -75,10 +75,21 @@ and to retrieve the articles from a file in S3, and format an email, but not act
 
 Add a GitHub personal token to AWS Secrets Manager, for the github repo, called `github-token`.
 
+Put the following environment variables in parameter store, with appropriate values (as described above with the `.env` file):
+
+- `rss-email-AWS_ACCOUNT_ID`
+- `rss-email-AWS_REGION`
+- `rss-email-EMAIL_RECIPIENTS`
+- `rss-email-SOURCE_DOMAIN`
+- `rss-email-SOURCE_EMAIL_ADDRESS`
+- `rss-email-TO_EMAIL_ADDRESS`
+
 Deploy the pipeline itself.
 
 ```sh
 cdk deploy --app "npx ts-node bin/pipeline-cdk.ts"
 ```
+
+Once the deploy has completed successfully, upload the `feed_urls.json` file to the new S3 bucket.
 
 See [https://docs.aws.amazon.com/cdk/v2/guide/cdk_pipeline.html#cdk_pipeline_security](https://docs.aws.amazon.com/cdk/v2/guide/cdk_pipeline.html#cdk_pipeline_security) for more info.
