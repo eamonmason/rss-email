@@ -1,0 +1,18 @@
+{
+  "name": "rss-email",
+  "version": "1.0.0",
+  "description": "![Lint and Unit Testing](https://github.com/eamonmason/rss-email/actions/workflows/lint_and_test.yml/badge.svg)",
+  "main": "index.js",
+  "directories": {
+    "lib": "lib"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "aws-cdk": "^2.104.0",
+    "dotenv": "^16.3.1"
+  }
+}

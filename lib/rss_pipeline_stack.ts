@@ -12,7 +12,7 @@ export class RSSPipelineStack extends cdk.Stack {
       pipelineName: 'RSSPipeline',
       synth: new ShellStep('Synth', {
         input: CodePipelineSource.gitHub('eamonmason/rss-email', 'main'),
-        commands: ['npx cdk synth']
+        commands: ['npm ci', 'npm run build', 'npx cdk synth']
       })
     });
 
