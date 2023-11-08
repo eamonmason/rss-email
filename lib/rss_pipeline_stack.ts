@@ -22,6 +22,7 @@ export class RSSPipelineStack extends cdk.Stack {
             EMAIL_RECIPIENTS: {value: 'rss-email-EMAIL_RECIPIENTS', type: BuildEnvironmentVariableType.PARAMETER_STORE},
             AWS_ACCOUNT_ID: {value: 'rss-email-AWS_ACCOUNT_ID', type: BuildEnvironmentVariableType.PARAMETER_STORE},
             AWS_REGION: {value: 'rss-email-AWS_REGION', type: BuildEnvironmentVariableType.PARAMETER_STORE},
+            FEED_DEFINITIONS_FILE: {value: 'rss-email-FEED_DEFINITIONS_FILE', type: BuildEnvironmentVariableType.PARAMETER_STORE}
           }
         }
       })        

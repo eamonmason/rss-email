@@ -25,6 +25,7 @@ export class RSSEmailStack extends cdk.Stack {
     const SOURCE_EMAIL_ADDRESS = process.env.SOURCE_EMAIL_ADDRESS || "";
     const TO_EMAIL_ADDRESS = process.env.TO_EMAIL_ADDRESS || "";
     const EMAIL_RECIPIENTS = process.env.EMAIL_RECIPIENTS?.split(',') || [];
+    const FEED_DEFINITIONS_FILE = process.env.FEED_DEFINITIONS_FILE || "";
 
     const bucket = new s3.Bucket(this, BUCKET_NAME, {
       versioned: false,
@@ -120,6 +121,7 @@ export class RSSEmailStack extends cdk.Stack {
       environment: {
         BUCKET: bucket.bucketName,
         KEY: KEY,
+        FEED_DEFINITIONS_FILE: FEED_DEFINITIONS_FILE
       },
       role: role,
       layers: [layer],
