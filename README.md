@@ -90,6 +90,21 @@ Deploy the pipeline itself.
 cdk deploy --app "npx ts-node bin/pipeline-cdk.ts"
 ```
 
-Once the deploy has completed successfully, upload the `feed_urls.json` file to the new S3 bucket.
+Once the deploy has completed successfully, upload the `feed_urls.json` file to the new S3 bucket, for example:
+
+```json
+{
+    "feeds": [
+        {
+            "name": "Krebs on Security",
+            "url": "https://krebsonsecurity.com/feed/"
+        },        
+        {
+            "name": "The Register",
+            "url": "http://www.theregister.co.uk/data_centre/cloud/headlines.atom"
+        }
+    ]
+}
+```
 
 See [https://docs.aws.amazon.com/cdk/v2/guide/cdk_pipeline.html#cdk_pipeline_security](https://docs.aws.amazon.com/cdk/v2/guide/cdk_pipeline.html#cdk_pipeline_security) for more info.
