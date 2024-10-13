@@ -115,8 +115,9 @@ def generate_html(last_run_date, s3_bucket, s3_prefix):
         day = item['pubDate'][:3]
         if day != previous_day:
             list_output += f"<p><b>{day}</b></p>\n"
-            previous_day = day
-
+            previous_day = day        
+        if len(item['description']) > 1000:
+            item['description'] = item['description'][:1000] + "..." 
         list_output += f"""
             <div class="tooltip">
             <a href="{item['link']}">{item['title']}</a>
