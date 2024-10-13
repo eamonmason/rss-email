@@ -19,6 +19,7 @@ from bs4 import BeautifulSoup
 CHARSET = "UTF-8"
 DAYS_OF_NEWS = 3
 EMAIL_SUBJECT = 'Daily News'
+DESCRIPTION_MAX_LENGTH = 1000
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -32,18 +33,16 @@ def get_description_body(html):
     for s in parsed_html.select('iframe'):
         s.decompose()
 
-    stripped_html = parsed_html
+    body_text = str("")
     if parsed_html.find('html'):
         if parsed_html.body:
-            stripped_html = parsed_html.body.text
-
-    if len(stripped_html) > 20:
-        child_offset = 0
-        for child in stripped_html.findChildren():
-            if child_offset > 20:
-                child.decompose()
-            child_offset += 1
-    return stripped_html
+            body_text = parsed_html.body.text
+    if len(body_text) == 0:
+        if len(parsed_html.get_text()) > DESCRIPTION_MAX_LENGTH:
+            body_text = parsed_html.get_text()[:DESCRIPTION_MAX_LENGTH]
+        else:
+            body_text = parsed_html
+    return body_text
 
 
 def get_last_run(parameter_name):
@@ -116,8 +115,6 @@ def generate_html(last_run_date, s3_bucket, s3_prefix):
         if day != previous_day:
             list_output += f"<p><b>{day}</b></p>\n"
             previous_day = day
-        if len(item['description']) > 1000:
-            item['description'] = item['description'][:1000] + "..."
         list_output += f"""
             <div class="tooltip">
             <a href="{item['link']}">{item['title']}</a>
