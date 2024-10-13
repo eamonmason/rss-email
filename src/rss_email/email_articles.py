@@ -108,16 +108,16 @@ def generate_html(last_run_date, s3_bucket, s3_prefix):
         if datetime.fromtimestamp(published_date) > last_run_date:
             all_items.append(item_dict)
 
-    list_output = u""
+    list_output = ""
 
     previous_day = ""
     for item in sorted(all_items, key=lambda k: k['sortDate'], reverse=True):
         day = item['pubDate'][:3]
         if day != previous_day:
             list_output += f"<p><b>{day}</b></p>\n"
-            previous_day = day        
+            previous_day = day
         if len(item['description']) > 1000:
-            item['description'] = item['description'][:1000] + "..." 
+            item['description'] = item['description'][:1000] + "..."
         list_output += f"""
             <div class="tooltip">
             <a href="{item['link']}">{item['title']}</a>
