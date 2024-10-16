@@ -36,12 +36,17 @@ def get_description_body(html):
     body_text = str("")
     if parsed_html.find('html'):
         if parsed_html.body:
-            body_text = parsed_html.body.text
-    if len(body_text) == 0:
-        if len(parsed_html.get_text()) > DESCRIPTION_MAX_LENGTH:
-            body_text = parsed_html.get_text()[:DESCRIPTION_MAX_LENGTH]
+            body_text = str(parsed_html.body)
         else:
-            body_text = parsed_html
+            body_text = str(parsed_html.html)
+    else:
+        body_text = str(parsed_html)
+
+    if len(body_text) == 0:
+        body_text = parsed_html.get_text()
+    if len(body_text) > DESCRIPTION_MAX_LENGTH:
+        body_text = parsed_html.get_text()[:DESCRIPTION_MAX_LENGTH] + '...'
+
     return body_text
 
 
@@ -73,7 +78,10 @@ def add_attribute_to_dict(item, name, target_dict):
     """Add an attribute to a dictionary."""
     tmp_attribute = item.find(name)
     if tmp_attribute is not None:
-        target_dict[name] = tmp_attribute.text
+        if name == 'description':
+            target_dict[name] = get_description_body(tmp_attribute.text)
+        else:
+            target_dict[name] = tmp_attribute.text
 
 
 def read_s3_file(bucket_name, s3_key):
@@ -84,14 +92,23 @@ def read_s3_file(bucket_name, s3_key):
     return file_content
 
 
-def generate_html(last_run_date, s3_bucket, s3_prefix):
-    """Generate the HTML for the email."""
-    try:
-        rss_file = read_s3_file(s3_bucket, s3_prefix)
-    except HTTPError as e:
-        logger.error(f"Error retrieving RSS file: {s3_bucket}/{s3_prefix}".format(e))
-        return "Internal error retrieving RSS file."
+def get_feed_file(s3_bucket, s3_prefix, local_file=None):
+    """Get the feed file."""
+    rss_file = None
+    if local_file:
+        with open(local_file, 'r', encoding='UTF-8') as file:
+            rss_file = file.read()
+    else:
+        try:
+            rss_file = read_s3_file(s3_bucket, s3_prefix)
+        except HTTPError as e:
+            logger.error(f"Error retrieving RSS file: {s3_bucket}/{s3_prefix}".format(e))
+            return "Internal error retrieving RSS file."
+    return rss_file
 
+
+def filter_items(rss_file, last_run_date):
+    """Filter items based on the last run date."""
     all_items = []
     logger.debug("Retrieved RSS file. Last run date: %s", last_run_date)
     for item in ElementTree.fromstring(rss_file).findall('.//item'):
@@ -106,11 +123,17 @@ def generate_html(last_run_date, s3_bucket, s3_prefix):
         item_dict["sortDate"] = published_date
         if datetime.fromtimestamp(published_date) > last_run_date:
             all_items.append(item_dict)
+    return all_items
+
+
+def generate_html(last_run_date, s3_bucket, s3_prefix, local_file=None):
+    """Generate the HTML for the email."""
+    rss_file = get_feed_file(s3_bucket, s3_prefix, local_file)
+    filtered_items = filter_items(rss_file, last_run_date)
 
     list_output = ""
-
     previous_day = ""
-    for item in sorted(all_items, key=lambda k: k['sortDate'], reverse=True):
+    for item in sorted(filtered_items, key=lambda k: k['sortDate'], reverse=True):
         day = item['pubDate'][:3]
         if day != previous_day:
             list_output += f"<p><b>{day}</b></p>\n"
@@ -130,7 +153,7 @@ def is_valid_email(event_dict, valid_emails):
     """Check if the email address is valid."""
     if ("Records" in event_dict
         and len(event_dict["Records"]) > 0
-        and "Sns" in event_dict["Records"][0]):
+            and "Sns" in event_dict["Records"][0]):
         ses_notification = event_dict["Records"][0]["Sns"]["Message"]
         json_ses = json.loads(ses_notification)
         if json_ses["mail"]["source"].lower() not in [email.lower() for email in valid_emails]:
@@ -140,7 +163,7 @@ def is_valid_email(event_dict, valid_emails):
     return True
 
 
-def send_email(event, context): # pylint: disable=unused-argument
+def send_email(event, context):  # pylint: disable=unused-argument
     """Send the email."""
     logger.debug("Event body: %s", event)
 
@@ -200,6 +223,10 @@ def main():
         'rss_host', type=str, help='XML RSS S3 bucket, e.g. myfeedbucket')
     parser.add_argument(
         'rss_prefix', type=str, help='XML RSS file, e.g. rss.xml')
+    # Add optional argument to retrieve a file locally instead of from an S3 bucket
+    parser.add_argument(
+        '--local-file', type=str, help='Path to a local XML RSS file')
+
     args = parser.parse_args()
     run_date = datetime.today() - timedelta(days=DAYS_OF_NEWS)
     ch = logging.StreamHandler(sys.stdout)
@@ -209,7 +236,8 @@ def main():
     ch.setFormatter(formatter)
     logger.addHandler(ch)
     logger.setLevel(logging.DEBUG)
-    logger.info(generate_html(run_date, args.rss_host, args.rss_prefix))
+    logger.info(generate_html(run_date, args.rss_host, args.rss_prefix, args.local_file))
+
 
 if __name__ == "__main__":
     main()
