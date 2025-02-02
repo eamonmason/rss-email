@@ -15,16 +15,17 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from importlib.resources import files
-from operator import itemgetter
 from socket import timeout
 from time import mktime
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 from urllib.error import HTTPError, URLError
 
 import boto3
 import feedparser
+import pydantic
 import PyRSS2Gen
 from botocore.exceptions import ClientError
+from pydantic import BaseModel, Field, HttpUrl
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -34,6 +35,7 @@ REMOTE_SERVER = "www.google.com"
 DAYS_OF_NEWS = 3
 
 
+@pydantic.validate_call(validate_return=True)
 def get_feed_items(url: str, timestamp: datetime) -> bytes:
     """Slurps feed url."""
 
@@ -76,6 +78,7 @@ def get_feed_items(url: str, timestamp: datetime) -> bytes:
     return feed_items
 
 
+@pydantic.validate_call(validate_return=True)
 def get_feed_urls(feed_file: str) -> List[str]:
     """
     Extract feed urls from a json file containing a list of items 'url'.
@@ -101,9 +104,18 @@ def get_feed_urls(feed_file: str) -> List[str]:
     return url_list
 
 
-def get_feed(
-    url: str, item: bytes, update_date: datetime
-) -> List[Dict[str, Union[str, datetime]]]:
+class Article(BaseModel):
+    title: str = Field(min_length=1)
+    link: HttpUrl
+    description: Optional[str] = ""
+    pubdate: datetime
+
+    def __lt__(self, other):
+        return self.pubdate < other.pubdate
+
+
+@pydantic.validate_call(validate_return=True)
+def get_feed(url: str, item: bytes, update_date: datetime) -> List[Article]:
     """Get items from defined feed for a given period of time."""
     feed_list = feedparser.parse(item)
     articles = []
@@ -120,16 +132,16 @@ def get_feed(
             break
         feed_datetime = datetime.fromtimestamp(mktime(feed_date))
         if feed_datetime > update_date:
-            out_article = {
-                "title": article.title,
-                "link": article.link,
-                "pubdate": feed_datetime,
-                "description": "",
-            }
+            out_article = Article(
+                title=article.title,
+                link=article.link,
+                pubdate=feed_datetime,
+            )
+
             if hasattr(article, "summary"):
-                out_article["description"] = article["summary"]
+                out_article.description = article["summary"]
             elif hasattr(article, "description"):
-                out_article["description"] = article["description"]
+                out_article.description = article["description"]
             articles.append(out_article)
 
     if not articles:
@@ -139,6 +151,7 @@ def get_feed(
     return articles
 
 
+@pydantic.validate_call(validate_return=True)
 def get_update_date(days: int = DAYS_OF_NEWS) -> datetime:
     """Get 3 days old RSS if no date/time available..."""
     time_three_days_ago = datetime.now() - timedelta(days)
@@ -149,7 +162,8 @@ def get_update_date(days: int = DAYS_OF_NEWS) -> datetime:
     return lookback_date
 
 
-def generate_rss(articles: List[Dict[str, Union[str, datetime]]]) -> str:
+@pydantic.validate_call(validate_return=True)
+def generate_rss(articles: List[Article]) -> str:
     """Generate RSS output."""
     output = []
     if not articles:
@@ -161,11 +175,11 @@ def generate_rss(articles: List[Dict[str, Union[str, datetime]]]) -> str:
     for article in output_list:
         output.append(
             PyRSS2Gen.RSSItem(
-                title=article["title"],
-                link=article["link"],
-                description=article["description"],
-                guid=PyRSS2Gen.Guid(article["link"]),
-                pubDate=article["pubdate"],
+                title=article.title,
+                link=str(article.link),
+                description=article.description,
+                guid=PyRSS2Gen.Guid(str(article.link)),
+                pubDate=article.pubdate,
             )
         )
 
@@ -181,6 +195,7 @@ def generate_rss(articles: List[Dict[str, Union[str, datetime]]]) -> str:
     return rss.to_xml(CHARACTER_ENCODING)
 
 
+@pydantic.validate_call(validate_return=True)
 def is_connected() -> bool:
     """Check if there is an internet connection."""
     try:
@@ -196,6 +211,7 @@ def is_connected() -> bool:
     return False
 
 
+@pydantic.validate_call(validate_return=True)
 def retrieve_rss_feeds(feed_file: str, update_date: datetime) -> str:
     """Run main orchestration function."""
     # Check there is an intenet connection, otherwise bail
@@ -224,11 +240,10 @@ def retrieve_rss_feeds(feed_file: str, update_date: datetime) -> str:
     for item_url, item in rss_items.items():
         for f_item in get_feed(item_url, item, update_date):
             filtered_entries.append(f_item)
-    return generate_rss(
-        sorted(filtered_entries, key=itemgetter("pubdate"), reverse=True)
-    )
+    return generate_rss(sorted(filtered_entries, reverse=True))
 
 
+@pydantic.validate_call(validate_return=True)
 def create_rss(event: Dict[str, Any], context: Optional[Any] = None) -> None:  # pylint: disable=unused-argument
     """
     Entry point for Lambda.

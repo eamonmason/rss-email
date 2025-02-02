@@ -1,8 +1,16 @@
+import os
 import unittest
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
+import boto3
+from moto import mock_s3
+from pydantic import HttpUrl
+
+import rss_email.retrieve_articles
 from rss_email.retrieve_articles import (
+    Article,
+    create_rss,
     generate_rss,
     get_feed,
     get_feed_items,
@@ -11,6 +19,8 @@ from rss_email.retrieve_articles import (
     is_connected,
     retrieve_rss_feeds,
 )
+
+EXAMPLE_RSS_FILE = "example_rss_file.xml"
 
 
 class TestRetrieveArticles(unittest.TestCase):
@@ -57,12 +67,12 @@ class TestRetrieveArticles(unittest.TestCase):
 
     def test_generate_rss(self):
         articles = [
-            {
-                "title": "Article 1",
-                "link": "http://example.com/1",
-                "pubdate": datetime.now(),
-                "description": "Description 1",
-            }
+            Article(
+                title="Article 1",
+                link=HttpUrl("http://example.com/1"),
+                pubdate=datetime.now(),
+                description="Description 1",
+            )
         ]
         result = generate_rss(articles)
         self.assertIn("<title>Article 1</title>", result)
@@ -93,6 +103,78 @@ class TestRetrieveArticles(unittest.TestCase):
             "feed_file.json", datetime.now() - timedelta(days=3)
         )
         self.assertIn("<rss>RSS content</rss>", result)
+
+    @mock_s3
+    def test_create_rss(self):
+        # Set up environment variables
+        os.environ["BUCKET"] = "test-bucket"
+        os.environ["KEY"] = "rss.xml"
+        os.environ["FEED_DEFINITIONS_FILE"] = "test-file"
+
+        # Set up S3 and mock
+        s3 = boto3.client("s3")
+        s3.create_bucket(Bucket="test-bucket")
+        test_content = "<rss><title>Test RSS</title></rss>"
+        rss_email.retrieve_articles.retrieve_rss_feeds = MagicMock(
+            return_value=test_content
+        )
+
+        try:
+            create_rss({"blah": "blah2"}, None)
+            response = s3.get_object(Bucket="test-bucket", Key="rss.xml")
+            content = response["Body"].read().decode("utf-8")
+            self.assertEqual(content, test_content)
+        finally:
+            # Clean up environment variables
+            os.environ.pop("BUCKET", None)
+            os.environ.pop("KEY", None)
+            os.environ.pop("FEED_DEFINITIONS_FILE", None)
+
+    EXAMPLE_RSS_FILE = """
+    {
+            "feeds": [
+                {
+                    "name": "Test Feed A",
+                    "url": "https://foo.com/feed/"
+                },
+                {
+                    "name": "Test Feed B",
+                    "url": "https://bar.com/posts.atom"
+                },
+                {
+                    "name": "Test Feed C",
+                    "_url": "https://acme.com/feed.xml"
+                }
+            ]
+        }
+    """
+
+    @mock_s3
+    def test_create_rss2(self):
+        """Tests that the RSS file is created and uploaded to S3."""
+        # Set up mock S3 bucket
+        bucket_name = "test-bucket"
+        key = "test-key"
+        content = "test"
+        s3 = boto3.client("s3")
+        s3.create_bucket(Bucket=bucket_name)
+        rss_email.retrieve_articles.retrieve_rss_feeds = MagicMock(return_value=content)
+
+        try:
+            # Call create_rss function, with appropriate env variables
+            os.environ["BUCKET"] = bucket_name
+            os.environ["KEY"] = key
+            os.environ["FEED_DEFINITIONS_FILE"] = "test-file"
+            create_rss({"test": "blah"}, None)
+
+            # Check that the file was uploaded to S3
+            obj = s3.get_object(Bucket=bucket_name, Key=key)
+            self.assertEqual(obj["Body"].read().decode("ASCII"), content)
+        finally:
+            # Clean up environment variables
+            os.environ.pop("BUCKET", None)
+            os.environ.pop("KEY", None)
+            os.environ.pop("FEED_DEFINITIONS_FILE", None)
 
 
 if __name__ == "__main__":

@@ -16,6 +16,7 @@ from urllib.error import HTTPError
 from xml.etree import ElementTree
 
 import boto3
+import pydantic
 from botocore.exceptions import ClientError
 from bs4 import BeautifulSoup
 
@@ -69,6 +70,7 @@ def get_last_run(parameter_name: str) -> datetime:
         return datetime.today() - timedelta(days=DAYS_OF_NEWS)
 
 
+@pydantic.validate_call(validate_return=True)
 def set_last_run(parameter_name: str) -> None:
     """Set the last run timestamp in parameter store."""
     current_timestamp = datetime.now().isoformat()
@@ -94,6 +96,7 @@ def add_attribute_to_dict(
             target_dict[name] = tmp_attribute.text
 
 
+@pydantic.validate_call(validate_return=True)
 def read_s3_file(bucket_name: str, s3_key: str) -> str:
     """Read a file from S3."""
     s3 = boto3.client("s3")
@@ -102,6 +105,7 @@ def read_s3_file(bucket_name: str, s3_key: str) -> str:
     return file_content
 
 
+@pydantic.validate_call(validate_return=True)
 def get_feed_file(
     s3_bucket: str, s3_prefix: str, local_file: Optional[str] = None
 ) -> str:
@@ -121,6 +125,7 @@ def get_feed_file(
     return rss_file
 
 
+@pydantic.validate_call(validate_return=True)
 def filter_items(rss_file: str, last_run_date: datetime):
     """Filter items based on the last run date."""
     all_items = []
@@ -141,6 +146,7 @@ def filter_items(rss_file: str, last_run_date: datetime):
     return all_items
 
 
+@pydantic.validate_call(validate_return=True)
 def generate_html(
     last_run_date: datetime,
     s3_bucket: str,
@@ -169,6 +175,7 @@ def generate_html(
     return html.format(subject=EMAIL_SUBJECT, articles=list_output)
 
 
+@pydantic.validate_call(validate_return=True)
 def is_valid_email(event_dict: Dict[str, Any], valid_emails: List[str]) -> bool:
     """Check if the email address is valid."""
     if (
@@ -239,6 +246,7 @@ def send_email(event: Dict[str, Any], context: Optional[Any] = None) -> None:
         set_last_run(parameter_name)
 
 
+@pydantic.validate_call(validate_return=True)
 def main() -> None:
     """Main function when invoked from command line and not lambda."""
     parser = argparse.ArgumentParser(
