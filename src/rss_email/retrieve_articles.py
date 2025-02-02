@@ -105,6 +105,10 @@ def get_feed_urls(feed_file: str) -> List[str]:
 
 
 class Article(BaseModel):
+    """
+    RSS Article model.
+    """
+
     title: str = Field(min_length=1)
     link: HttpUrl
     description: Optional[str] = ""
@@ -233,7 +237,7 @@ def retrieve_rss_feeds(feed_file: str, update_date: datetime) -> str:
             try:
                 data = future.result()
                 rss_items[url] = data
-            except Exception as exc:
+            except Exception as exc:  # pylint: disable=W0718
                 logger.warning("%r generated an exception: %s", url, exc)
 
     filtered_entries = []

@@ -1,3 +1,5 @@
+"""Unit tests for the email_articles module."""
+
 # Rename this file to test_email_articles.py to ensure pytest discovers it
 
 import unittest
@@ -7,7 +9,9 @@ from unittest.mock import MagicMock, patch
 from rss_email.email_articles import send_email
 
 
-class TestEmailArticles(unittest.TestCase):  # Renamed class to start with 'Test'
+class TestEmailArticles(unittest.TestCase):
+    """Test cases for the email_articles module's send_email function."""
+
     @patch("rss_email.email_articles.boto3.client")
     @patch.dict(
         "os.environ",
@@ -20,6 +24,15 @@ class TestEmailArticles(unittest.TestCase):  # Renamed class to start with 'Test
         },
     )
     def test_send_email(self, mock_boto3_client):
+        """
+        Test the send_email function with mocked AWS services.
+
+        Tests that the function correctly processes RSS content and sends an email
+        using mocked S3, SSM, and SES services.
+
+        Args:
+            mock_boto3_client: Mocked boto3 client for AWS services
+        """
         # Mock SSM client and parameter response
         mock_ssm_client = MagicMock()
         mock_ssm_client.get_parameter.return_value = {

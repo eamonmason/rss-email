@@ -1,3 +1,9 @@
+"""Unit tests for the retrieve_articles module.
+
+This module contains test cases for RSS feed retrieval, parsing, and processing
+functionality including S3 integration tests using moto mock.
+"""
+
 import os
 import unittest
 from datetime import datetime, timedelta
@@ -24,8 +30,11 @@ EXAMPLE_RSS_FILE = "example_rss_file.xml"
 
 
 class TestRetrieveArticles(unittest.TestCase):
+    """Test suite for RSS feed retrieval and processing functionality."""
+
     @patch("rss_email.retrieve_articles.urllib.request.urlopen")
     def test_get_feed_items(self, mock_urlopen):
+        """Test retrieval of feed items from a URL with mocked urllib."""
         mock_context = MagicMock()
         mock_context.__enter__.return_value.read.return_value = b"feed data"
         mock_urlopen.return_value = mock_context
@@ -37,6 +46,7 @@ class TestRetrieveArticles(unittest.TestCase):
 
     @patch("rss_email.retrieve_articles.urllib.request.urlopen")
     def test_get_feed(self, mock_urlopen):
+        """Test feed parsing and processing with mocked URL response."""
         mock_context = MagicMock()
         mock_context.__enter__.return_value.read.return_value = b"feed data"
         mock_urlopen.return_value = mock_context
@@ -51,21 +61,24 @@ class TestRetrieveArticles(unittest.TestCase):
     @patch("rss_email.retrieve_articles.boto3.client")
     @patch("rss_email.retrieve_articles.files")
     def test_get_feed_urls(self, mock_files, mock_boto3_client):
+        """Test extraction of feed URLs from both local and S3 JSON files."""
         mock_files.return_value.joinpath.return_value.read_text.return_value = (
             '{"feeds": [{"url": "http://example.com/rss"}]}'
         )
         result = get_feed_urls("local_feed_file.json")
         self.assertEqual(result, ["http://example.com/rss"])
 
-        mock_boto3_client.return_value.get_object.return_value.get.return_value.read.return_value.decode.return_value = '{"feeds": [{"url": "http://example.com/rss"}]}'
+        mock_boto3_client.return_value.get_object.return_value.get.return_value.read.return_value.decode.return_value = '{"feeds": [{"url": "http://example.com/rss"}]}'  # pylint: disable=C0301
         result = get_feed_urls("s3://bucket/feed_file.json")
         self.assertEqual(result, ["http://example.com/rss"])
 
     def test_get_update_date(self):
+        """Test calculation of update date based on days parameter."""
         result = get_update_date(3)
         self.assertTrue(isinstance(result, datetime))
 
     def test_generate_rss(self):
+        """Test RSS XML generation from Article objects."""
         articles = [
             Article(
                 title="Article 1",
@@ -79,6 +92,7 @@ class TestRetrieveArticles(unittest.TestCase):
 
     @patch("rss_email.retrieve_articles.socket.create_connection")
     def test_is_connected(self, mock_create_connection):
+        """Test internet connectivity check with mocked socket connection."""
         mock_create_connection.return_value = True
         result = is_connected()
         self.assertTrue(result)
@@ -94,6 +108,7 @@ class TestRetrieveArticles(unittest.TestCase):
         mock_get_feed_items,
         mock_get_feed_urls,
     ):
+        """Test end-to-end RSS feed retrieval process with mocked components."""
         mock_is_connected.return_value = True
         mock_get_feed_urls.return_value = ["http://example.com/rss"]
         mock_get_feed_items.return_value = "feed data"
@@ -106,6 +121,7 @@ class TestRetrieveArticles(unittest.TestCase):
 
     @mock_s3
     def test_create_rss(self):
+        """Test RSS file creation and S3 upload using moto mock."""
         # Set up environment variables
         os.environ["BUCKET"] = "test-bucket"
         os.environ["KEY"] = "rss.xml"
@@ -151,7 +167,7 @@ class TestRetrieveArticles(unittest.TestCase):
 
     @mock_s3
     def test_create_rss2(self):
-        """Tests that the RSS file is created and uploaded to S3."""
+        """Test RSS file creation and S3 upload with different test conditions."""
         # Set up mock S3 bucket
         bucket_name = "test-bucket"
         key = "test-key"

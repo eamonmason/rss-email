@@ -117,10 +117,8 @@ def get_feed_file(
     else:
         try:
             rss_file = read_s3_file(s3_bucket, s3_prefix)
-        except HTTPError as e:
-            logger.error(
-                f"Error retrieving RSS file: {s3_bucket}/{s3_prefix}".format(e)
-            )
+        except HTTPError:
+            logger.error("Error retrieving RSS file: %s/%s", s3_bucket, s3_prefix)
             return "Internal error retrieving RSS file."
     return rss_file
 
@@ -194,7 +192,7 @@ def is_valid_email(event_dict: Dict[str, Any], valid_emails: List[str]) -> bool:
     return True
 
 
-def send_email(event: Dict[str, Any], context: Optional[Any] = None) -> None:
+def send_email(event: Dict[str, Any], context: Optional[Any] = None) -> None:  # pylint: disable=W0613
     """Send the email."""
     logger.debug("Event body: %s", event)
 
