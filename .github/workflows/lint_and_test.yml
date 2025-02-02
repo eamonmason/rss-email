@@ -25,4 +25,4 @@ jobs:
         poetry run pylint --fail-under=9.9 $(git ls-files '*.py')
     - name: Run unit tests
       run: |
-        poetry run python -m pytest src
+        poetry run python -m pytest tests
