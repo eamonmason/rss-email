@@ -1,0 +1,42 @@
+name: Test CDK Synth
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-cdk-synth:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+        
+    - name: Install dependencies
+      run: |
+        npm ci
+        pip install --upgrade pip
+        
+    - name: Test CDK Synth with CDK_DOCKER=false
+      env:
+        CDK_DOCKER: 'false'
+        SOURCE_DOMAIN: 'test.example.com'
+        SOURCE_EMAIL_ADDRESS: 'test@example.com'
+        TO_EMAIL_ADDRESS: 'recipient@example.com'
+        EMAIL_RECIPIENTS: 'recipient@example.com'
+        AWS_ACCOUNT_ID: '123456789012'
+        AWS_REGION: 'us-east-1'
+        FEED_DEFINITIONS_FILE: 'feeds.json'
+      run: |
+        npx cdk synth --no-staging
