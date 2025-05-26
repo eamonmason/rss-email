@@ -194,7 +194,7 @@ export class RSSEmailStack extends cdk.Stack {
       },
       role: role,
       layers: [layer],
-      timeout: cdk.Duration.seconds(180)
+      timeout: cdk.Duration.seconds(130)
     });
 
     const generationEventRule = new events.Rule(this, 'generationEventRule', {
@@ -216,7 +216,8 @@ export class RSSEmailStack extends cdk.Stack {
         CLAUDE_MODEL: 'claude-sonnet-4-20250514',
         CLAUDE_MAX_TOKENS: '100000',
         CLAUDE_MAX_REQUESTS: '5',
-        CLAUDE_ENABLED: 'true'
+        CLAUDE_ENABLED: 'true',
+        CLAUDE_API_TIMEOUT: '120',  // 2 minutes (120 seconds) timeout for Anthropic API calls
       },
       role: role,
       layers: [layer],

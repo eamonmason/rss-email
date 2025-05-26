@@ -90,16 +90,40 @@ class ClaudeRateLimiter:
 
 
 @pydantic.validate_call(validate_return=True)
-def get_anthropic_api_key() -> str:
-    """Get the Anthropic API key from parameter store."""
-    parameter_name = os.environ["ANTHROPIC_API_KEY_PARAMETER"]
+def get_anthropic_api_key(api_key: Optional[str] = None) -> str:
+    """
+    Get the Anthropic API key from parameter, environment variable or Parameter Store.
+
+    Args:
+        api_key: Optional direct API key to use
+
+    Returns:
+        str: The Anthropic API key
+
+    Raises:
+        ValueError: If the API key cannot be retrieved
+    """
+    # First, use directly provided API key if available
+    if api_key:
+        return api_key
+
+    # Second, check for environment variable
+    env_key = os.environ.get("ANTHROPIC_API_KEY")
+    if env_key:
+        return env_key
+
+    # Finally, try to retrieve from Parameter Store
     try:
+        parameter_name = os.environ.get("ANTHROPIC_API_KEY_PARAMETER")
+        if not parameter_name:
+            raise ValueError("ANTHROPIC_API_KEY_PARAMETER environment variable not set")
+
         ssm = boto3.client("ssm")
-        parameter = ssm.get_parameter(Name=parameter_name, WithDecryption=True)
-        return parameter["Parameter"]["Value"]
+        response = ssm.get_parameter(Name=parameter_name, WithDecryption=True)
+        return response["Parameter"]["Value"]
     except ClientError as e:
         logger.error("Error retrieving Anthropic API key: %s", e)
-        raise
+        raise ValueError(f"Could not retrieve API key from Parameter Store: {e}")
 
 
 def estimate_tokens(articles: List[Dict[str, Any]]) -> int:
@@ -274,30 +298,48 @@ def _call_claude_api(
         estimated_tokens = estimate_tokens(articles)
         logger.info("Estimated input tokens: %s", estimated_tokens)
 
+        # Get timeout from environment variable or default to 120 seconds (2 minutes)
+        api_timeout = int(os.environ.get("CLAUDE_API_TIMEOUT", "120"))
+
+        # Get model name
+        model_name = os.environ.get("CLAUDE_MODEL", "claude-3-5-sonnet-20241022")
+
+        # Set max_tokens based on model to avoid errors
+        max_tokens = 4000  # Default conservative value
+        if "claude-3-5-sonnet" in model_name:
+            max_tokens = 8000  # Safe value below the 8,192 limit
+        elif "claude-3-opus" in model_name:
+            max_tokens = 30000
+        elif "claude-3-haiku" in model_name:
+            max_tokens = 4000
+        elif "claude-3-5-haiku" in model_name:
+            max_tokens = 4000
+        elif "claude-2" in model_name:
+            max_tokens = 100000  # Claude 2 had very high limits
+        elif "claude-sonnet" in model_name:
+            max_tokens = 8000
+
+        logger.info(f"Using model {model_name} with max_tokens={max_tokens}")
+
         start_time = datetime.now()
         response = client.messages.create(
-            model=os.environ.get("CLAUDE_MODEL", "claude-3-5-haiku-latest"),
-            max_tokens=20000,
+            model=model_name,
+            max_tokens=max_tokens,
             temperature=0.3,
             messages=[{"role": "user", "content": prompt}],
+            timeout=api_timeout,  # Set API request timeout
         )
 
-        # Parse response
+        # Parse response using the extraction function
         response_text = response.content[0].text
-        categorized_data = json.loads(response_text)
+        categorized_data = _extract_json_from_text(response_text)
+
+        if not categorized_data:
+            logger.error("Could not extract valid JSON from response")
+            return None, None
 
         # Process usage metrics
-        input_tokens = response.usage.input_tokens
-        output_tokens = response.usage.output_tokens
-        tokens_used = input_tokens + output_tokens
-
-        logger.info(
-            "Token usage - Input: %s, Output: %s, Total: %s",
-            input_tokens,
-            output_tokens,
-            tokens_used,
-        )
-
+        tokens_used = response.usage.input_tokens + response.usage.output_tokens
         rate_limiter.record_usage(tokens_used)
 
         processing_time = (datetime.now() - start_time).total_seconds()
@@ -305,6 +347,7 @@ def _call_claude_api(
             "processed_at": datetime.now().isoformat(),
             "articles_count": len(articles),
             "tokens_used": tokens_used,
+            "model": model_name,
             "processing_time_seconds": processing_time,
         }
 
@@ -315,6 +358,120 @@ def _call_claude_api(
     except json.JSONDecodeError as e:
         logger.error("Failed to parse Claude response: %s", e)
         return None, None
+    except anthropic.APIError as e:
+        logger.error("Anthropic API error: %s", e)
+        return None, None
+
+
+def _extract_json_from_text(text: str) -> Optional[Dict[str, Any]]:
+    """Extract valid JSON from text that might contain additional content."""
+    import re
+
+    # Improved debugging - log beginning of response
+    logger.debug(
+        "Response starts with: %s", text[:500] + "..." if len(text) > 500 else text
+    )
+
+    # First try: direct parsing in case the response is clean JSON
+    try:
+        parsed = json.loads(text)
+        if isinstance(parsed, dict) and "categories" in parsed:
+            logger.info("Successfully parsed complete JSON response directly")
+            return parsed
+    except json.JSONDecodeError:
+        pass  # Continue with extraction methods
+
+    # Look for JSON between triple backticks (common Claude formatting)
+    backtick_json = re.search(r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", text)
+    if backtick_json:
+        try:
+            candidate = backtick_json.group(1).strip()
+            parsed = json.loads(candidate)
+            if isinstance(parsed, dict) and "categories" in parsed:
+                logger.info("Successfully extracted JSON from code block")
+                return parsed
+        except json.JSONDecodeError:
+            pass
+
+    # Try to find the most complete JSON object
+    # Look for objects with the expected structure
+    candidates = []
+
+    # Pattern to find JSON objects
+    json_pattern = r"\{(?:[^{}]|(?R))*\}"
+    try:
+        # Use a more lenient approach with regex
+        import regex  # This requires the 'regex' package which supports recursive patterns
+
+        matches = regex.findall(json_pattern, text)
+        for match in sorted(matches, key=len, reverse=True):
+            try:
+                parsed = json.loads(match)
+                if isinstance(parsed, dict) and "categories" in parsed:
+                    candidates.append(parsed)
+            except json.JSONDecodeError:
+                continue
+    except (ImportError, Exception) as e:
+        logger.debug(f"Advanced regex failed: {e}, falling back to basic approach")
+
+        # Fallback approach if regex module not available
+        # Try to find JSON by bracket balancing
+        start_positions = [i for i, c in enumerate(text) if c == "{"]
+        for start in start_positions:
+            bracket_count = 0
+            for i in range(start, len(text)):
+                if text[i] == "{":
+                    bracket_count += 1
+                elif text[i] == "}":
+                    bracket_count -= 1
+                    if bracket_count == 0:
+                        # Found potential complete JSON
+                        potential = text[start : i + 1]
+                        try:
+                            parsed = json.loads(potential)
+                            if isinstance(parsed, dict) and "categories" in parsed:
+                                candidates.append(parsed)
+                                break
+                        except json.JSONDecodeError:
+                            continue
+                        break
+
+    if candidates:
+        # Return the first valid candidate
+        logger.info("Successfully extracted JSON using bracket balancing")
+        return candidates[0]
+
+    # Last resort: try to fix common JSON formatting issues
+    cleaned_text = text
+
+    # Try to find a section that looks like JSON by searching for "categories":
+    categories_pos = cleaned_text.find('"categories"')
+    if categories_pos > 0:
+        # Look for opening brace before "categories"
+        opening_brace_pos = cleaned_text.rfind("{", 0, categories_pos)
+        if opening_brace_pos >= 0:
+            # Look for closing brace that would complete this object
+            cleaned_text = cleaned_text[opening_brace_pos:]
+            closing_braces = [
+                i + opening_brace_pos for i, c in enumerate(cleaned_text) if c == "}"
+            ]
+
+            # Try each potential closing position
+            for closing_pos in closing_braces:
+                potential = cleaned_text[: closing_pos + 1]
+                try:
+                    parsed = json.loads(potential)
+                    if isinstance(parsed, dict) and "categories" in parsed:
+                        logger.info(
+                            "Successfully extracted JSON using categories marker"
+                        )
+                        return parsed
+                except json.JSONDecodeError:
+                    continue
+
+    # If we got here, extraction failed
+    logger.error("Failed to extract valid JSON from Claude response")
+    return None
 
 
 def _log_api_success(
