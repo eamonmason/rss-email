@@ -20,8 +20,8 @@ export class RSSPipelineStack extends cdk.Stack {
         }),
         commands: ['npm ci', 'npx cdk synth'],
         buildEnvironment: {
+          privileged: true,  // Enable Docker in CodeBuild
           environmentVariables: {
-            CDK_DOCKER: { value: 'false' },
             SOURCE_DOMAIN: { value: 'rss-email-SOURCE_DOMAIN', type: BuildEnvironmentVariableType.PARAMETER_STORE},
             SOURCE_EMAIL_ADDRESS: {value: 'rss-email-SOURCE_EMAIL_ADDRESS', type: BuildEnvironmentVariableType.PARAMETER_STORE},
             TO_EMAIL_ADDRESS: {value: 'rss-email-TO_EMAIL_ADDRESS', type: BuildEnvironmentVariableType.PARAMETER_STORE},
