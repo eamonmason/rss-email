@@ -213,14 +213,14 @@ export class RSSEmailStack extends cdk.Stack {
         TO_EMAIL_ADDRESS: TO_EMAIL_ADDRESS,
         LAST_RUN_PARAMETER: LAST_RUN_PARAMETER,
         ANTHROPIC_API_KEY_PARAMETER: ANTHROPIC_API_KEY_PARAMETER,
-        CLAUDE_MODEL: 'claude-3-5-haiku-latest',
+        CLAUDE_MODEL: 'claude-sonnet-4-20250514',
         CLAUDE_MAX_TOKENS: '100000',
         CLAUDE_MAX_REQUESTS: '5',
         CLAUDE_ENABLED: 'true'
       },
       role: role,
       layers: [layer],
-      timeout: cdk.Duration.seconds(60)  // Increased from 30s to accommodate Claude API calls
+      timeout: cdk.Duration.seconds(120)  // Increased from 30s to accommodate Claude API calls
     });
 
     const emailerEventRule = new events.Rule(this, 'emailerEventRule', {
