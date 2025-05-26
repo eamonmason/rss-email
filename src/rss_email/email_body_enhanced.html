@@ -94,14 +94,21 @@
       }}
 
       .article-title a {{
-        color: #2c3e50;
-        text-decoration: none;
+        color: #2c3e50 !important;
+        text-decoration: underline !important;
         font-size: 1.1em;
+        display: inline-block;
       }}
 
       .article-title a:hover {{
-        color: #3498db;
-        text-decoration: underline;
+        color: #3498db !important;
+        text-decoration: underline !important;
+      }}
+
+      /* Ensure all links are styled properly for email clients */
+      a {{
+        color: #3498db !important;
+        text-decoration: underline !important;
       }}
 
       .article-meta {{
@@ -185,19 +192,6 @@
         }}
       }}
     </style>
-    <script>
-      function toggleDescription(id) {{
-        var desc = document.getElementById('desc-' + id);
-        var link = document.getElementById('toggle-' + id);
-        if (desc.style.display === 'none' || desc.style.display === '') {{
-          desc.style.display = 'block';
-          link.textContent = 'Show less';
-        }} else {{
-          desc.style.display = 'none';
-          link.textContent = 'Show more';
-        }}
-      }}
-    </script>
   </head>
   <body>
     <div class="container">

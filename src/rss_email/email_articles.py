@@ -168,58 +168,86 @@ def generate_enhanced_html_content(
     article_counter = 0
 
     for category, articles in categorized_articles:
-        # Determine CSS class for category header
-        category_class = (
-            f"category-{category.lower().replace('/', '').replace(' ', '-')}"
-        )
+        # Category header
+        category_color = "#667eea"
+        if "technology" in category.lower():
+            category_color = "#2196F3"
+        elif "ai" in category.lower() or "ml" in category.lower():
+            category_color = "#9C27B0"
+        elif "cybersecurity" in category.lower():
+            category_color = "#F44336"
+        elif "programming" in category.lower():
+            category_color = "#4CAF50"
+        elif "science" in category.lower():
+            category_color = "#FF9800"
 
-        content_parts.append('<div class="category-section">')
-        content_parts.append(
-            f'  <div class="category-header {category_class}">{category}</div>'
-        )
+        content_parts.append(f"""
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 30px;">
+            <tr>
+                <td>
+                    <table width="100%" cellpadding="12" cellspacing="0" border="0" style="background-color: {category_color}; border-radius: 6px; margin-bottom: 15px;">
+                        <tr>
+                            <td>
+                                <h2 style="color: #ffffff; margin: 0; font-size: 18px; font-weight: bold;">{category}</h2>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        """)
 
         for article in articles:
             article_counter += 1
-            article_id = f"article_{article_counter}"
 
-            # Build related articles links
+            # Build related articles text
             related_html = ""
             if article.related_articles:
-                related_links = []
+                related_titles = []
                 for related_id in article.related_articles:
-                    # Find the related article title
                     idx = int(related_id.split("_")[1])
                     if idx < len(article_map):
                         related_title = list(article_map.values())[idx].get(
                             "title", "Related Article"
                         )
-                        related_links.append(
-                            f'<span class="related-link">{related_title}</span>'
-                        )
+                        related_titles.append(related_title)
 
-                if related_links:
+                if related_titles:
                     related_html = f"""
-                    <div class="related-articles">
-                        <span class="related-articles-label">Related:</span>
-                        {" ".join(related_links)}
-                    </div>"""
+                    <tr>
+                        <td style="padding: 8px 15px; background-color: #e9ecef; border-radius: 4px;">
+                            <p style="margin: 0; font-size: 12px; color: #666;">
+                                <strong>Related:</strong> {", ".join(related_titles)}
+                            </p>
+                        </td>
+                    </tr>"""
+
+            # Ensure the link is properly formatted with protocol
+            article_link = article.link
+            if not article_link.startswith(("http://", "https://")):
+                article_link = "https://" + article_link
 
             content_parts.append(f'''
-            <div class="article">
-                <div class="article-title">
-                    <a href="{article.link}" target="_blank">{article.title}</a>
-                </div>
-                <div class="article-meta">{article.pubdate}</div>
-                <div class="article-summary">{article.summary}</div>
-                <span class="show-more" id="toggle-{article_id}"
-                      onclick="toggleDescription('{article_id}')">Show more</span>
-                <div class="article-description" id="desc-{article_id}">
-                    {article.original_description or ""}
-                </div>
-                {related_html}
-            </div>''')
+            <tr>
+                <td>
+                    <table width="100%" cellpadding="15" cellspacing="0" border="0" style="background-color: #f8f9fa; border-left: 4px solid #3498db; margin-bottom: 15px;">
+                        <tr>
+                            <td>
+                                <h3 style="margin: 0 0 8px 0;">
+                                    <a href="{article_link}" target="_blank" style="color: #0066cc; text-decoration: underline; font-size: 16px;">{article.title}</a>
+                                </h3>
+                                <p style="margin: 0 0 10px 0; font-size: 12px; color: #666;">{article.pubdate}</p>
+                                <p style="margin: 0 0 10px 0; font-size: 14px; color: #555; line-height: 1.5;">{article.summary}</p>
+                                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #dee2e6;">
+                                    <p style="margin: 0; font-size: 13px; color: #666;">{article.original_description or ""}</p>
+                                </div>
+                            </td>
+                        </tr>
+                        {related_html}
+                    </table>
+                </td>
+            </tr>''')
 
-        content_parts.append("</div>")
+        content_parts.append("</table>")
 
     return "\n".join(content_parts)
 
@@ -257,10 +285,18 @@ def _generate_claude_enhanced_html(
                 ordered_categories, article_map
             )
 
-            # Load enhanced template
-            html_template = (
-                files("rss_email").joinpath("email_body_enhanced.html").read_text()
-            )
+            # Load enhanced template - use simpler version for better email client compatibility
+            try:
+                html_template = (
+                    files("rss_email")
+                    .joinpath("email_body_enhanced_simple.html")
+                    .read_text()
+                )
+            except FileNotFoundError:
+                # Fallback to original enhanced template if simple version not found
+                html_template = (
+                    files("rss_email").joinpath("email_body_enhanced.html").read_text()
+                )
 
             # Format the template
             return html_template.format(
@@ -305,9 +341,14 @@ def generate_html(
         if day != previous_day:
             list_output += f"<p><b>{day}</b></p>\n"
             previous_day = day
+        # Ensure link has protocol
+        item_link = item["link"]
+        if not item_link.startswith(("http://", "https://")):
+            item_link = "https://" + item_link
+
         list_output += f"""
             <div class="tooltip">
-            <a href="{item["link"]}">{item["title"]}</a>
+            <a href="{item_link}" style="color: white; text-decoration: underline;">{item["title"]}</a>
             <span class="tooltiptext">{item["pubDate"]}</span>
             </div>\n
             <section class="longdescription">{item["description"]}</section>\n"""
