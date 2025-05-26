@@ -168,7 +168,7 @@ def generate_enhanced_html_content(
     article_counter = 0
 
     for category, articles in categorized_articles:
-        # Category header
+        # Category header color logic
         category_color = "#667eea"
         if "technology" in category.lower():
             category_color = "#2196F3"
@@ -181,38 +181,43 @@ def generate_enhanced_html_content(
         elif "science" in category.lower():
             category_color = "#FF9800"
 
-        content_parts.append(f"""
+        # Add category header
+        content_parts.append(
+            f"""
         <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 30px;">
             <tr>
                 <td>
-                    <table width="100%" cellpadding="12" cellspacing="0" border="0" style="background-color: {category_color}; border-radius: 6px; margin-bottom: 15px;">
+                    <table width="100%" cellpadding="12" cellspacing="0" border="0" 
+                    style="background-color: {category_color}; border-radius: 6px; margin-bottom: 15px;">
                         <tr>
                             <td>
-                                <h2 style="color: #ffffff; margin: 0; font-size: 18px; font-weight: bold;">{category}</h2>
+                                <h2 style="color: #ffffff; margin: 0; 
+                                font-size: 18px; font-weight: bold;">{category}</h2>
                             </td>
                         </tr>
                     </table>
                 </td>
             </tr>
-        """)
+        """
+        )
 
         for article in articles:
             article_counter += 1
 
             # Build related articles text
-            related_html = ""
-            if article.related_articles:
-                related_titles = []
-                for related_id in article.related_articles:
-                    idx = int(related_id.split("_")[1])
-                    if idx < len(article_map):
-                        related_title = list(article_map.values())[idx].get(
-                            "title", "Related Article"
-                        )
-                        related_titles.append(related_title)
+            related_titles = []
+            for related_id in article.related_articles:
+                idx = int(related_id.split("_")[1])
+                if idx < len(article_map):
+                    related_title = list(article_map.values())[idx].get(
+                        "title", "Related Article"
+                    )
+                    related_titles.append(related_title)
 
-                if related_titles:
-                    related_html = f"""
+            # Initialize related_html as empty string
+            related_html = ""
+            if related_titles:
+                related_html = f"""
                     <tr>
                         <td style="padding: 8px 15px; background-color: #e9ecef; border-radius: 4px;">
                             <p style="margin: 0; font-size: 12px; color: #666;">
@@ -229,14 +234,18 @@ def generate_enhanced_html_content(
             content_parts.append(f'''
             <tr>
                 <td>
-                    <table width="100%" cellpadding="15" cellspacing="0" border="0" style="background-color: #f8f9fa; border-left: 4px solid #3498db; margin-bottom: 15px;">
+                    <table width="100%" cellpadding="15" cellspacing="0" border="0" 
+                                 style="background-color: #f8f9fa; border-left: 4px solid #3498db; margin-bottom: 15px;">
                         <tr>
                             <td>
                                 <h3 style="margin: 0 0 8px 0;">
-                                    <a href="{article_link}" target="_blank" style="color: #0066cc; text-decoration: underline; font-size: 16px;">{article.title}</a>
+                                    <a href="{article_link}" target="_blank"
+                                    style="color: #0066cc; text-decoration: underline; font-size: 16px;">
+                                    {article.title}</a>
                                 </h3>
                                 <p style="margin: 0 0 10px 0; font-size: 12px; color: #666;">{article.pubdate}</p>
-                                <p style="margin: 0 0 10px 0; font-size: 14px; color: #555; line-height: 1.5;">{article.summary}</p>
+                                <p style="margin: 0 0 10px 0; font-size: 14px; color: #555; line-height: 1.5;">
+                                {article.summary}</p>
                             </td>
                         </tr>
                         {related_html}
@@ -284,16 +293,14 @@ def _generate_claude_enhanced_html(
 
             # Load enhanced template - use simpler version for better email client compatibility
             try:
-                html_template = (
-                    files("rss_email")
-                    .joinpath("email_body_enhanced_simple.html")
-                    .read_text()
+                template_path = files("rss_email").joinpath(
+                    "email_body_enhanced_simple.html"
                 )
+                html_template = template_path.read_text()
             except FileNotFoundError:
                 # Fallback to original enhanced template if simple version not found
-                html_template = (
-                    files("rss_email").joinpath("email_body_enhanced.html").read_text()
-                )
+                template_path = files("rss_email").joinpath("email_body_enhanced.html")
+                html_template = template_path.read_text()
 
             # Format the template
             return html_template.format(

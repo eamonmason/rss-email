@@ -11,20 +11,27 @@ import json
 import logging
 import os
 import sys
+import traceback
 from datetime import datetime, timedelta
 from typing import Optional
 
+import dotenv
 from botocore.exceptions import ClientError
 
 # Add the src directory to the Python path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-from rss_email.article_processor import (
+# These imports depend on sys.path modification
+from rss_email.article_processor import (  # pylint: disable=C0413
     ClaudeRateLimiter,
     group_articles_by_priority,
     process_articles_with_claude,
 )
-from rss_email.email_articles import filter_items, get_last_run, read_s3_file
+from rss_email.email_articles import (  # pylint: disable=C0413
+    filter_items,
+    get_last_run,
+    read_s3_file,
+)
 
 
 def setup_logging(debug: bool = False) -> None:
@@ -61,7 +68,7 @@ def process_articles(
     """
     try:
         # Read and parse RSS file from S3
-        logging.info(f"Reading RSS file from s3://{bucket}/{key}")
+        logging.info("Reading RSS file from s3://%s/%s", bucket, key)
         rss_content = read_s3_file(bucket, key)
         filtered_items = filter_items(rss_content, run_date)
 
@@ -69,7 +76,7 @@ def process_articles(
             logging.info("No new articles found since %s", run_date)
             return
 
-        logging.info(f"Found {len(filtered_items)} articles since {run_date}")
+        logging.info("Found %s articles since %s", len(filtered_items), run_date)
 
         # Process with Claude
         logging.info("Processing articles with Claude...")
@@ -113,12 +120,10 @@ def process_articles(
                 print(f"- {category_name}: {len(articles)} articles")
 
     except ClientError as e:
-        logging.error(f"AWS error: {e}")
-    except Exception as e:
-        logging.error(f"Error processing articles: {e}")
+        logging.error("AWS error: %s", e)
+    except (ValueError, KeyError, TypeError, AttributeError) as e:
+        logging.error("Error processing articles: %s", e)
         if debug:
-            import traceback
-
             traceback.print_exc()
 
 
@@ -163,8 +168,6 @@ def main():
     # Load environment variables from .env file if specified
     if args.env_file:
         try:
-            import dotenv
-
             dotenv.load_dotenv(args.env_file)
             print(f"Loaded environment variables from {args.env_file}")
         except ImportError:
