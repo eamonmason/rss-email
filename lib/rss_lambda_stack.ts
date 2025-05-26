@@ -112,10 +112,10 @@ export class RSSEmailStack extends cdk.Stack {
       code: lambda.Code.fromAsset('.', {
         exclude: ['*.pyc'],
         bundling: {
-          image: lambda.Runtime.PYTHON_3_11.bundlingImage,
+          image: lambda.Runtime.PYTHON_3_13.bundlingImage,
           command: [
             'bash', '-c',
-            'mkdir -p /asset-output/python/lib/python3.11/site-packages/ && pip install -t /asset-output/python/lib/python3.11/site-packages/ . && rm -r /asset-output/python/lib/python3.11/site-packages/rss_email*'
+            'mkdir -p /asset-output/python/lib/python3.13/site-packages/ && pip install -t /asset-output/python/lib/python3.13/site-packages/ . && rm -r /asset-output/python/lib/python3.13/site-packages/rss_email*'
           ],
           local: {
             tryBundle(outputDir: string) {
@@ -123,7 +123,7 @@ export class RSSEmailStack extends cdk.Stack {
               if (process.env.CDK_DOCKER === 'false') {
                 console.log('Skipping Python layer bundling in CI environment');
                 // Create a minimal structure to satisfy CDK
-                const pythonDir = path.join(outputDir, 'python', 'lib', 'python3.11', 'site-packages');
+                const pythonDir = path.join(outputDir, 'python', 'lib', 'python3.13', 'site-packages');
                 fs.mkdirSync(pythonDir, { recursive: true });
                 fs.writeFileSync(path.join(pythonDir, '.placeholder'), '');
                 return true;
