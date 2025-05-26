@@ -271,10 +271,13 @@ def _call_claude_api(
     try:
         # Create prompt and call API
         prompt = create_categorization_prompt(articles)
+        estimated_tokens = estimate_tokens(articles)
+        logger.info("Estimated input tokens: %s", estimated_tokens)
+
         start_time = datetime.now()
         response = client.messages.create(
             model=os.environ.get("CLAUDE_MODEL", "claude-3-5-haiku-latest"),
-            max_tokens=4000,
+            max_tokens=20000,
             temperature=0.3,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -284,7 +287,17 @@ def _call_claude_api(
         categorized_data = json.loads(response_text)
 
         # Process usage metrics
-        tokens_used = response.usage.input_tokens + response.usage.output_tokens
+        input_tokens = response.usage.input_tokens
+        output_tokens = response.usage.output_tokens
+        tokens_used = input_tokens + output_tokens
+
+        logger.info(
+            "Token usage - Input: %s, Output: %s, Total: %s",
+            input_tokens,
+            output_tokens,
+            tokens_used,
+        )
+
         rate_limiter.record_usage(tokens_used)
 
         processing_time = (datetime.now() - start_time).total_seconds()
