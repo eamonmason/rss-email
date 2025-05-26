@@ -98,7 +98,7 @@ def get_anthropic_api_key() -> str:
         parameter = ssm.get_parameter(Name=parameter_name, WithDecryption=True)
         return parameter["Parameter"]["Value"]
     except ClientError as e:
-        logger.error(f"Error retrieving Anthropic API key: {e}")
+        logger.error("Error retrieving Anthropic API key: %s", e)
         raise
 
 
@@ -174,33 +174,103 @@ def process_articles_with_claude(
     articles: List[Dict[str, Any]], rate_limiter: ClaudeRateLimiter
 ) -> Optional[CategorizedArticles]:
     """Process articles using Claude API for categorization and summarization."""
-    if not articles:
-        logger.info("No articles to process")
-        return None
+    result = None
 
-    # Check if Claude is enabled
-    if os.environ.get("CLAUDE_ENABLED", "true").lower() != "true":
-        logger.info("Claude processing is disabled")
+    # Early validation check
+    if not should_process_articles(articles):
         return None
 
     try:
-        # Get API key and initialize client
-        api_key = get_anthropic_api_key()
-        client = anthropic.Anthropic(api_key=api_key)
+        # Initialize client and process articles
+        result = _process_with_claude_client(articles, rate_limiter)
+    except (
+        json.JSONDecodeError,
+        anthropic.APIError,
+        KeyError,
+        IndexError,
+        ValueError,
+        ClientError,
+    ) as e:
+        _log_processing_error(e)
 
-        # Estimate tokens and check rate limits
-        estimated_tokens = estimate_tokens(articles)
-        if not rate_limiter.can_make_request(estimated_tokens):
-            logger.warning(
-                f"Rate limit would be exceeded. Estimated tokens: {estimated_tokens}, "
-                f"Current usage: {rate_limiter.get_usage_stats()}"
-            )
-            return None
+    return result
 
-        # Create prompt
+
+def _process_with_claude_client(
+    articles: List[Dict[str, Any]], rate_limiter: ClaudeRateLimiter
+) -> Optional[CategorizedArticles]:
+    """Process articles with initialized Claude client."""
+    # Initialize client and check rate limits
+    client = _initialize_claude_client()
+    if not _check_rate_limits(articles, rate_limiter):
+        return None
+
+    # Process with Claude API
+    categorized_data, usage_stats = _call_claude_api(client, articles, rate_limiter)
+    if not categorized_data or usage_stats is None:
+        return None
+
+    # Convert to structured format
+    return _create_categorized_articles(categorized_data, articles, usage_stats)
+
+
+def _log_processing_error(error: Exception) -> None:
+    """Log specific error types with appropriate messages."""
+    if isinstance(error, json.JSONDecodeError):
+        logger.error("Failed to parse Claude response: %s", error)
+    elif isinstance(error, anthropic.APIError):
+        logger.error("Anthropic API error: %s", error)
+    elif isinstance(error, (KeyError, IndexError, ValueError)):
+        logger.error("Error processing API response structure: %s", error)
+    elif isinstance(error, ClientError):
+        logger.error("AWS client error: %s", error)
+    else:
+        logger.error("Unexpected error processing articles: %s", error)
+
+
+def should_process_articles(articles: List[Dict[str, Any]]) -> bool:
+    """Check if articles should be processed."""
+    if not articles:
+        logger.info("No articles to process")
+        return False
+
+    if os.environ.get("CLAUDE_ENABLED", "true").lower() != "true":
+        logger.info("Claude processing is disabled")
+        return False
+
+    return True
+
+
+def _initialize_claude_client() -> anthropic.Anthropic:
+    """Initialize the Claude API client."""
+    api_key = get_anthropic_api_key()
+    return anthropic.Anthropic(api_key=api_key)
+
+
+def _check_rate_limits(
+    articles: List[Dict[str, Any]], rate_limiter: ClaudeRateLimiter
+) -> bool:
+    """Check if the request is within rate limits."""
+    estimated_tokens = estimate_tokens(articles)
+    if not rate_limiter.can_make_request(estimated_tokens):
+        logger.warning(
+            "Rate limit would be exceeded. Estimated tokens: %s, Current usage: %s",
+            estimated_tokens,
+            rate_limiter.get_usage_stats(),
+        )
+        return False
+    return True
+
+
+def _call_claude_api(
+    client: anthropic.Anthropic,
+    articles: List[Dict[str, Any]],
+    rate_limiter: ClaudeRateLimiter,
+) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+    """Call the Claude API and process the response."""
+    try:
+        # Create prompt and call API
         prompt = create_categorization_prompt(articles)
-
-        # Make API call
         start_time = datetime.now()
         response = client.messages.create(
             model=os.environ.get("CLAUDE_MODEL", "claude-3-5-sonnet-20241022"),
@@ -213,63 +283,79 @@ def process_articles_with_claude(
         response_text = response.content[0].text
         categorized_data = json.loads(response_text)
 
-        # Record usage
+        # Process usage metrics
         tokens_used = response.usage.input_tokens + response.usage.output_tokens
         rate_limiter.record_usage(tokens_used)
 
-        # Log metrics
         processing_time = (datetime.now() - start_time).total_seconds()
-        logger.info(
-            {
-                "event": "claude_api_success",
-                "model": os.environ.get("CLAUDE_MODEL"),
-                "articles_processed": len(articles),
-                "tokens_used": tokens_used,
-                "processing_time_seconds": processing_time,
-                "usage_stats": rate_limiter.get_usage_stats(),
-            }
-        )
+        usage_stats = {
+            "processed_at": datetime.now().isoformat(),
+            "articles_count": len(articles),
+            "tokens_used": tokens_used,
+            "processing_time_seconds": processing_time,
+        }
 
-        # Convert to structured format
-        processed_categories = {}
-        for category, category_data in categorized_data["categories"].items():
-            processed_articles = []
-            for article in category_data["articles"]:
-                # Find original description
-                article_id = article["id"]
-                idx = int(article_id.split("_")[1])
-                original_desc = articles[idx].get("description", "")
+        _log_api_success(usage_stats, rate_limiter, articles)
 
-                processed_article = ProcessedArticle(
-                    title=article["title"],
-                    link=article["link"],
-                    summary=article["summary"],
-                    category=category,
-                    pubdate=article["pubdate"],
-                    related_articles=article.get("related_articles", []),
-                    original_description=original_desc,
-                )
-                processed_articles.append(processed_article)
-
-            if processed_articles:
-                processed_categories[category] = processed_articles
-
-        return CategorizedArticles(
-            categories=processed_categories,
-            processing_metadata={
-                "processed_at": datetime.now().isoformat(),
-                "articles_count": len(articles),
-                "tokens_used": tokens_used,
-                "processing_time_seconds": processing_time,
-            },
-        )
+        return categorized_data, usage_stats
 
     except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse Claude response: {e}")
-        return None
-    except Exception as e:
-        logger.error(f"Error processing articles with Claude: {e}")
-        return None
+        logger.error("Failed to parse Claude response: %s", e)
+        return None, None
+
+
+def _log_api_success(
+    usage_stats: Dict[str, Any],
+    rate_limiter: ClaudeRateLimiter,
+    articles: List[Dict[str, Any]],
+) -> None:
+    """Log API success metrics."""
+    logger.info(
+        {
+            "event": "claude_api_success",
+            "model": os.environ.get("CLAUDE_MODEL"),
+            "articles_processed": len(articles),
+            "tokens_used": usage_stats["tokens_used"],
+            "processing_time_seconds": usage_stats["processing_time_seconds"],
+            "usage_stats": rate_limiter.get_usage_stats(),
+        }
+    )
+
+
+def _create_categorized_articles(
+    categorized_data: Dict[str, Any],
+    articles: List[Dict[str, Any]],
+    usage_stats: Dict[str, Any],
+) -> CategorizedArticles:
+    """Convert categorized data to structured format."""
+    processed_categories = {}
+
+    for category, category_data in categorized_data["categories"].items():
+        processed_articles = []
+        for article in category_data["articles"]:
+            # Find original description
+            article_id = article["id"]
+            idx = int(article_id.split("_")[1])
+            original_desc = articles[idx].get("description", "")
+
+            processed_article = ProcessedArticle(
+                title=article["title"],
+                link=article["link"],
+                summary=article["summary"],
+                category=category,
+                pubdate=article["pubdate"],
+                related_articles=article.get("related_articles", []),
+                original_description=original_desc,
+            )
+            processed_articles.append(processed_article)
+
+        if processed_articles:
+            processed_categories[category] = processed_articles
+
+    return CategorizedArticles(
+        categories=processed_categories,
+        processing_metadata=usage_stats,
+    )
 
 
 def group_articles_by_priority(

@@ -1,4 +1,5 @@
 {
+  "type": "module",
   "name": "rss-email",
   "version": "1.0.0",
   "description": "![Lint and Unit Testing](https://github.com/eamonmason/rss-email/actions/workflows/lint_and_test.yml/badge.svg)",
@@ -7,7 +8,10 @@
     "lib": "lib"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "synth": "cdk synth",
+    "deploy": "cdk deploy",
+    "diff": "cdk diff"
   },
   "author": "",
   "license": "ISC",
@@ -15,6 +19,13 @@
     "aws-cdk-lib": "^2.187.0",
     "cdk": "^2.104.0",
     "dotenv": "^16.3.1",
-    "ts-node": "^10.9.1"
+    "ts-node": "^10.9.1",
+    "constructs": "^10.0.0",
+    "source-map-support": "^0.5.21"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.1",
+    "typescript": "~5.1.6"
   }
 }

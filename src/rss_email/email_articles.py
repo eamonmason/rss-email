@@ -211,7 +211,8 @@ def generate_enhanced_html_content(
                 </div>
                 <div class="article-meta">{article.pubdate}</div>
                 <div class="article-summary">{article.summary}</div>
-                <span class="show-more" id="toggle-{article_id}" onclick="toggleDescription('{article_id}')">Show more</span>
+                <span class="show-more" id="toggle-{article_id}"
+                      onclick="toggleDescription('{article_id}')">Show more</span>
                 <div class="article-description" id="desc-{article_id}">
                     {article.original_description or ""}
                 </div>
@@ -221,6 +222,62 @@ def generate_enhanced_html_content(
         content_parts.append("</div>")
 
     return "\n".join(content_parts)
+
+
+def _generate_claude_enhanced_html(
+    filtered_items: List[Dict[str, Any]],
+) -> Optional[str]:
+    """Generate HTML using Claude categorization if available."""
+    if not (
+        CLAUDE_AVAILABLE
+        and os.environ.get("CLAUDE_ENABLED", "true").lower() == "true"
+        and ClaudeRateLimiter is not None
+        and process_articles_with_claude is not None
+        and group_articles_by_priority is not None
+    ):
+        return None
+
+    try:
+        logger.info("Attempting to process articles with Claude")
+        rate_limiter = ClaudeRateLimiter()
+        categorized_result = process_articles_with_claude(filtered_items, rate_limiter)
+
+        if categorized_result:
+            logger.info("Successfully processed articles with Claude")
+            # Create article map for lookups
+            article_map = {
+                f"article_{i}": item for i, item in enumerate(filtered_items)
+            }
+
+            # Get ordered categories
+            ordered_categories = group_articles_by_priority(categorized_result)
+
+            # Generate enhanced HTML content
+            categorized_content = generate_enhanced_html_content(
+                ordered_categories, article_map
+            )
+
+            # Load enhanced template
+            html_template = (
+                files("rss_email").joinpath("email_body_enhanced.html").read_text()
+            )
+
+            # Format the template
+            return html_template.format(
+                subject=EMAIL_SUBJECT,
+                generation_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                total_articles=len(filtered_items),
+                total_categories=len(ordered_categories),
+                categorized_content=categorized_content,
+            )
+
+        logger.warning(
+            "Claude processing returned no results, falling back to original format"
+        )
+    except (ImportError, AttributeError, ValueError) as e:
+        logger.error("Error during Claude processing: %s", e, exc_info=True)
+
+    return None
 
 
 @pydantic.validate_call(validate_return=True)
@@ -234,55 +291,10 @@ def generate_html(
     rss_file = get_feed_file(s3_bucket, s3_prefix, local_file)
     filtered_items = filter_items(rss_file, last_run_date)
 
-    # Try Claude processing if available and enabled
-    if (
-        CLAUDE_AVAILABLE
-        and os.environ.get("CLAUDE_ENABLED", "true").lower() == "true"
-        and ClaudeRateLimiter is not None
-        and process_articles_with_claude is not None
-        and group_articles_by_priority is not None
-    ):
-        try:
-            logger.info("Attempting to process articles with Claude")
-            rate_limiter = ClaudeRateLimiter()
-            categorized_result = process_articles_with_claude(
-                filtered_items, rate_limiter
-            )
-
-            if categorized_result:
-                logger.info("Successfully processed articles with Claude")
-                # Create article map for lookups
-                article_map = {
-                    f"article_{i}": item for i, item in enumerate(filtered_items)
-                }
-
-                # Get ordered categories
-                ordered_categories = group_articles_by_priority(categorized_result)
-
-                # Generate enhanced HTML content
-                categorized_content = generate_enhanced_html_content(
-                    ordered_categories, article_map
-                )
-
-                # Load enhanced template
-                html_template = (
-                    files("rss_email").joinpath("email_body_enhanced.html").read_text()
-                )
-
-                # Format the template
-                return html_template.format(
-                    subject=EMAIL_SUBJECT,
-                    generation_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    total_articles=len(filtered_items),
-                    total_categories=len(ordered_categories),
-                    categorized_content=categorized_content,
-                )
-            else:
-                logger.warning(
-                    "Claude processing returned no results, falling back to original format"
-                )
-        except Exception as e:
-            logger.error(f"Error during Claude processing: {e}", exc_info=True)
+    # Try Claude processing first
+    claude_html = _generate_claude_enhanced_html(filtered_items)
+    if claude_html:
+        return claude_html
 
     # Fallback to original HTML generation
     logger.info("Using original HTML generation (Claude not available or disabled)")

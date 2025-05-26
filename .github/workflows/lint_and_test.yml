@@ -23,6 +23,9 @@ jobs:
     - name: Analysing the code with pylint
       run: |
         poetry run pylint --fail-under=9.9 $(git ls-files '*.py')
+    - name: Synthesize CDK stack
+      run: |
+        node --loader ts-node/esm bin/pipeline-cdk.ts
     - name: Run unit tests
       run: |
         poetry run python -m pytest tests

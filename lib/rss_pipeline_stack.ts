@@ -13,7 +13,7 @@ export class RSSPipelineStack extends cdk.Stack {
       pipelineName: 'RSSPipeline',
       synth: new CodeBuildStep('Synth', {
         input: CodePipelineSource.gitHub('eamonmason/rss-email', 'main'),
-        commands: ['npm ci', 'npx cdk synth'],
+        commands: ['npm ci', 'node --loader ts-node/esm ./node_modules/aws-cdk/bin/cdk synth'],
         buildEnvironment: {
           environmentVariables: {
             SOURCE_DOMAIN: { value: 'rss-email-SOURCE_DOMAIN', type: BuildEnvironmentVariableType.PARAMETER_STORE},
