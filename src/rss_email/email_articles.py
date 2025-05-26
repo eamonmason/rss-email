@@ -237,9 +237,6 @@ def generate_enhanced_html_content(
                                 </h3>
                                 <p style="margin: 0 0 10px 0; font-size: 12px; color: #666;">{article.pubdate}</p>
                                 <p style="margin: 0 0 10px 0; font-size: 14px; color: #555; line-height: 1.5;">{article.summary}</p>
-                                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #dee2e6;">
-                                    <p style="margin: 0; font-size: 13px; color: #666;">{article.original_description or ""}</p>
-                                </div>
                             </td>
                         </tr>
                         {related_html}
@@ -305,6 +302,7 @@ def _generate_claude_enhanced_html(
                 total_articles=len(filtered_items),
                 total_categories=len(ordered_categories),
                 categorized_content=categorized_content,
+                ai_model=os.environ.get("CLAUDE_MODEL", "claude-3-5-haiku-latest"),
             )
 
         logger.warning(
