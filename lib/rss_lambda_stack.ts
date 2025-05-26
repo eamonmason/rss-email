@@ -12,6 +12,7 @@ import * as actions from 'aws-cdk-lib/aws-ses-actions';
 import { Construct } from 'constructs';
 import * as fs from 'fs';
 import * as path from 'path';
+import { execSync } from 'child_process';
 
 
 const BUCKET_NAME = 'rss-bucket';
@@ -117,6 +118,66 @@ export class RSSEmailStack extends cdk.Stack {
             'bash', '-c',
             'mkdir -p /asset-output/python/lib/python3.13/site-packages/ && pip install -t /asset-output/python/lib/python3.13/site-packages/ . && rm -r /asset-output/python/lib/python3.13/site-packages/rss_email*'
           ],
+          local: {
+            tryBundle(outputDir: string) {
+              // For environments where Docker is not available (e.g., GitHub Actions with CDK_DOCKER=false)
+              if (process.env.CDK_DOCKER === 'false') {
+                console.log('Docker not available, using local bundling for Lambda Layer');
+                const pythonDir = path.join(outputDir, 'python', 'lib', 'python3.13', 'site-packages');
+                fs.mkdirSync(pythonDir, { recursive: true });
+                
+                // Read dependencies from pyproject.toml and create requirements.txt
+                const pyprojectPath = path.join(process.cwd(), 'pyproject.toml');
+                const pyprojectContent = fs.readFileSync(pyprojectPath, 'utf-8');
+                
+                // Extract dependencies from pyproject.toml
+                const dependencies: string[] = [];
+                const lines = pyprojectContent.split('\n');
+                let inDependencies = false;
+                
+                for (const line of lines) {
+                  if (line.includes('[tool.poetry.dependencies]')) {
+                    inDependencies = true;
+                    continue;
+                  }
+                  if (inDependencies && line.startsWith('[')) {
+                    break;
+                  }
+                  if (inDependencies && line.includes('=')) {
+                    const match = line.match(/^(\w+)\s*=\s*"(.+)"/);
+                    if (match && match[1] !== 'python') {
+                      // Convert poetry version specifiers to pip format
+                      let dep = match[1];
+                      let version = match[2];
+                      if (version.startsWith('^')) {
+                        version = '>=' + version.substring(1);
+                      }
+                      dependencies.push(`${dep}${version}`);
+                    }
+                  }
+                }
+                
+                // Create requirements.txt file
+                const requirementsPath = path.join(outputDir, 'requirements.txt');
+                fs.writeFileSync(requirementsPath, dependencies.join('\n'));
+                
+                // Use pip to install dependencies
+                try {
+                  execSync(`pip install -r ${requirementsPath} -t ${pythonDir}`, {
+                    stdio: 'inherit',
+                    cwd: outputDir
+                  });
+                  // Clean up
+                  fs.unlinkSync(requirementsPath);
+                  return true;
+                } catch (error) {
+                  console.error('Failed to install dependencies locally:', error);
+                  return false;
+                }
+              }
+              return false;
+            }
+          }
         }
       }
       )
