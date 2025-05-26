@@ -10,6 +10,8 @@ import * as ses from 'aws-cdk-lib/aws-ses';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as actions from 'aws-cdk-lib/aws-ses-actions';
 import { Construct } from 'constructs';
+import * as fs from 'fs';
+import * as path from 'path';
 
 
 const BUCKET_NAME = 'rss-bucket';
@@ -115,6 +117,20 @@ export class RSSEmailStack extends cdk.Stack {
             'bash', '-c',
             'mkdir -p /asset-output/python/lib/python3.11/site-packages/ && pip install -t /asset-output/python/lib/python3.11/site-packages/ . && rm -r /asset-output/python/lib/python3.11/site-packages/rss_email*'
           ],
+          local: {
+            tryBundle(outputDir: string) {
+              // Skip bundling in CI environment when CDK_DOCKER is false
+              if (process.env.CDK_DOCKER === 'false') {
+                console.log('Skipping Python layer bundling in CI environment');
+                // Create a minimal structure to satisfy CDK
+                const pythonDir = path.join(outputDir, 'python', 'lib', 'python3.11', 'site-packages');
+                fs.mkdirSync(pythonDir, { recursive: true });
+                fs.writeFileSync(path.join(pythonDir, '.placeholder'), '');
+                return true;
+              }
+              return false;
+            }
+          }
         }
       }
       )

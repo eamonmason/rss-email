@@ -9,7 +9,7 @@
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "synth": "cdk synth",
+    "synth": "tsx bin/pipeline-cdk.ts",
     "deploy": "cdk deploy",
     "diff": "cdk diff"
   },
@@ -26,6 +26,7 @@
   "devDependencies": {
     "@types/node": "^20.0.0",
     "ts-node": "^10.9.1",
+    "tsx": "^4.7.1",
     "typescript": "~5.1.6"
   }
 }

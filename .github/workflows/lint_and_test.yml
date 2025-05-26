@@ -32,8 +32,10 @@ jobs:
       run: |
         poetry run pylint --fail-under=9.9 $(git ls-files '*.py')
     - name: Synthesize CDK stack
+      env:
+        CDK_DOCKER: "false"
       run: |
-        node --loader ts-node/esm bin/pipeline-cdk.ts
+        npx cdk synth --no-staging
     - name: Run unit tests
       run: |
         poetry run python -m pytest tests

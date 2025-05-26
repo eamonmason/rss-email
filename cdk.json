@@ -1,5 +1,5 @@
 {
-  "app": "npx ts-node bin/pipeline-cdk.ts",
+  "app": "npx tsx bin/pipeline-cdk.ts",
   "context": {
     
   },
