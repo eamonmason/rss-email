@@ -186,7 +186,7 @@ export class RSSEmailStack extends cdk.Stack {
     const RSSGenerationFunction = new lambda.Function(this, 'RSSGenerationFunction', {
       code: new lambda.AssetCode('src'),
       handler: 'rss_email.retrieve_articles.create_rss',
-      runtime: lambda.Runtime.PYTHON_3_11,
+      runtime: lambda.Runtime.PYTHON_3_13,
       environment: {
         BUCKET: bucket.bucketName,
         KEY: KEY,
@@ -205,7 +205,7 @@ export class RSSEmailStack extends cdk.Stack {
     const RSSEMailerFunction = new lambda.Function(this, 'RSSEmailerFunction', {
       code: new lambda.AssetCode('src'), // directory of your lambda function code
       handler: 'rss_email.email_articles.send_email', // filename.methodname
-      runtime: lambda.Runtime.PYTHON_3_11,
+      runtime: lambda.Runtime.PYTHON_3_13,
       environment: {
         BUCKET: bucket.bucketName,
         KEY: KEY,
