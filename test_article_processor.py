@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 # Add the src directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
+# pylint: disable=wrong-import-position
 from rss_email.article_processor import (
     ClaudeRateLimiter,
     create_categorization_prompt,
@@ -21,6 +22,8 @@ from rss_email.article_processor import (
     process_articles_with_claude,
 )
 
+# pylint: enable=wrong-import-position
+
 
 def create_sample_articles() -> List[Dict[str, Any]]:
     """Create sample RSS articles for testing."""
@@ -28,37 +31,61 @@ def create_sample_articles() -> List[Dict[str, Any]]:
         {
             "title": "OpenAI Announces GPT-5 with Advanced Reasoning",
             "link": "https://example.com/openai-gpt5",
-            "description": "OpenAI has unveiled GPT-5, featuring breakthrough advances in logical reasoning and mathematical problem-solving. The new model demonstrates significant improvements in complex task handling and reduced hallucinations.",
+            "description": (
+                "OpenAI has unveiled GPT-5, featuring breakthrough advances in logical reasoning "
+                "and mathematical problem-solving. The new model demonstrates significant "
+                "improvements in complex task handling and reduced hallucinations."
+            ),
             "pubDate": "Mon, 26 May 2025 08:00:00 GMT",
         },
         {
             "title": "Apple Releases Vision Pro 2 with Enhanced Display",
             "link": "https://example.com/apple-vision-pro-2",
-            "description": "Apple today announced the Vision Pro 2, featuring a revolutionary 8K per eye display and improved battery life. The new headset weighs 30% less than its predecessor.",
+            "description": (
+                "Apple today announced the Vision Pro 2, featuring a revolutionary 8K per eye "
+                "display and improved battery life. The new headset weighs 30% less than its "
+                "predecessor."
+            ),
             "pubDate": "Mon, 26 May 2025 07:30:00 GMT",
         },
         {
             "title": "Major Cybersecurity Breach Affects Fortune 500 Companies",
             "link": "https://example.com/cyber-breach",
-            "description": "A sophisticated cyberattack has compromised data from over 50 Fortune 500 companies. Security experts are calling it one of the largest breaches in corporate history.",
+            "description": (
+                "A sophisticated cyberattack has compromised data from over 50 Fortune 500 "
+                "companies. Security experts are calling it one of the largest breaches in "
+                "corporate history."
+            ),
             "pubDate": "Mon, 26 May 2025 06:00:00 GMT",
         },
         {
             "title": "New Study Shows Benefits of 4-Day Work Week",
             "link": "https://example.com/4day-work-week",
-            "description": "A comprehensive study involving 100 companies shows that a 4-day work week increases productivity by 25% while improving employee satisfaction and mental health.",
+            "description": (
+                "A comprehensive study involving 100 companies shows that a 4-day work week "
+                "increases productivity by 25% while improving employee satisfaction and mental "
+                "health."
+            ),
             "pubDate": "Sun, 25 May 2025 14:00:00 GMT",
         },
         {
             "title": "Tour de France 2025 Route Announced",
             "link": "https://example.com/tour-de-france",
-            "description": "The 2025 Tour de France route has been revealed, featuring challenging mountain stages in the Alps and Pyrenees. The race will cover 3,500 kilometers over 21 stages.",
+            "description": (
+                "The 2025 Tour de France route has been revealed, featuring challenging mountain "
+                "stages in the Alps and Pyrenees. The race will cover 3,500 kilometers over 21 "
+                "stages."
+            ),
             "pubDate": "Sun, 25 May 2025 10:00:00 GMT",
         },
         {
             "title": "Breaking: AI System Solves Protein Folding Challenge",
             "link": "https://example.com/ai-protein-folding",
-            "description": "Researchers have developed an AI system that can accurately predict protein structures in minutes, potentially accelerating drug discovery and disease treatment research.",
+            "description": (
+                "Researchers have developed an AI system that can accurately predict protein "
+                "structures in minutes, potentially accelerating drug discovery and disease "
+                "treatment research."
+            ),
             "pubDate": "Mon, 26 May 2025 09:00:00 GMT",
         },
     ]
@@ -143,22 +170,22 @@ def test_api_key_retrieval():
 
     try:
         # This will only work if AWS credentials are configured and parameter exists
-        api_key = get_anthropic_api_key()
-        print(f"✓ Successfully retrieved API key (length: {len(api_key)})")
-        return api_key
-    except Exception as e:
+        retrieved_api_key = get_anthropic_api_key()
+        print(f"✓ Successfully retrieved API key (length: {len(retrieved_api_key)})")
+        return retrieved_api_key
+    except (ValueError, KeyError, ImportError) as e:
         print(f"⚠ Could not retrieve API key: {e}")
         print("  (This is expected if AWS credentials or parameter are not configured)")
         return None
 
 
-def test_claude_processing(api_key: Optional[str] = None):
+def test_claude_processing(provided_api_key: Optional[str] = None):
     """Test the full Claude processing pipeline."""
     print("\n=== Testing Claude Processing ===")
 
-    if not api_key:
+    if not provided_api_key:
         print("⚠ Skipping Claude processing test (no API key available)")
-        return
+        return None
 
     # Set up environment
     os.environ["ANTHROPIC_API_KEY_PARAMETER"] = "rss-email-anthropic-api-key"
@@ -198,9 +225,9 @@ def test_claude_processing(api_key: Optional[str] = None):
             print(f"  {i + 1}. {category}")
 
         return result
-    else:
-        print("✗ Failed to process articles with Claude")
-        return None
+
+    print("✗ Failed to process articles with Claude")
+    return None
 
 
 def test_fallback_behavior():
@@ -236,11 +263,11 @@ def run_all_tests():
     test_fallback_behavior()
 
     # Try to get API key for full integration test
-    api_key = test_api_key_retrieval()
+    retrieved_key = test_api_key_retrieval()
 
     # Run Claude processing test if API key is available
-    if api_key or os.environ.get("ANTHROPIC_API_KEY"):
-        test_claude_processing(api_key)
+    if retrieved_key or os.environ.get("ANTHROPIC_API_KEY"):
+        test_claude_processing(retrieved_key)
     else:
         print("\n⚠ Skipping Claude integration test (no API key)")
         print("  To run full tests, ensure:")
@@ -266,8 +293,8 @@ if __name__ == "__main__":
         elif test_name == "api_key":
             test_api_key_retrieval()
         elif test_name == "claude":
-            api_key = os.environ.get("ANTHROPIC_API_KEY") or test_api_key_retrieval()
-            test_claude_processing(api_key)
+            env_key = os.environ.get("ANTHROPIC_API_KEY") or test_api_key_retrieval()
+            test_claude_processing(env_key)
         elif test_name == "fallback":
             test_fallback_behavior()
         else:
