@@ -273,7 +273,7 @@ def _call_claude_api(
         prompt = create_categorization_prompt(articles)
         start_time = datetime.now()
         response = client.messages.create(
-            model=os.environ.get("CLAUDE_MODEL", "claude-3-5-sonnet-20241022"),
+            model=os.environ.get("CLAUDE_MODEL", "claude-3-5-haiku-latest"),
             max_tokens=4000,
             temperature=0.3,
             messages=[{"role": "user", "content": prompt}],
