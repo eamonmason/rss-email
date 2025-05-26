@@ -29,7 +29,7 @@ The RSS Email system now integrates with Anthropic's Claude API to:
 The following environment variables are configured in the CDK stack:
 
 - `ANTHROPIC_API_KEY_PARAMETER`: Name of the AWS Parameter Store parameter containing the API key (default: `rss-email-anthropic-api-key`)
-- `CLAUDE_MODEL`: The Claude model to use (default: `claude-3-5-sonnet-20241022`)
+- `CLAUDE_MODEL`: The Claude model to use (default: `claude-3-5-haiku-latest`)
 - `CLAUDE_MAX_TOKENS`: Maximum tokens per request (default: `100000`)
 - `CLAUDE_MAX_REQUESTS`: Maximum API requests per Lambda execution (default: `5`)
 - `CLAUDE_ENABLED`: Feature flag to enable/disable Claude processing (default: `true`)
