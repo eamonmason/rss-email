@@ -4,6 +4,8 @@ import { CodePipeline, CodePipelineSource, CodeBuildStep } from 'aws-cdk-lib/pip
 import { RSSPipelineAppStage } from './rss_pipeline_app_stage';
 import { ManualApprovalStep } from 'aws-cdk-lib/pipelines';
 import {BuildEnvironmentVariableType} from 'aws-cdk-lib/aws-codebuild';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import { PipelineType } from 'aws-cdk-lib/aws-codepipeline';
 
 export class RSSPipelineStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -11,8 +13,11 @@ export class RSSPipelineStack extends cdk.Stack {
 
     const pipeline = new CodePipeline(this, 'Pipeline', {
       pipelineName: 'RSSPipeline',
+      pipelineType: PipelineType.V2,
       synth: new CodeBuildStep('Synth', {
-        input: CodePipelineSource.gitHub('eamonmason/rss-email', 'main'),
+        input: CodePipelineSource.connection('eamonmason/rss-email', 'main', {
+          connectionArn: 'arn:aws:codeconnections:eu-west-1:002681522526:connection/54e18fbd-fb99-4888-ac79-3a906b55f7ae',
+        }),
         commands: ['npm ci', 'npx cdk synth'],
         buildEnvironment: {
           environmentVariables: {
@@ -35,6 +40,19 @@ export class RSSPipelineStack extends cdk.Stack {
             region: process.env.AWS_REGION
         }
       }));
+    
+    // Grant the pipeline role permission to use the CodeConnections connection
+    // This must be done after the pipeline is built
+    pipeline.buildPipeline();
+    pipeline.pipeline.role.addToPrincipalPolicy(new iam.PolicyStatement({
+      actions: ['codeconnections:UseConnection'],
+      resources: ['arn:aws:codeconnections:eu-west-1:002681522526:connection/54e18fbd-fb99-4888-ac79-3a906b55f7ae'],
+      conditions: {
+        StringEquals: {
+          'codeconnections:FullRepositoryId': 'eamonmason/rss-email'
+        }
+      }
+    }));
     
     //   testingStage.addPost(new ManualApprovalStep('approval'));
     //   testingStage.addPost(new ShellStep("validate", {
