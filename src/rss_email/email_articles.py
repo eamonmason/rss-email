@@ -20,6 +20,21 @@ import pydantic
 from botocore.exceptions import ClientError
 from bs4 import BeautifulSoup
 
+try:
+    from .article_processor import (
+        ClaudeRateLimiter,
+        group_articles_by_priority,
+        process_articles_with_claude,
+    )
+
+    CLAUDE_AVAILABLE = True
+except ImportError:
+    # For local testing or when article_processor is not available
+    CLAUDE_AVAILABLE = False
+    ClaudeRateLimiter = None
+    group_articles_by_priority = None
+    process_articles_with_claude = None
+
 CHARSET = "UTF-8"
 DAYS_OF_NEWS = 3
 EMAIL_SUBJECT = "Daily News"
@@ -93,7 +108,8 @@ def add_attribute_to_dict(
         if name == "description":
             target_dict[name] = get_description_body(tmp_attribute.text)
         else:
-            target_dict[name] = tmp_attribute.text
+            if tmp_attribute.text is not None:
+                target_dict[name] = tmp_attribute.text
 
 
 @pydantic.validate_call(validate_return=True)
@@ -144,6 +160,69 @@ def filter_items(rss_file: str, last_run_date: datetime):
     return all_items
 
 
+def generate_enhanced_html_content(
+    categorized_articles, article_map: Dict[str, Dict[str, Any]]
+) -> str:
+    """Generate the categorized HTML content for the enhanced email template."""
+    content_parts = []
+    article_counter = 0
+
+    for category, articles in categorized_articles:
+        # Determine CSS class for category header
+        category_class = (
+            f"category-{category.lower().replace('/', '').replace(' ', '-')}"
+        )
+
+        content_parts.append('<div class="category-section">')
+        content_parts.append(
+            f'  <div class="category-header {category_class}">{category}</div>'
+        )
+
+        for article in articles:
+            article_counter += 1
+            article_id = f"article_{article_counter}"
+
+            # Build related articles links
+            related_html = ""
+            if article.related_articles:
+                related_links = []
+                for related_id in article.related_articles:
+                    # Find the related article title
+                    idx = int(related_id.split("_")[1])
+                    if idx < len(article_map):
+                        related_title = list(article_map.values())[idx].get(
+                            "title", "Related Article"
+                        )
+                        related_links.append(
+                            f'<span class="related-link">{related_title}</span>'
+                        )
+
+                if related_links:
+                    related_html = f"""
+                    <div class="related-articles">
+                        <span class="related-articles-label">Related:</span>
+                        {" ".join(related_links)}
+                    </div>"""
+
+            content_parts.append(f'''
+            <div class="article">
+                <div class="article-title">
+                    <a href="{article.link}" target="_blank">{article.title}</a>
+                </div>
+                <div class="article-meta">{article.pubdate}</div>
+                <div class="article-summary">{article.summary}</div>
+                <span class="show-more" id="toggle-{article_id}" onclick="toggleDescription('{article_id}')">Show more</span>
+                <div class="article-description" id="desc-{article_id}">
+                    {article.original_description or ""}
+                </div>
+                {related_html}
+            </div>''')
+
+        content_parts.append("</div>")
+
+    return "\n".join(content_parts)
+
+
 @pydantic.validate_call(validate_return=True)
 def generate_html(
     last_run_date: datetime,
@@ -151,10 +230,62 @@ def generate_html(
     s3_prefix: str,
     local_file: Optional[str] = None,
 ) -> str:
-    """Generate the HTML for the email."""
+    """Generate the HTML for the email with optional Claude categorization."""
     rss_file = get_feed_file(s3_bucket, s3_prefix, local_file)
     filtered_items = filter_items(rss_file, last_run_date)
 
+    # Try Claude processing if available and enabled
+    if (
+        CLAUDE_AVAILABLE
+        and os.environ.get("CLAUDE_ENABLED", "true").lower() == "true"
+        and ClaudeRateLimiter is not None
+        and process_articles_with_claude is not None
+        and group_articles_by_priority is not None
+    ):
+        try:
+            logger.info("Attempting to process articles with Claude")
+            rate_limiter = ClaudeRateLimiter()
+            categorized_result = process_articles_with_claude(
+                filtered_items, rate_limiter
+            )
+
+            if categorized_result:
+                logger.info("Successfully processed articles with Claude")
+                # Create article map for lookups
+                article_map = {
+                    f"article_{i}": item for i, item in enumerate(filtered_items)
+                }
+
+                # Get ordered categories
+                ordered_categories = group_articles_by_priority(categorized_result)
+
+                # Generate enhanced HTML content
+                categorized_content = generate_enhanced_html_content(
+                    ordered_categories, article_map
+                )
+
+                # Load enhanced template
+                html_template = (
+                    files("rss_email").joinpath("email_body_enhanced.html").read_text()
+                )
+
+                # Format the template
+                return html_template.format(
+                    subject=EMAIL_SUBJECT,
+                    generation_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    total_articles=len(filtered_items),
+                    total_categories=len(ordered_categories),
+                    categorized_content=categorized_content,
+                )
+            else:
+                logger.warning(
+                    "Claude processing returned no results, falling back to original format"
+                )
+        except Exception as e:
+            logger.error(f"Error during Claude processing: {e}", exc_info=True)
+
+    # Fallback to original HTML generation
+    logger.info("Using original HTML generation (Claude not available or disabled)")
     list_output = ""
     previous_day = ""
     for item in sorted(filtered_items, key=lambda k: k["sortDate"], reverse=True):

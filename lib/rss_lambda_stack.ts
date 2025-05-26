@@ -17,6 +17,7 @@ const KEY = 'rss.xml';
 const SNS_RECEIVE_EMAIL = 'rss-receive-email';
 const RSS_RULE_SET_NAME = 'RSSRuleSet';
 const LAST_RUN_PARAMETER = 'rss-email-lastrun';
+const ANTHROPIC_API_KEY_PARAMETER = 'rss-email-anthropic-api-key';
 
 export class RSSEmailStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -90,6 +91,11 @@ export class RSSEmailStack extends cdk.Stack {
             }),
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
+              actions: ['ssm:GetParameter'],
+              resources: [`arn:aws:ssm:*:*:parameter/${ANTHROPIC_API_KEY_PARAMETER}`],
+            }),
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
               actions: ['ses:SendEmail'],
               resources: [
                 `arn:aws:ses:*:*:identity/${TO_EMAIL_ADDRESS}`,
@@ -142,11 +148,16 @@ export class RSSEmailStack extends cdk.Stack {
         KEY: KEY,
         SOURCE_EMAIL_ADDRESS: SOURCE_EMAIL_ADDRESS,
         TO_EMAIL_ADDRESS: TO_EMAIL_ADDRESS,
-        LAST_RUN_PARAMETER: LAST_RUN_PARAMETER
+        LAST_RUN_PARAMETER: LAST_RUN_PARAMETER,
+        ANTHROPIC_API_KEY_PARAMETER: ANTHROPIC_API_KEY_PARAMETER,
+        CLAUDE_MODEL: 'claude-3-5-sonnet-20241022',
+        CLAUDE_MAX_TOKENS: '100000',
+        CLAUDE_MAX_REQUESTS: '5',
+        CLAUDE_ENABLED: 'true'
       },
       role: role,
       layers: [layer],
-      timeout: cdk.Duration.seconds(30)
+      timeout: cdk.Duration.seconds(60)  // Increased from 30s to accommodate Claude API calls
     });
 
     const emailerEventRule = new events.Rule(this, 'emailerEventRule', {
