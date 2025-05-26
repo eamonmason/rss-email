@@ -213,7 +213,7 @@ export class RSSEmailStack extends cdk.Stack {
         TO_EMAIL_ADDRESS: TO_EMAIL_ADDRESS,
         LAST_RUN_PARAMETER: LAST_RUN_PARAMETER,
         ANTHROPIC_API_KEY_PARAMETER: ANTHROPIC_API_KEY_PARAMETER,
-        CLAUDE_MODEL: 'claude-sonnet-4-20250514',
+        CLAUDE_MODEL: 'claude-3-5-haiku-20241022',
         CLAUDE_MAX_TOKENS: '100000',
         CLAUDE_MAX_REQUESTS: '5',
         CLAUDE_ENABLED: 'true',

@@ -80,8 +80,22 @@ def process_articles(
 
         # Process with Claude
         logging.info("Processing articles with Claude...")
+        logging.info("Environment CLAUDE_MODEL = %s", os.environ.get("CLAUDE_MODEL"))
+
+        # Ensure CLAUDE_MODEL is visible in the environment
+        if "CLAUDE_MODEL" in os.environ:
+            logging.info("CLAUDE_MODEL is present in environment variables")
+        else:
+            logging.warning("CLAUDE_MODEL is not in environment variables!")
+
         rate_limiter = ClaudeRateLimiter()
-        result = process_articles_with_claude(filtered_items, rate_limiter)
+        try:
+            result = process_articles_with_claude(filtered_items, rate_limiter)
+            if not result:
+                logging.error("Failed to process articles with Claude")
+
+        except (ValueError, KeyError, TypeError, AttributeError) as e:
+            logging.error("Failed to process articles with Claude: %s", e)
 
         if not result:
             logging.error("Failed to process articles with Claude")
@@ -170,6 +184,9 @@ def main():
         try:
             dotenv.load_dotenv(args.env_file)
             print(f"Loaded environment variables from {args.env_file}")
+            # Add debugging info to verify loaded model
+            print(f"Using Claude model: {os.environ.get('CLAUDE_MODEL', 'not set')}")
+            # sys.exit(0)
         except ImportError:
             print(
                 "python-dotenv package not installed. Install with: pip install python-dotenv"

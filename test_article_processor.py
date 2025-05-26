@@ -21,6 +21,7 @@ from rss_email.article_processor import (
     group_articles_by_priority,
     process_articles_with_claude,
 )
+from rss_email.compression_utils import compress_json, decompress_json
 
 # pylint: enable=wrong-import-position
 
@@ -250,6 +251,42 @@ def test_fallback_behavior():
     print("✓ Returns None for empty article list")
 
 
+def test_json_compression():
+    """Test JSON compression and decompression."""
+    print("\n=== Testing JSON Compression ===")
+
+    # Create test data
+    test_data = {
+        "categories": {
+            "Technology": [
+                {
+                    "id": "article_0",
+                    "title": "Test Article",
+                    "link": "https://example.com",
+                    "summary": "This is a test summary.",
+                    "category": "Technology",
+                    "pubdate": "Mon, 26 May 2025 12:00:00 GMT",
+                    "related_articles": [],
+                }
+            ]
+        }
+    }
+
+    # Compress
+    compressed = compress_json(test_data)
+    print(f"Original size: {len(json.dumps(test_data))} bytes")
+    print(f"Compressed size: {len(compressed)} bytes")
+
+    # Decompress
+    decompressed = decompress_json(compressed)
+
+    # Verify
+    if decompressed == test_data:
+        print("✓ Compression/decompression successful - data matches")
+    else:
+        print("✗ Compression test failed - data doesn't match")
+
+
 def run_all_tests():
     """Run all tests."""
     print("=" * 60)
@@ -261,6 +298,7 @@ def run_all_tests():
     test_token_estimation()
     test_prompt_creation()
     test_fallback_behavior()
+    test_json_compression()
 
     # Try to get API key for full integration test
     retrieved_key = test_api_key_retrieval()
@@ -297,10 +335,12 @@ if __name__ == "__main__":
             test_claude_processing(env_key)
         elif test_name == "fallback":
             test_fallback_behavior()
+        elif test_name == "compression":
+            test_json_compression()
         else:
             print(f"Unknown test: {test_name}")
             print(
-                "Available tests: rate_limiter, tokens, prompt, api_key, claude, fallback"
+                "Available tests: rate_limiter, tokens, prompt, api_key, claude, fallback, compression"
             )
     else:
         run_all_tests()

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+# Add these imports at the top
+import base64
+import gzip
 import json
 import logging
 import os
@@ -15,7 +18,11 @@ from botocore.exceptions import ClientError
 from pydantic import BaseModel, Field
 from pydantic.config import ConfigDict
 
-from rss_email.json_utils import extract_json_from_text
+from rss_email.json_repair import (
+    repair_truncated_json,
+)  # Move this import to the top level
+
+# Add to the top imports section
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -140,6 +147,21 @@ def estimate_tokens(articles: List[Dict[str, Any]]) -> int:
     return total_chars // 4
 
 
+# Add these utility functions
+def compress_json(data: Dict[str, Any]) -> str:
+    """Compress JSON data to base64-encoded gzipped string."""
+    json_str = json.dumps(data)
+    compressed = gzip.compress(json_str.encode("utf-8"))
+    return base64.b64encode(compressed).decode("ascii")
+
+
+def decompress_json(compressed_str: str) -> Dict[str, Any]:
+    """Decompress base64-encoded gzipped JSON string."""
+    decoded = base64.b64decode(compressed_str)
+    decompressed = gzip.decompress(decoded)
+    return json.loads(decompressed.decode("utf-8"))
+
+
 def create_categorization_prompt(articles: List[Dict[str, Any]]) -> str:
     """Create the prompt for Claude to categorize and summarize articles."""
     articles_json = []
@@ -162,22 +184,28 @@ def create_categorization_prompt(articles: List[Dict[str, Any]]) -> str:
 Categories to use (in priority order - prefer tech-related categories when applicable):
 {", ".join(PRIORITY_CATEGORIES)}
 
-Return a JSON response in this exact format:
+YOU MUST FOLLOW THESE STRICT FORMAT RULES:
+- First process all articles normally into the JSON structure described below
+- Then compress the entire JSON object using the following steps:
+  1. Convert your JSON to a compact string with no whitespace
+  2. Return ONLY that compressed JSON with no other text
+- Do not include any explanations, notes, or text before or after the JSON
+- Your entire response must be valid JSON with no whitespace that can be directly parsed
+
+Return a JSON response in this exact format (before compression):
 {{
   "categories": {{
-    "category_name": {{
-      "articles": [
-        {{
-          "id": "article_X",
-          "title": "original title",
-          "link": "original link",
-          "summary": "2-3 sentence summary",
-          "category": "category_name",
-          "pubdate": "original pubdate",
-          "related_articles": ["article_Y", "article_Z"]
-        }}
-      ]
-    }}
+    "category_name": [
+      {{
+        "id": "article_X",
+        "title": "original title",
+        "link": "original link",
+        "summary": "2-3 sentence summary",
+        "category": "category_name",
+        "pubdate": "original pubdate",
+        "related_articles": ["article_Y", "article_Z"]
+      }}
+    ]
   }}
 }}
 
@@ -209,6 +237,12 @@ def process_articles_with_claude(
     try:
         # Initialize client and process articles
         result = _process_with_claude_client(articles, rate_limiter)
+
+        # Validate the result is properly formatted before returning
+        if result is not None and not isinstance(result, CategorizedArticles):
+            logger.error("Expected CategorizedArticles but got %r", type(result))
+            return None
+
     except (
         json.JSONDecodeError,
         anthropic.APIError,
@@ -217,7 +251,7 @@ def process_articles_with_claude(
         ValueError,
         ClientError,
     ) as e:
-        _log_processing_error(e)
+        logger.error("Failed to process articles with Claude: %s", e)
 
     return result
 
@@ -303,8 +337,14 @@ def _call_claude_api(
         # Get timeout from environment variable or default to 120 seconds (2 minutes)
         api_timeout = int(os.environ.get("CLAUDE_API_TIMEOUT", "120"))
 
-        # Get model name
-        model_name = os.environ.get("CLAUDE_MODEL", "claude-3-5-sonnet-20241022")
+        # Use environment variable CLAUDE_MODEL without default
+        model_name = os.environ.get("CLAUDE_MODEL")
+        if not model_name:
+            logger.warning("CLAUDE_MODEL not set, using default model")
+            model_name = "claude-3-7-sonnet-latest"  # Updated default model
+
+        # Debug to check what's being used
+        logger.debug("Using environment model: %s", model_name)
 
         # Set max_tokens based on model to avoid errors
         max_tokens = _get_max_tokens_for_model(model_name)
@@ -315,16 +355,31 @@ def _call_claude_api(
         response = client.messages.create(
             model=model_name,
             max_tokens=max_tokens,
-            temperature=0.3,
+            temperature=0.3,  # Use 0.0 for more deterministic JSON responses
             messages=[{"role": "user", "content": prompt}],
             timeout=api_timeout,  # Set API request timeout
         )
 
-        # Parse response using the shared extraction function
-        response_text = response.content[0].text
-        categorized_data = extract_json_from_text(
-            response_text, required_fields=["categories"]
-        )
+        # Parse response text
+        response_text = response.content[0].text.strip()
+
+        # Try to extract valid JSON with error handling for truncation
+        categorized_data = None
+        try:
+            # First attempt to parse the entire response as JSON
+            categorized_data = json.loads(response_text)
+        except json.JSONDecodeError as e:
+            # If parsing fails, use the json_repair module instead of manual repair
+            logger.warning("JSON parse error: %s. Attempting to repair response.", e)
+
+            # Try to repair the JSON (using the top-level import)
+            categorized_data = repair_truncated_json(response_text)
+
+            if categorized_data is None:
+                logger.error(
+                    "Failed to repair truncated JSON using repair_truncated_json"
+                )
+                return None, None
 
         if not categorized_data:
             logger.error("Could not extract valid JSON from response")
@@ -357,6 +412,12 @@ def _call_claude_api(
 
 def _get_max_tokens_for_model(model_name: str) -> int:
     """Get the maximum token limit for a given Claude model."""
+    if "claude-sonnet-4" in model_name:
+        return 28000  # Claude 4 Sonnet has a higher token limit
+
+    if "claude-3-7-sonnet" in model_name:
+        return 40000
+
     if "claude-3-5-sonnet" in model_name:
         return 8000  # Safe value below the 8,192 limit
 
@@ -404,27 +465,63 @@ def _create_categorized_articles(
     """Convert categorized data to structured format."""
     processed_categories = {}
 
-    for category, category_data in categorized_data["categories"].items():
-        processed_articles = []
-        for article in category_data["articles"]:
-            # Find original description
-            article_id = article["id"]
-            idx = int(article_id.split("_")[1])
-            original_desc = articles[idx].get("description", "")
+    # Handle both possible JSON structures from Claude
+    if "categories" in categorized_data:
+        categories_data = categorized_data["categories"]
 
-            processed_article = ProcessedArticle(
-                title=article["title"],
-                link=article["link"],
-                summary=article["summary"],
-                category=category,
-                pubdate=article["pubdate"],
-                related_articles=article.get("related_articles", []),
-                original_description=original_desc,
-            )
-            processed_articles.append(processed_article)
+        # Handle structure where categories are keys
+        if isinstance(categories_data, dict):
+            for category, category_data in categories_data.items():
+                articles_data = category_data
+                # Handle both possible structures for articles
+                if isinstance(category_data, dict) and "articles" in category_data:
+                    articles_data = category_data["articles"]
 
-        if processed_articles:
-            processed_categories[category] = processed_articles
+                processed_articles = []
+                for article in articles_data:
+                    # Find original description
+                    article_id = article["id"]
+                    idx = int(article_id.split("_")[1])
+                    original_desc = articles[idx].get("description", "")
+
+                    processed_article = ProcessedArticle(
+                        title=article["title"],
+                        link=article["link"],
+                        summary=article["summary"],
+                        category=category,
+                        pubdate=article["pubdate"],
+                        related_articles=article.get("related_articles", []),
+                        original_description=original_desc,
+                    )
+                    processed_articles.append(processed_article)
+
+                if processed_articles:
+                    processed_categories[category] = processed_articles
+
+        # Handle structure where categories is a list of category objects
+        elif isinstance(categories_data, list):
+            for category_obj in categories_data:
+                if "name" in category_obj and "articles" in category_obj:
+                    category = category_obj["name"]
+                    processed_articles = []
+                    for article in category_obj["articles"]:
+                        article_id = article["id"]
+                        idx = int(article_id.split("_")[1])
+                        original_desc = articles[idx].get("description", "")
+
+                        processed_article = ProcessedArticle(
+                            title=article["title"],
+                            link=article["link"],
+                            summary=article["summary"],
+                            category=category,
+                            pubdate=article["pubdate"],
+                            related_articles=article.get("related_articles", []),
+                            original_description=original_desc,
+                        )
+                        processed_articles.append(processed_article)
+
+                    if processed_articles:
+                        processed_categories[category] = processed_articles
 
     return CategorizedArticles(
         categories=processed_categories,
