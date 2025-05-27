@@ -425,10 +425,10 @@ def _get_max_tokens_for_model(model_name: str) -> int:
         return 30000
 
     if "claude-3-haiku" in model_name:
-        return 4000
+        return 8192
 
     if "claude-3-5-haiku" in model_name:
-        return 4000
+        return 8192  # Safe value below the 8,192 limit
 
     if "claude-2" in model_name:
         return 100000  # Claude 2 had very high limits
