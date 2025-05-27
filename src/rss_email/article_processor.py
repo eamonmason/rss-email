@@ -211,6 +211,7 @@ Return a JSON response in this exact format (before compression):
 
 Important:
 - Every article must appear in exactly one category
+- All original articles must be included in the response. The count of articles in the response must match the input count.
 - Preserve all original article data (title, link, pubdate)
 - Group similar articles using the related_articles field
 - Prioritize tech-related categories over entertainment/lifestyle categories
