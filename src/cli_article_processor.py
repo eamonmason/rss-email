@@ -89,13 +89,14 @@ def process_articles(
             logging.warning("CLAUDE_MODEL is not in environment variables!")
 
         rate_limiter = ClaudeRateLimiter()
+        result = None
         try:
             result = process_articles_with_claude(filtered_items, rate_limiter)
-            if not result:
-                logging.error("Failed to process articles with Claude")
-
         except (ValueError, KeyError, TypeError, AttributeError) as e:
             logging.error("Failed to process articles with Claude: %s", e)
+            if debug:
+                traceback.print_exc()
+            return
 
         if not result:
             logging.error("Failed to process articles with Claude")

@@ -176,23 +176,36 @@ def create_categorization_prompt(articles: List[Dict[str, Any]]) -> str:
             }
         )
 
-    prompt = f"""Analyze these RSS articles and categorize them intelligently. For each article:
-1. Assign it to the most appropriate category from the list below
-2. Create a concise 2-3 sentence summary that captures the key information
-3. Identify related articles that cover similar topics or events
+    prompt = f"""You are processing {len(articles_json)} RSS articles.
+                 You MUST return ALL {len(articles_json)} articles in your response.
 
-Categories to use (in priority order - prefer tech-related categories when applicable):
+CRITICAL REQUIREMENTS:
+- Input: {len(articles_json)} articles
+- Output: EXACTLY {len(articles_json)} articles (no more, no less)
+- Every single article from the input must appear in your output
+- If you're unsure about categorization, use your best judgment but DO NOT omit any articles
+
+PROCESSING INSTRUCTIONS:
+1. Read through ALL articles first to get complete context
+2. Categorize each article using the priority categories below
+3. Create 2-3 sentence summaries for each article
+4. Identify related articles that cover similar topics
+5. VERIFY your output contains all {len(articles_json)} articles before responding
+
+CATEGORIES (in priority order - prefer tech-related when applicable):
 {", ".join(PRIORITY_CATEGORIES)}
+
+Return a JSON response in this exact format (before compression):
 
 YOU MUST FOLLOW THESE STRICT FORMAT RULES:
 - First process all articles normally into the JSON structure described below
-- Then compress the entire JSON object using the following steps:
-  1. Convert your JSON to a compact string with no whitespace
-  2. Return ONLY that compressed JSON with no other text
-- Do not include any explanations, notes, or text before or after the JSON
+- Then compress the entire JSON object with the following steps: 
+   1. Convert your JSON to a compact string with no whitespace
+   2. Return ONLY that compressed JSON with no other text
+- Do not include any explanations, notes, or additional text before or after the JSON
 - Your entire response must be valid JSON with no whitespace that can be directly parsed
 
-Return a JSON response in this exact format (before compression):
+Required JSON structure (compress before returning):
 {{
   "categories": {{
     "category_name": [
@@ -206,15 +219,23 @@ Return a JSON response in this exact format (before compression):
         "related_articles": ["article_Y", "article_Z"]
       }}
     ]
+  }},
+  "article_count": {len(articles_json)},
+  "verification": "processed_all_articles"
+}}
+
   }}
 }}
 
 Important:
 - Every article must appear in exactly one category
-- All original articles must be included in the response. The count of articles in the response must match the input count.
+- All original articles must be included in the response.
+- The count of articles in the response must match the input count.
 - Preserve all original article data (title, link, pubdate)
 - Group similar articles using the related_articles field
 - Prioritize tech-related categories over entertainment/lifestyle categories
+
+FINAL CHECK: Before responding, count your articles and confirm you have exactly {len(articles_json)} articles.
 
 Articles to process:
 {json.dumps(articles_json, indent=2)}
