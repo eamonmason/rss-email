@@ -35,7 +35,7 @@ jobs:
       env:
         CDK_DOCKER: "false"
       run: |
-        npm install -g aws-cdk@^2.1018.1
+        npm install -g aws-cdk@^2.198.0
         npx cdk synth --no-staging
     - name: Run unit tests
       run: |
