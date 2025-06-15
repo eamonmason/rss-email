@@ -1,0 +1,9 @@
+{
+  "name": "log-forwarder",
+  "version": "1.0.0",
+  "description": "Lambda function to forward CloudWatch logs to SNS",
+  "main": "log_forwarder.js",
+  "dependencies": {
+    "aws-sdk": "^2.1413.0"
+  }
+}

@@ -1,7 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { CodePipeline, CodePipelineSource, CodeBuildStep } from 'aws-cdk-lib/pipelines';
-import { RSSPipelineAppStage } from './rss_pipeline_app_stage';
+import { RSSPipelineAppStage } from './rss_pipeline_app_stage.js';
 import { ManualApprovalStep } from 'aws-cdk-lib/pipelines';
 import {BuildEnvironmentVariableType} from 'aws-cdk-lib/aws-codebuild';
 import * as iam from 'aws-cdk-lib/aws-iam';

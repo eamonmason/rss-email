@@ -1,6 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from "constructs";
-import { RSSEmailStack } from './rss_lambda_stack';
+import { RSSEmailStack } from './rss_lambda_stack.js';
 
 export class RSSPipelineAppStage extends cdk.Stage {
 

@@ -1,14 +1,16 @@
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as events from 'aws-cdk-lib/aws-events'
+import * as events from 'aws-cdk-lib/aws-events';
 import { SnsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
-import * as targets from 'aws-cdk-lib/aws-events-targets'
+import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as ses from 'aws-cdk-lib/aws-ses';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as destinations from 'aws-cdk-lib/aws-logs-destinations';
 import * as actions from 'aws-cdk-lib/aws-ses-actions';
+import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import { Construct } from 'constructs';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -18,6 +20,7 @@ import { execSync } from 'child_process';
 const BUCKET_NAME = 'rss-bucket';
 const KEY = 'rss.xml';
 const SNS_RECEIVE_EMAIL = 'rss-receive-email';
+const SNS_ERROR_ALERTS = 'rss-error-alerts';
 const RSS_RULE_SET_NAME = 'RSSRuleSet';
 const LAST_RUN_PARAMETER = 'rss-email-lastrun';
 const ANTHROPIC_API_KEY_PARAMETER = 'rss-email-anthropic-api-key';
@@ -36,6 +39,14 @@ export class RSSEmailStack extends cdk.Stack {
     });
 
     const receive_topic = new sns.Topic(this, SNS_RECEIVE_EMAIL);
+    
+    // Create an SNS topic for error alerts
+    const error_alerts_topic = new sns.Topic(this, SNS_ERROR_ALERTS);
+    const errorSubscription = new sns.Subscription(this, 'ErrorEmailSubscription', {
+      topic: error_alerts_topic,
+      endpoint: TO_EMAIL_ADDRESS,
+      protocol: sns.SubscriptionProtocol.EMAIL
+    });
 
     const MyTopicPolicy = new sns.TopicPolicy(this, 'RSSTopicSNSPolicy', {
       topics: [receive_topic],
@@ -184,7 +195,7 @@ export class RSSEmailStack extends cdk.Stack {
     })
 
     const RSSGenerationFunction = new lambda.Function(this, 'RSSGenerationFunction', {
-      code: new lambda.AssetCode('src'),
+      code: lambda.Code.fromAsset('src'),
       handler: 'rss_email.retrieve_articles.create_rss',
       runtime: lambda.Runtime.PYTHON_3_13,
       environment: {
@@ -203,7 +214,7 @@ export class RSSEmailStack extends cdk.Stack {
     generationEventRule.addTarget(new targets.LambdaFunction(RSSGenerationFunction))
 
     const RSSEMailerFunction = new lambda.Function(this, 'RSSEmailerFunction', {
-      code: new lambda.AssetCode('src'), // directory of your lambda function code
+      code: lambda.Code.fromAsset('src'), // directory of your lambda function code
       handler: 'rss_email.email_articles.send_email', // filename.methodname
       runtime: lambda.Runtime.PYTHON_3_13,
       environment: {
@@ -240,6 +251,91 @@ export class RSSEmailStack extends cdk.Stack {
       logGroupName: `/aws/lambda/${RSSEMailerFunction.functionName}`,
       retention: logs.RetentionDays.ONE_MONTH,
       removalPolicy: cdk.RemovalPolicy.DESTROY
+    });
+
+    // Add CloudWatch metric filter to extract ERROR and WARNING logs
+    const emailerErrorMetricFilter = new logs.MetricFilter(this, 'EmailErrorMetricFilter', {
+      logGroup: rssEmailLogGroup,
+      filterPattern: logs.FilterPattern.anyTerm('ERROR', 'WARNING', 'Error', 'Warning', 'error', 'warning'),
+      metricNamespace: 'RSS/EmailLambda',
+      metricName: 'ErrorWarningCount',
+      defaultValue: 0,
+      metricValue: '1',
+    });
+
+    // Create an alarm based on the metric that triggers when there's at least one ERROR or WARNING message
+    const errorAlarm = new cdk.aws_cloudwatch.Alarm(this, 'EmailLambdaErrorAlarm', {
+      metric: emailerErrorMetricFilter.metric(),
+      threshold: 1,
+      evaluationPeriods: 1,
+      comparisonOperator: cdk.aws_cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: cdk.aws_cloudwatch.TreatMissingData.NOT_BREACHING,
+      alarmDescription: 'Alarm for ERROR or WARNING log messages in RSS Email Lambda',
+      actionsEnabled: true,
+    });
+
+    // Add the SNS topic as an action for the alarm
+    errorAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(error_alerts_topic));
+
+    // Apply the same for the RSS generation function
+    const rssGenerationErrorMetricFilter = new logs.MetricFilter(this, 'GenerationErrorMetricFilter', {
+      logGroup: rssGenerationLogGroup,
+      filterPattern: logs.FilterPattern.anyTerm('ERROR', 'WARNING', 'Error', 'Warning', 'error', 'warning'),
+      metricNamespace: 'RSS/GenerationLambda',
+      metricName: 'ErrorWarningCount',
+      defaultValue: 0,
+      metricValue: '1',
+    });
+
+    const generationErrorAlarm = new cdk.aws_cloudwatch.Alarm(this, 'GenerationLambdaErrorAlarm', {
+      metric: rssGenerationErrorMetricFilter.metric(),
+      threshold: 1,
+      evaluationPeriods: 1,
+      comparisonOperator: cdk.aws_cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: cdk.aws_cloudwatch.TreatMissingData.NOT_BREACHING,
+      alarmDescription: 'Alarm for ERROR or WARNING log messages in RSS Generation Lambda',
+      actionsEnabled: true,
+    });
+
+    generationErrorAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(error_alerts_topic));
+
+    // Create a Lambda function that will forward log events to the SNS topic
+    const logForwarderFunction = new lambda.Function(this, 'LogForwarderFunction', {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: 'rss_email/log_forwarder.handler',
+      code: lambda.Code.fromAsset('src'),
+      environment: {
+        SNS_TOPIC_ARN: error_alerts_topic.topicArn
+      }
+    });
+    
+    // Grant the Lambda function necessary permissions
+    error_alerts_topic.grantPublish(logForwarderFunction);
+    
+    // Add CloudWatch Logs permissions
+    logForwarderFunction.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'logs:CreateLogGroup',
+        'logs:CreateLogStream',
+        'logs:PutLogEvents',
+        'logs:DescribeLogStreams'
+      ],
+      resources: ['*']
+    }));
+
+    // Create log subscription filters to send the actual log messages to the SNS topic via Lambda
+    // This ensures the actual log message content is included in the notification
+    const emailerLogSubscription = new logs.SubscriptionFilter(this, 'EmailerLogSubscription', {
+      logGroup: rssEmailLogGroup,
+      destination: new destinations.LambdaDestination(logForwarderFunction),
+      filterPattern: logs.FilterPattern.anyTerm('ERROR', 'WARNING', 'Error', 'Warning', 'error', 'warning'),
+    });
+
+    const generationLogSubscription = new logs.SubscriptionFilter(this, 'GenerationLogSubscription', {
+      logGroup: rssGenerationLogGroup,
+      destination: new destinations.LambdaDestination(logForwarderFunction),
+      filterPattern: logs.FilterPattern.anyTerm('ERROR', 'WARNING', 'Error', 'Warning', 'error', 'warning'),
     });
   }
 }
