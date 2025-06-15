@@ -39,4 +39,5 @@ jobs:
         AWS_REGION: 'us-east-1'
         FEED_DEFINITIONS_FILE: 'feeds.json'
       run: |
+        npm install -g aws-cdk@^2.1018.1
         npx cdk synth --no-staging
