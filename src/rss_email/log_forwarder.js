@@ -4,21 +4,21 @@
  * This Lambda function processes CloudWatch log events and forwards
  * ERROR and WARNING messages to an SNS topic for notification.
  */
-const AWS = require('aws-sdk');
+const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
 const zlib = require('zlib');
 
 // Initialize SNS client - allow for dependency injection in testing
-let sns;
+let snsClient;
 
 /**
  * Initializes the AWS SNS client
- * @returns {AWS.SNS} The SNS client
+ * @returns {SNSClient} The SNS client
  */
 const getSNSClient = () => {
-  if (!sns) {
-    sns = new AWS.SNS();
+  if (!snsClient) {
+    snsClient = new SNSClient();
   }
-  return sns;
+  return snsClient;
 };
 
 /**
@@ -69,7 +69,8 @@ Message: ${message}
     Message: snsMessage
   };
 
-  return getSNSClient().publish(params).promise();
+  const command = new PublishCommand(params);
+  return getSNSClient().send(command);
 };
 
 /**
@@ -133,4 +134,4 @@ exports.handler = async (event) => {
 // For testing purposes
 exports.detectLogLevel = detectLogLevel;
 exports.decodeLogData = decodeLogData;
-exports.setSNSClient = (client) => { sns = client; };
+exports.setSNSClient = (client) => { snsClient = client; };

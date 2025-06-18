@@ -18,6 +18,7 @@
   "dependencies": {
     "aws-cdk-lib": "*",
     "aws-cdk": "*",
+    "@aws-sdk/client-sns": "^3.427.0",
     "constructs": "^10.x",
     "dotenv": "^16.x",
     "source-map-support": "^0.x",
