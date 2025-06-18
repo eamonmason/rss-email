@@ -146,6 +146,64 @@ class TestRetrieveArticles(unittest.TestCase):
             os.environ.pop("KEY", None)
             os.environ.pop("FEED_DEFINITIONS_FILE", None)
 
+    def test_get_specific_problematic_feed(self):
+        """Test the feed URL that was returning 403 Forbidden errors."""
+        # This test will verify that our fix for the 403 error works
+        url = "https://towardsdatascience.com/feed/"
+        timestamp = datetime.now() - timedelta(days=3)
+
+        # This should now work without getting a 403 Forbidden error
+        result = get_feed_items(url, timestamp)
+
+        # Verify we got a response with actual RSS content
+        self.assertNotEqual(result, b"")
+        self.assertIn(b"<rss", result)
+
+    def test_originally_problematic_feeds(self):
+        """Test specifically the feeds that were causing issues."""
+        # Only test the feed that was causing a 403 Forbidden error
+        feeds = [
+            "https://towardsdatascience.com/feed/",
+            "https://www.techmeme.com/feed.xml",  # This feed should work reliably
+        ]
+
+        timestamp = datetime.now() - timedelta(days=3)
+
+        for feed_url in feeds:
+            with self.subTest(feed=feed_url):
+                result = get_feed_items(feed_url, timestamp)
+                # Verify we got actual content
+                self.assertNotEqual(result, b"")
+                # Verify it looks like RSS/XML content - only check for the techmeme feed
+                # which is more reliable and predictable
+                if "techmeme" in feed_url:
+                    self.assertTrue(
+                        b"<rss" in result or b"<feed" in result or b"<?xml" in result,
+                        f"Feed {feed_url} did not return valid RSS/XML content",
+                    )
+
+    def test_ssl_certificate_handling(self):
+        """Test the SSL certificate verification handling with fallback to unverified."""
+        # Test some feeds that are likely to have SSL certificate issues but should work with our fallback
+        # Using feeds that worked in our test_all_feeds.py
+        feeds_to_test = [
+            "https://stratechery.passport.online/feed/rss/S4nwHuhEnykTmJfDZVx4Ui",  # This worked with our SSL fix
+            "https://www.awsarchitectureblog.com/atom.xml",  # This should work with our SSL fix
+        ]
+
+        timestamp = datetime.now() - timedelta(days=3)
+
+        for feed_url in feeds_to_test:
+            with self.subTest(feed=feed_url):
+                result = get_feed_items(feed_url, timestamp)
+                # Verify we got actual content
+                self.assertNotEqual(result, b"")
+                # Verify it looks like RSS/XML content
+                self.assertTrue(
+                    b"<rss" in result or b"<feed" in result or b"<?xml" in result,
+                    f"Feed {feed_url} did not return valid RSS/XML content",
+                )
+
     EXAMPLE_RSS_FILE = """
     {
             "feeds": [
