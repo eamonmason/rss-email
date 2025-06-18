@@ -2,12 +2,18 @@
 """
 Test script for the article_processor module.
 This script allows comprehensive testing of the Claude integration locally.
+Also includes specific tests for the _create_categorized_articles function to handle error cases.
 """
 
 import json
+import logging
 import os
 import sys
 from typing import Any, Dict, List, Optional
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger()
 
 # Add the src directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
@@ -15,6 +21,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 # pylint: disable=wrong-import-position
 from rss_email.article_processor import (
     ClaudeRateLimiter,
+    _create_categorized_articles,
     create_categorization_prompt,
     estimate_tokens,
     get_anthropic_api_key,
@@ -287,6 +294,83 @@ def test_json_compression():
         print("✗ Compression test failed - data doesn't match")
 
 
+def test_categorized_articles_integer_bug():
+    """Test fix for the integer data bug in _create_categorized_articles."""
+    print("\n" + "=" * 60)
+    print("Testing _create_categorized_articles with problematic data structures")
+    print("=" * 60)
+
+    # Mock articles data
+    mock_articles = [
+        {
+            "title": "Test Article 1",
+            "description": "Description 1",
+            "link": "https://example.com/1",
+        },
+        {
+            "title": "Test Article 2",
+            "description": "Description 2",
+            "link": "https://example.com/2",
+        },
+    ]
+    print(f"Created mock articles: {len(mock_articles)}")
+
+    # Mock usage stats
+    mock_usage_stats = {"processed_at": "2025-06-18T12:00:00", "tokens_used": 1000}
+
+    # Test case 1: Integer instead of list
+    print("\n=== Test Case 1: Integer instead of list ===")
+    invalid_structure = {
+        "categories": {
+            "Technology": 42  # Integer instead of list of articles
+        }
+    }
+
+    result = _create_categorized_articles(
+        invalid_structure, mock_articles, mock_usage_stats
+    )
+    print(f"Result: {result}")
+    print(f"Categories: {result.categories}")
+    print(f"Number of categories: {len(result.categories)}")
+    assert len(result.categories) == 0, (
+        "Should have no categories when given an integer instead of list"
+    )
+
+    # Test case 2: Valid structure
+    print("\n=== Test Case 2: Valid structure ===")
+    valid_structure = {
+        "categories": {
+            "Technology": [
+                {
+                    "id": "article_0",
+                    "title": "Test Article 1",
+                    "link": "https://example.com/1",
+                    "summary": "Summary 1",
+                    "category": "Technology",
+                    "pubdate": "Mon, 18 Jun 2025",
+                    "related_articles": [],
+                }
+            ]
+        }
+    }
+
+    result = _create_categorized_articles(
+        valid_structure, mock_articles, mock_usage_stats
+    )
+    print(f"Result: {result}")
+    print(f"Categories: {result.categories}")
+    print(f"Number of categories: {len(result.categories)}")
+    if "Technology" in result.categories:
+        print(f"Number of technology articles: {len(result.categories['Technology'])}")
+    assert "Technology" in result.categories, "Should have Technology category"
+    assert len(result.categories["Technology"]) == 1, (
+        "Should have one article in Technology category"
+    )
+
+    print("\nAll tests successful!")
+    return True
+
+
 def run_all_tests():
     """Run all tests."""
     print("=" * 60)
@@ -299,6 +383,7 @@ def run_all_tests():
     test_prompt_creation()
     test_fallback_behavior()
     test_json_compression()
+    test_categorized_articles_integer_bug()
 
     # Try to get API key for full integration test
     retrieved_key = test_api_key_retrieval()
@@ -337,10 +422,13 @@ if __name__ == "__main__":
             test_fallback_behavior()
         elif test_name == "compression":
             test_json_compression()
+        elif test_name == "int_bug":
+            test_categorized_articles_integer_bug()
         else:
             print(f"Unknown test: {test_name}")
             print(
-                "Available tests: rate_limiter, tokens, prompt, api_key, claude, fallback, compression"
+                "Available tests: rate_limiter, tokens, prompt, api_key, claude, fallback, compression, int_bug"
             )
     else:
-        run_all_tests()
+        # Default to running the integer bug test if no arguments provided
+        test_categorized_articles_integer_bug()
