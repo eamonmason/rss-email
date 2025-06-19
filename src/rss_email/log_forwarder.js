@@ -152,7 +152,7 @@ const decodeLogData = (event) => {
  */
 const shouldSendAggregatedLogs = () => {
   const now = Date.now();
-  const fiveMinutesInMs = 5 * 60 * 1000;
+  const fiveMinutesInMs = 4 * 60 * 1000;
   return (now - aggregatedLogs.lastSentTime) >= fiveMinutesInMs;
 };
 
