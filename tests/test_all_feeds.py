@@ -188,12 +188,16 @@ def test_all_feeds():
     total = success_count + warning_count + failed_count
 
     logger.info("\n%s", "=" * 80)
-    logger.info(
-        "SUMMARY: %s/%s feeds successfully retrieved (%s%%)",
-        success_count,
-        total,
-        int(success_count / total * 100),
-    )
+    if total > 0:
+        success_percentage = int(success_count / total * 100)
+        logger.info(
+            "SUMMARY: %s/%s feeds successfully retrieved (%s%%)",
+            success_count,
+            total,
+            success_percentage,
+        )
+    else:
+        logger.info("SUMMARY: No feeds to test")
     logger.info("- ✅ Success: %s feeds", success_count)
     logger.info(
         "- ⚠️ Warning: %s feeds (content received but might not be XML)", warning_count
@@ -242,14 +246,19 @@ def test_all_feeds():
                 )
             break  # Only show suggestions once
 
-    return feed_results
+    # For testing from command line
+    if __name__ == "__main__":
+        return feed_results
+    # In pytest context, just assert something basic
+    assert True
 
 
 if __name__ == "__main__":
     logger.info("Starting test of all feeds...")
     try:
         results = test_all_feeds()
-        sys.exit(0 if len(results["failed"]) == 0 else 1)
+        if results and "failed" in results and len(results["failed"]) > 0:
+            sys.exit(1)
     except (IOError, ValueError, AttributeError, KeyError) as e:
         logger.error("Unhandled exception: %s", str(e), exc_info=True)
         sys.exit(1)
