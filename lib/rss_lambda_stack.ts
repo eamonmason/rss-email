@@ -306,7 +306,9 @@ export class RSSEmailStack extends cdk.Stack {
       code: lambda.Code.fromAsset('src'),
       environment: {
         SNS_TOPIC_ARN: error_alerts_topic.topicArn
-      }
+      },
+      timeout: cdk.Duration.minutes(5), // Increased timeout to handle aggregation
+      memorySize: 256 // Increased memory for log aggregation
     });
     
     // Grant the Lambda function necessary permissions

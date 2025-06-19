@@ -2,13 +2,22 @@
  * CloudWatch Logs to SNS Forwarder
  * 
  * This Lambda function processes CloudWatch log events and forwards
- * ERROR and WARNING messages to an SNS topic for notification.
+ * aggregated ERROR and WARNING messages to an SNS topic for notification
+ * no more than once every 5 minutes.
  */
 const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
 const zlib = require('zlib');
 
 // Initialize SNS client - allow for dependency injection in testing
 let snsClient;
+
+// Store aggregated log events and the last time they were sent
+const aggregatedLogs = {
+  ERROR: [],
+  WARNING: [],
+  INFO: [],
+  lastSentTime: 0 // Unix timestamp in ms
+};
 
 /**
  * Initializes the AWS SNS client
@@ -41,32 +50,80 @@ const detectLogLevel = (message) => {
 };
 
 /**
- * Publishes a log event to SNS
+ * Aggregates a log event to be sent later
  * @param {object} logData - The CloudWatch log data
  * @param {object} logEvent - The individual log event
- * @returns {Promise} Promise resolving to the SNS publish result
  */
-const publishToSNS = async (logData, logEvent) => {
+const aggregateLogEvent = (logData, logEvent) => {
   const message = logEvent.message || '';
   const logLevel = detectLogLevel(message);
   
+  // Only aggregate ERROR and WARNING logs
+  if (logLevel === 'ERROR' || logLevel === 'WARNING') {
+    aggregatedLogs[logLevel].push({
+      logGroup: logData.logGroup,
+      logStream: logData.logStream,
+      timestamp: logEvent.timestamp,
+      message: message
+    });
+  }
+};
+
+/**
+ * Publishes aggregated log events to SNS
+ * @returns {Promise} Promise resolving to the SNS publish result
+ */
+const publishAggregatedLogsToSNS = async () => {
   const topicArn = process.env.SNS_TOPIC_ARN;
   if (!topicArn) {
     throw new Error('Missing required environment variable: SNS_TOPIC_ARN');
   }
   
-  const subject = `[${logLevel}] RSS Email Alert`;
-  const snsMessage = `
-Log Group: ${logData.logGroup}
-Log Stream: ${logData.logStream}
-Time: ${new Date(logEvent.timestamp).toISOString()}
-Message: ${message}
-`;
-
+  const errorCount = aggregatedLogs.ERROR.length;
+  const warningCount = aggregatedLogs.WARNING.length;
+  
+  if (errorCount === 0 && warningCount === 0) {
+    console.log('No logs to send');
+    return null;
+  }
+  
+  // Format a summary subject line
+  let subject = '';
+  if (errorCount > 0 && warningCount > 0) {
+    subject = `[ALERT] RSS Email: ${errorCount} errors, ${warningCount} warnings`;
+  } else if (errorCount > 0) {
+    subject = `[ERROR] RSS Email: ${errorCount} error${errorCount > 1 ? 's' : ''}`;
+  } else {
+    subject = `[WARNING] RSS Email: ${warningCount} warning${warningCount > 1 ? 's' : ''}`;
+  }
+  
+  // Format the message body with all aggregated logs
+  let messageBody = 'Aggregated log events:\n\n';
+  
+  if (errorCount > 0) {
+    messageBody += `=== ERRORS (${errorCount}) ===\n\n`;
+    aggregatedLogs.ERROR.forEach(log => {
+      messageBody += `Time: ${new Date(log.timestamp).toISOString()}\n`;
+      messageBody += `Log Group: ${log.logGroup}\n`;
+      messageBody += `Log Stream: ${log.logStream}\n`;
+      messageBody += `Message: ${log.message}\n\n`;
+    });
+  }
+  
+  if (warningCount > 0) {
+    messageBody += `=== WARNINGS (${warningCount}) ===\n\n`;
+    aggregatedLogs.WARNING.forEach(log => {
+      messageBody += `Time: ${new Date(log.timestamp).toISOString()}\n`;
+      messageBody += `Log Group: ${log.logGroup}\n`;
+      messageBody += `Log Stream: ${log.logStream}\n`;
+      messageBody += `Message: ${log.message}\n\n`;
+    });
+  }
+  
   const params = {
     TopicArn: topicArn,
     Subject: subject,
-    Message: snsMessage
+    Message: messageBody
   };
 
   const command = new PublishCommand(params);
@@ -89,6 +146,27 @@ const decodeLogData = (event) => {
 };
 
 /**
+ * Should we send the aggregated logs now?
+ * Checks if it's been at least 5 minutes since the last send
+ * @returns {boolean} True if it's time to send logs
+ */
+const shouldSendAggregatedLogs = () => {
+  const now = Date.now();
+  const fiveMinutesInMs = 5 * 60 * 1000;
+  return (now - aggregatedLogs.lastSentTime) >= fiveMinutesInMs;
+};
+
+/**
+ * Reset the aggregated logs after they've been sent
+ */
+const resetAggregatedLogs = () => {
+  aggregatedLogs.ERROR = [];
+  aggregatedLogs.WARNING = [];
+  aggregatedLogs.INFO = [];
+  aggregatedLogs.lastSentTime = Date.now();
+};
+
+/**
  * Lambda handler function
  * @param {object} event - The Lambda event containing CloudWatch log data
  * @returns {object} Response object
@@ -102,28 +180,34 @@ exports.handler = async (event) => {
     console.log('Processing log events from:', logData.logGroup);
     
     // Track results for each event
-    const results = {
-      processed: 0,
-      successful: 0,
-      failed: 0
-    };
+    let logsAggregated = 0;
     
-    // Process each log event
+    // Process each log event by aggregating them
     for (const logEvent of logData.logEvents) {
+      aggregateLogEvent(logData, logEvent);
+      logsAggregated++;
+    }
+    
+    console.log(`Aggregated ${logsAggregated} log events (${aggregatedLogs.ERROR.length} errors, ${aggregatedLogs.WARNING.length} warnings)`);
+    
+    // Check if we should send the aggregated logs (if it's been at least 5 minutes)
+    let sendResult = null;
+    if (shouldSendAggregatedLogs() && (aggregatedLogs.ERROR.length > 0 || aggregatedLogs.WARNING.length > 0)) {
       try {
-        results.processed++;
-        await publishToSNS(logData, logEvent);
-        results.successful++;
-        console.log('Successfully published log event to SNS');
+        console.log('Sending aggregated logs - time threshold reached');
+        sendResult = await publishAggregatedLogsToSNS();
+        resetAggregatedLogs();
+        console.log('Successfully sent aggregated logs');
       } catch (error) {
-        results.failed++;
-        console.error('Error publishing log event to SNS:', error);
+        console.error('Error sending aggregated logs:', error);
       }
+    } else {
+      console.log('Not sending aggregated logs yet - time threshold not reached or no logs to send');
     }
     
     return { 
       statusCode: 200, 
-      body: `Log events processed: ${results.processed}, successful: ${results.successful}, failed: ${results.failed}` 
+      body: `Log events processed and aggregated: ${logsAggregated}, emails sent: ${sendResult ? '1' : '0'}` 
     };
   } catch (error) {
     console.error('Error processing CloudWatch Logs data:', error);
@@ -135,3 +219,9 @@ exports.handler = async (event) => {
 exports.detectLogLevel = detectLogLevel;
 exports.decodeLogData = decodeLogData;
 exports.setSNSClient = (client) => { snsClient = client; };
+exports.aggregateLogEvent = aggregateLogEvent;
+exports.publishAggregatedLogsToSNS = publishAggregatedLogsToSNS;
+exports.shouldSendAggregatedLogs = shouldSendAggregatedLogs;
+exports.resetAggregatedLogs = resetAggregatedLogs;
+// Export aggregated logs for testing purposes
+exports.getAggregatedLogs = () => aggregatedLogs;
