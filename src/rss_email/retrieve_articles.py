@@ -127,8 +127,15 @@ def get_feed_items(url: str, timestamp: datetime) -> bytes:
                         ) as conn:
                             content = conn.read()
                             feed_items = detect_and_decompress(content, url)
-                except (ssl.SSLError, ConnectionError, TimeoutError,
-                         OSError, socket.timeout, URLError, HTTPError) as e:
+                except (
+                    ssl.SSLError,
+                    ConnectionError,
+                    TimeoutError,
+                    OSError,
+                    socket.timeout,
+                    URLError,
+                    HTTPError,
+                ) as e:
                     logger.debug(
                         "Unverified SSL attempt failed for %s: %s. Trying opener approach.",
                         url,
@@ -143,14 +150,20 @@ def get_feed_items(url: str, timestamp: datetime) -> bytes:
                         with contextlib.closing(opener.open(url, timeout=10)) as conn:
                             content = conn.read()
                             feed_items = detect_and_decompress(content, url)
-                    except (ssl.SSLError, ConnectionError, TimeoutError,
-                         OSError, timeout, URLError, HTTPError) as e3:
+                    except (
+                        ssl.SSLError,
+                        ConnectionError,
+                        TimeoutError,
+                        OSError,
+                        timeout,
+                        URLError,
+                        HTTPError,
+                    ) as e3:
                         logger.debug(
                             "All SSL approaches failed for %s: %s", url, str(e3)
                         )
                         raise
-            except (ConnectionError, TimeoutError,
-                     OSError) as e:
+            except (ConnectionError, TimeoutError, OSError) as e:
                 logger.debug(
                     "First attempt failed for %s: %s. Trying alternate approach.",
                     url,

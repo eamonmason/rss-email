@@ -486,10 +486,7 @@ def _process_article_entry(article, articles, category):
     if idx < len(articles):
         original_desc = articles[idx].get("description", "")
     else:
-        logger.warning(
-            "Article index %s out of range. Using empty description.",
-            idx
-        )
+        logger.warning("Article index %s out of range. Using empty description.", idx)
         original_desc = ""
 
     return ProcessedArticle(
@@ -516,7 +513,8 @@ def _process_dictionary_categories(categories_data, articles):
         if not isinstance(articles_data, (list, tuple)):
             logger.error(
                 "Expected list of articles but got %s for category %s",
-                type(articles_data), category
+                type(articles_data),
+                category,
             )
             continue
 
@@ -542,7 +540,8 @@ def _process_list_categories(categories_data, articles):
             if not isinstance(articles_list, (list, tuple)):
                 logger.error(
                     "Expected list of articles but got %s for category %s",
-                    type(articles_list), category
+                    type(articles_list),
+                    category,
                 )
                 continue
 
@@ -571,10 +570,14 @@ def _create_categorized_articles(
 
             # Handle structure where categories are keys
             if isinstance(categories_data, dict):
-                processed_categories = _process_dictionary_categories(categories_data, articles)
+                processed_categories = _process_dictionary_categories(
+                    categories_data, articles
+                )
             # Handle structure where categories is a list of category objects
             elif isinstance(categories_data, list):
-                processed_categories = _process_list_categories(categories_data, articles)
+                processed_categories = _process_list_categories(
+                    categories_data, articles
+                )
 
         return CategorizedArticles(
             categories=processed_categories,

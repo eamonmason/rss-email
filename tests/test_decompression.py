@@ -81,13 +81,15 @@ def test_problematic_feeds():
             ):
                 logger.info(
                     "✅ Success: %s - received %s bytes of valid XML",
-                    feed_name, format(len(feed_content), ",")
+                    feed_name,
+                    format(len(feed_content), ","),
                 )
                 success_count += 1
             else:
                 logger.warning(
                     "⚠️ Warning: %s - received %s bytes but doesn't look like XML",
-                    feed_name, format(len(feed_content), ",")
+                    feed_name,
+                    format(len(feed_content), ","),
                 )
 
                 # Try our specialized decompression function again
@@ -121,7 +123,9 @@ def test_problematic_feeds():
     percentage = int(success_count / len(PROBLEM_FEEDS) * 100)
     logger.info(
         "\nRESULTS: %s/%s feeds successfully retrieved (%s%%)",
-        success_count, len(PROBLEM_FEEDS), percentage
+        success_count,
+        len(PROBLEM_FEEDS),
+        percentage,
     )
 
     if failed_feeds:

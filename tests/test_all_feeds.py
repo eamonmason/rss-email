@@ -43,6 +43,10 @@ logger = logging.getLogger(__name__)
 def load_feed_urls():
     """Load feed URLs from feed_urls.json."""
     feed_urls_path = Path(__file__).parent.parent / "feed_urls.json"
+
+    if not feed_urls_path.exists():
+        return []
+
     with open(feed_urls_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
@@ -93,7 +97,8 @@ def test_all_feeds():
                 ):
                     logger.info(
                         "✅ Success: %s - received %s bytes of XML",
-                        name, format(len(feed_items), ",")
+                        name,
+                        format(len(feed_items), ","),
                     )
                     feed_results["success"].append(feed_entry)
                 else:
@@ -102,12 +107,16 @@ def test_all_feeds():
                         preview = feed_items[:100].decode("utf-8", errors="replace")
                         logger.warning(
                             "⚠️ Warning: %s - received %s bytes but doesn't look like XML. Preview: %s",
-                            name, format(len(feed_items), ","), preview
+                            name,
+                            format(len(feed_items), ","),
+                            preview,
                         )
 
                         # Log more detailed information about first bytes as hex
                         hex_preview = " ".join(f"{b:02x}" for b in feed_items[:16])
-                        logger.debug("First 16 bytes as hex for %s: %s", name, hex_preview)
+                        logger.debug(
+                            "First 16 bytes as hex for %s: %s", name, hex_preview
+                        )
 
                         # Try to detect common headers for compressed or binary formats
                         if len(feed_items) >= 2:
@@ -132,12 +141,14 @@ def test_all_feeds():
                             ):
                                 logger.debug(
                                     "%s appears to start with XML but wasn't detected",
-                                    name
+                                    name,
                                 )
                     except (UnicodeDecodeError, TypeError) as decode_error:
                         logger.warning(
                             "⚠️ Warning: %s - received %s bytes but can't decode preview: %s",
-                            name, format(len(feed_items), ","), decode_error
+                            name,
+                            format(len(feed_items), ","),
+                            decode_error,
                         )
                     feed_results["warning"].append(feed_entry)
             else:
@@ -145,7 +156,15 @@ def test_all_feeds():
                 feed_results["failed"].append(
                     {"name": name, "url": url, "error": "No content received"}
                 )
-        except (IOError, ValueError, TypeError, KeyError, AttributeError, URLError, HTTPError) as e:
+        except (
+            IOError,
+            ValueError,
+            TypeError,
+            KeyError,
+            AttributeError,
+            URLError,
+            HTTPError,
+        ) as e:
             error_str = str(e)
             logger.error("❌ Error: %s - %s", name, error_str)
 
@@ -158,7 +177,9 @@ def test_all_feeds():
                 {"name": name, "url": url, "error": error_str}
             )
 
-            feed_results["failed"].append({"name": name, "url": url, "error": error_str})
+            feed_results["failed"].append(
+                {"name": name, "url": url, "error": error_str}
+            )
 
     # Print summary
     success_count = len(feed_results["success"])
@@ -169,26 +190,27 @@ def test_all_feeds():
     logger.info("\n%s", "=" * 80)
     logger.info(
         "SUMMARY: %s/%s feeds successfully retrieved (%s%%)",
-        success_count, total, int(success_count / total * 100)
+        success_count,
+        total,
+        int(success_count / total * 100),
     )
     logger.info("- ✅ Success: %s feeds", success_count)
     logger.info(
-        "- ⚠️ Warning: %s feeds (content received but might not be XML)",
-        warning_count
+        "- ⚠️ Warning: %s feeds (content received but might not be XML)", warning_count
     )
     logger.info("- ❌ Failed: %s feeds", failed_count)
 
     if warning_count > 0:
         logger.info("\nWARNING FEEDS (received data but might not be XML):")
         for feed in feed_results["warning"]:
-            logger.info("- %s (%s bytes)", feed['name'], format(feed['bytes'], ","))
+            logger.info("- %s (%s bytes)", feed["name"], format(feed["bytes"], ","))
 
     if failed_count > 0:
         logger.info("\nFAILED FEEDS BY ERROR TYPE:")
         for error_type, feeds in feed_results["errors"].items():
             logger.info("\n%s (%s feeds):", error_type, len(feeds))
             for feed in feeds:
-                logger.info("- %s: %s", feed['name'], feed['url'])
+                logger.info("- %s: %s", feed["name"], feed["url"])
 
         # Provide suggestions for fixing common feed issues
         logger.info("\nSUGGESTIONS FOR FAILED FEEDS:")

@@ -3,6 +3,7 @@
 import logging
 import os
 import sys
+
 from rss_email.article_processor import _create_categorized_articles
 
 # Add the src directory to the path so we can import the module
