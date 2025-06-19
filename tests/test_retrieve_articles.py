@@ -2,6 +2,9 @@
 
 This module contains test cases for RSS feed retrieval, parsing, and processing
 functionality including S3 integration tests using moto mock.
+
+Some code duplication with test_article_data.py is intentional for test isolation.
+# pylint: disable=duplicate-code,R0801
 """
 
 import os

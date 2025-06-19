@@ -4,7 +4,7 @@ init-hook='import sys; sys.path.insert(0, "src")'
 
 [MESSAGES CONTROL]
 # Disable some messages if needed
-disable=
+disable=R0801
 
 [FORMAT]
 # Maximum number of characters on a single line.

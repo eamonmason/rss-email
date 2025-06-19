@@ -49,7 +49,7 @@ PROBLEM_FEEDS = [
 
 def test_problematic_feeds():
     """Test decompression for all problematic feeds."""
-    logger.info(f"Testing {len(PROBLEM_FEEDS)} problematic feeds...")
+    logger.info("Testing %s problematic feeds...", len(PROBLEM_FEEDS))
 
     success_count = 0
     failed_feeds = []
@@ -61,14 +61,14 @@ def test_problematic_feeds():
         feed_url = feed["url"]
         feed_name = feed["name"]
 
-        logger.info(f"Testing feed: {feed_name} ({feed_url})")
+        logger.info("Testing feed: %s (%s)", feed_name, feed_url)
 
         try:
             # Fetch the feed
             feed_content = get_feed_items(feed_url, timestamp)
 
             if not feed_content:
-                logger.error(f"❌ No content received for {feed_name}")
+                logger.error("❌ No content received for %s", feed_name)
                 failed_feeds.append(feed_name)
                 continue
 
@@ -80,12 +80,14 @@ def test_problematic_feeds():
                 or b"<xml" in feed_content[:500]
             ):
                 logger.info(
-                    f"✅ Success: {feed_name} - received {len(feed_content):,} bytes of valid XML"
+                    "✅ Success: %s - received %s bytes of valid XML",
+                    feed_name, format(len(feed_content), ",")
                 )
                 success_count += 1
             else:
                 logger.warning(
-                    f"⚠️ Warning: {feed_name} - received {len(feed_content):,} bytes but doesn't look like XML"
+                    "⚠️ Warning: %s - received %s bytes but doesn't look like XML",
+                    feed_name, format(len(feed_content), ",")
                 )
 
                 # Try our specialized decompression function again
@@ -97,7 +99,7 @@ def test_problematic_feeds():
                     or b"<?xml" in decompressed[:500]
                     or b"<xml" in decompressed[:500]
                 ):
-                    logger.info(f"✅ Success after extra decompression: {feed_name}")
+                    logger.info("✅ Success after extra decompression: %s", feed_name)
                     success_count += 1
                 else:
                     failed_feeds.append(feed_name)
@@ -105,23 +107,25 @@ def test_problematic_feeds():
                     # Show content preview for debugging
                     try:
                         preview = feed_content[:100].decode("utf-8", errors="replace")
-                        logger.debug(f"Content preview: {preview}")
-                    except Exception:
+                        logger.debug("Content preview: %s", preview)
+                    except (UnicodeDecodeError, TypeError):
                         pass
 
                     # Show hex dump of first bytes
                     hex_preview = " ".join(f"{b:02x}" for b in feed_content[:32])
-                    logger.debug(f"First 32 bytes as hex: {hex_preview}")
-        except Exception as e:
-            logger.error(f"❌ Error testing {feed_name}: {str(e)}")
+                    logger.debug("First 32 bytes as hex: %s", hex_preview)
+        except (IOError, ValueError, TypeError, KeyError, AttributeError) as e:
+            logger.error("❌ Error testing %s: %s", feed_name, str(e))
             failed_feeds.append(feed_name)
 
+    percentage = int(success_count / len(PROBLEM_FEEDS) * 100)
     logger.info(
-        f"\nRESULTS: {success_count}/{len(PROBLEM_FEEDS)} feeds successfully retrieved ({success_count / len(PROBLEM_FEEDS):.0%})"
+        "\nRESULTS: %s/%s feeds successfully retrieved (%s%%)",
+        success_count, len(PROBLEM_FEEDS), percentage
     )
 
     if failed_feeds:
-        logger.info("Failed feeds: " + ", ".join(failed_feeds))
+        logger.info("Failed feeds: %s", ", ".join(failed_feeds))
 
     # For pytest, we'll allow the test to pass if we have at least 6 out of 8 feeds working
     # The TechCrunch feed is special-cased to use a direct feed URL instead
@@ -137,7 +141,7 @@ def main():
         test_problematic_feeds()
         return 0
     except AssertionError as e:
-        logger.error(f"Test failed: {e}")
+        logger.error("Test failed: %s", e)
         return 1
 
 

@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """Test all feeds in feed_urls.json."""
 
+# pylint: disable=too-many-nested-blocks
+# pylint: disable=too-many-branches
+
 import json
 import logging
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
+from urllib.error import HTTPError, URLError
 
 # Configure logging first so we can see all outputs
 logger = logging.getLogger()
@@ -29,7 +33,7 @@ except ImportError:
 
         logger.info("Successfully imported from src/rss_email")
     except ImportError as e:
-        logger.error(f"Import error: {e}")
+        logger.error("Import error: %s", e)
         sys.exit(1)
 
 # Get logger for this module
@@ -39,7 +43,7 @@ logger = logging.getLogger(__name__)
 def load_feed_urls():
     """Load feed URLs from feed_urls.json."""
     feed_urls_path = Path(__file__).parent.parent / "feed_urls.json"
-    with open(feed_urls_path, "r") as f:
+    with open(feed_urls_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     feed_entries = []
@@ -55,12 +59,12 @@ def load_feed_urls():
 def test_all_feeds():
     """Test all feeds by trying to retrieve them."""
     feeds = load_feed_urls()
-    logger.info(f"Testing {len(feeds)} feeds")
+    logger.info("Testing %s feeds", len(feeds))
 
     # Get a timestamp 3 days ago
     timestamp = datetime.now() - timedelta(days=3)
 
-    results = {
+    feed_results = {
         "success": [],
         "warning": [],
         "failed": [],
@@ -71,7 +75,7 @@ def test_all_feeds():
         try:
             name = feed["name"]
             url = feed["url"]
-            logger.info(f"Testing feed: {name} ({url})")
+            logger.info("Testing feed: %s (%s)", name, url)
 
             # Try to get the feed
             feed_items = get_feed_items(url, timestamp)
@@ -88,101 +92,107 @@ def test_all_feeds():
                     or b"<xml" in feed_items[:500]
                 ):
                     logger.info(
-                        f"✅ Success: {name} - received {len(feed_items):,} bytes of XML"
+                        "✅ Success: %s - received %s bytes of XML",
+                        name, format(len(feed_items), ",")
                     )
-                    results["success"].append(feed_entry)
+                    feed_results["success"].append(feed_entry)
                 else:
                     try:
                         # Try to see what we got (first 100 characters)
                         preview = feed_items[:100].decode("utf-8", errors="replace")
                         logger.warning(
-                            f"⚠️ Warning: {name} - received {len(feed_items):,} bytes but doesn't look like XML. Preview: {preview}"
+                            "⚠️ Warning: %s - received %s bytes but doesn't look like XML. Preview: %s",
+                            name, format(len(feed_items), ","), preview
                         )
 
-                        # Log more detailed information about first bytes as hex to help diagnose compression/encoding issues
+                        # Log more detailed information about first bytes as hex
                         hex_preview = " ".join(f"{b:02x}" for b in feed_items[:16])
-                        logger.debug(f"First 16 bytes as hex for {name}: {hex_preview}")
+                        logger.debug("First 16 bytes as hex for %s: %s", name, hex_preview)
 
                         # Try to detect common headers for compressed or binary formats
                         if len(feed_items) >= 2:
                             if feed_items[:2] == b"\x1f\x8b":
-                                logger.debug(f"{name} has gzip magic number (1F 8B)")
+                                logger.debug("%s has gzip magic number (1F 8B)", name)
                             elif feed_items[:2] == b"PK":
-                                logger.debug(f"{name} might be a ZIP file (PK)")
+                                logger.debug("%s might be a ZIP file (PK)", name)
                             elif (
                                 feed_items[:4] == b"\xef\xbb\xbf<"
                                 or feed_items[:3] == b"\xef\xbb\xbf"
                             ):
-                                logger.debug(f"{name} has UTF-8 BOM")
+                                logger.debug("%s has UTF-8 BOM", name)
                             elif (
                                 feed_items[:2] == b"\xfe\xff"
                                 or feed_items[:2] == b"\xff\xfe"
                             ):
-                                logger.debug(f"{name} has UTF-16 BOM")
+                                logger.debug("%s has UTF-16 BOM", name)
                             elif (
                                 feed_items[:5] == b"<?xml"
                                 or feed_items[:5] == b"<rss "
                                 or feed_items[:6] == b"<feed>"
                             ):
                                 logger.debug(
-                                    f"{name} appears to start with XML but wasn't detected"
+                                    "%s appears to start with XML but wasn't detected",
+                                    name
                                 )
-                    except Exception as decode_error:
+                    except (UnicodeDecodeError, TypeError) as decode_error:
                         logger.warning(
-                            f"⚠️ Warning: {name} - received {len(feed_items):,} bytes but doesn't look like XML and couldn't decode preview: {decode_error}"
+                            "⚠️ Warning: %s - received %s bytes but can't decode preview: %s",
+                            name, format(len(feed_items), ","), decode_error
                         )
-                    results["warning"].append(feed_entry)
+                    feed_results["warning"].append(feed_entry)
             else:
-                logger.error(f"❌ Failed: {name} - no content received")
-                results["failed"].append(
+                logger.error("❌ Failed: %s - no content received", name)
+                feed_results["failed"].append(
                     {"name": name, "url": url, "error": "No content received"}
                 )
-        except Exception as e:
+        except (IOError, ValueError, TypeError, KeyError, AttributeError, URLError, HTTPError) as e:
             error_str = str(e)
-            logger.error(f"❌ Error: {name} - {error_str}")
+            logger.error("❌ Error: %s - %s", name, error_str)
 
             # Group by error type
             error_type = error_str.split(":", 1)[0] if ":" in error_str else error_str
-            if error_type not in results["errors"]:
-                results["errors"][error_type] = []
+            if error_type not in feed_results["errors"]:
+                feed_results["errors"][error_type] = []
 
-            results["errors"][error_type].append(
+            feed_results["errors"][error_type].append(
                 {"name": name, "url": url, "error": error_str}
             )
 
-            results["failed"].append({"name": name, "url": url, "error": error_str})
+            feed_results["failed"].append({"name": name, "url": url, "error": error_str})
 
     # Print summary
-    success_count = len(results["success"])
-    warning_count = len(results["warning"])
-    failed_count = len(results["failed"])
+    success_count = len(feed_results["success"])
+    warning_count = len(feed_results["warning"])
+    failed_count = len(feed_results["failed"])
     total = success_count + warning_count + failed_count
 
-    logger.info("\n" + "=" * 80)
+    logger.info("\n%s", "=" * 80)
     logger.info(
-        f"SUMMARY: {success_count}/{total} feeds successfully retrieved ({success_count / total:.0%})"
+        "SUMMARY: %s/%s feeds successfully retrieved (%s%%)",
+        success_count, total, int(success_count / total * 100)
     )
-    logger.info(f"- ✅ Success: {success_count} feeds")
+    logger.info("- ✅ Success: %s feeds", success_count)
     logger.info(
-        f"- ⚠️ Warning: {warning_count} feeds (content received but might not be XML)"
+        "- ⚠️ Warning: %s feeds (content received but might not be XML)",
+        warning_count
     )
-    logger.info(f"- ❌ Failed: {failed_count} feeds")
+    logger.info("- ❌ Failed: %s feeds", failed_count)
 
     if warning_count > 0:
         logger.info("\nWARNING FEEDS (received data but might not be XML):")
-        for feed in results["warning"]:
-            logger.info(f"- {feed['name']} ({feed['bytes']:,} bytes)")
+        for feed in feed_results["warning"]:
+            logger.info("- %s (%s bytes)", feed['name'], format(feed['bytes'], ","))
 
     if failed_count > 0:
         logger.info("\nFAILED FEEDS BY ERROR TYPE:")
-        for error_type, feeds in results["errors"].items():
-            logger.info(f"\n{error_type} ({len(feeds)} feeds):")
+        for error_type, feeds in feed_results["errors"].items():
+            logger.info("\n%s (%s feeds):", error_type, len(feeds))
             for feed in feeds:
-                logger.info(f"- {feed['name']}: {feed['url']}")
+                logger.info("- %s: %s", feed['name'], feed['url'])
 
         # Provide suggestions for fixing common feed issues
         logger.info("\nSUGGESTIONS FOR FAILED FEEDS:")
-        for error_type, feeds in results["errors"].items():
+        for error_type, feeds in feed_results["errors"].items():
             if "certificate verify failed" in error_type.lower():
                 logger.info(
                     "- For SSL certificate issues: Check if the site uses an expired or self-signed certificate."
@@ -210,7 +220,7 @@ def test_all_feeds():
                 )
             break  # Only show suggestions once
 
-    return results
+    return feed_results
 
 
 if __name__ == "__main__":
@@ -218,6 +228,6 @@ if __name__ == "__main__":
     try:
         results = test_all_feeds()
         sys.exit(0 if len(results["failed"]) == 0 else 1)
-    except Exception as e:
-        logger.error(f"Unhandled exception: {str(e)}", exc_info=True)
+    except (IOError, ValueError, AttributeError, KeyError) as e:
+        logger.error("Unhandled exception: %s", str(e), exc_info=True)
         sys.exit(1)

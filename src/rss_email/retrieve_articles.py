@@ -1,6 +1,15 @@
 #!/usr/bin/env python3
 """Lambda function to aggregate multiple RSS feeds into a single one."""
 
+# pylint: disable=broad-exception-caught
+# pylint: disable=too-many-nested-blocks
+# pylint: disable=too-many-return-statements
+# pylint: disable=too-many-branches
+# pylint: disable=too-many-statements
+# pylint: disable=protected-access
+
+# pylint: disable=broad-exception-caught
+
 from __future__ import annotations, print_function
 
 import argparse
@@ -11,6 +20,7 @@ import io
 import json
 import logging
 import os
+import re
 import socket
 import ssl
 import sys
@@ -30,6 +40,12 @@ import pydantic
 import PyRSS2Gen
 from botocore.exceptions import ClientError
 from pydantic import BaseModel, Field, HttpUrl
+
+# Import brotli if available
+try:
+    import brotli
+except ImportError:
+    brotli = None
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -111,7 +127,8 @@ def get_feed_items(url: str, timestamp: datetime) -> bytes:
                         ) as conn:
                             content = conn.read()
                             feed_items = detect_and_decompress(content, url)
-                except Exception as e:
+                except (ssl.SSLError, ConnectionError, TimeoutError,
+                         OSError, socket.timeout, URLError, HTTPError) as e:
                     logger.debug(
                         "Unverified SSL attempt failed for %s: %s. Trying opener approach.",
                         url,
@@ -122,16 +139,18 @@ def get_feed_items(url: str, timestamp: datetime) -> bytes:
                         opener = urllib.request.build_opener(
                             urllib.request.HTTPSHandler(context=unverified_context)
                         )
-                        opener.addheaders = [(k, v) for k, v in headers.items()]
+                        opener.addheaders = list(headers.items())
                         with contextlib.closing(opener.open(url, timeout=10)) as conn:
                             content = conn.read()
                             feed_items = detect_and_decompress(content, url)
-                    except Exception as e3:
+                    except (ssl.SSLError, ConnectionError, TimeoutError,
+                         OSError, timeout, URLError, HTTPError) as e3:
                         logger.debug(
                             "All SSL approaches failed for %s: %s", url, str(e3)
                         )
                         raise
-            except Exception as e:
+            except (ConnectionError, TimeoutError,
+                     OSError) as e:
                 logger.debug(
                     "First attempt failed for %s: %s. Trying alternate approach.",
                     url,
@@ -140,7 +159,7 @@ def get_feed_items(url: str, timestamp: datetime) -> bytes:
                 # Try a different approach for some sites (non-SSL related issues)
                 try:
                     opener = urllib.request.build_opener()
-                    opener.addheaders = [(k, v) for k, v in headers.items()]
+                    opener.addheaders = list(headers.items())
                     with contextlib.closing(opener.open(url, timeout=10)) as conn:
                         content = conn.read()
                         feed_items = detect_and_decompress(content, url)
@@ -391,10 +410,8 @@ def detect_and_decompress(content: bytes, url: str) -> bytes:
         except Exception:
             pass
 
-    # Try brotli if installed
-    try:
-        import brotli
-
+    # Try brotli if available
+    if brotli is not None:
         try:
             decompressed = brotli.decompress(content)
             if (
@@ -406,8 +423,6 @@ def detect_and_decompress(content: bytes, url: str) -> bytes:
                 return decompressed
         except Exception:
             pass
-    except ImportError:
-        pass
 
     # Try to brute force with common compression algorithms
     # Try zlib/deflate with different window bits
@@ -494,8 +509,6 @@ def detect_and_decompress(content: bytes, url: str) -> bytes:
     logger.debug("Failed to decompress content. First 32 bytes: %s", hex_preview)
 
     # As a last resort, try to extract any XML-like content
-    import re
-
     xml_pattern = re.compile(
         b"<\\?xml.*?>.*?<(rss|feed|rdf:RDF)", re.DOTALL | re.IGNORECASE
     )

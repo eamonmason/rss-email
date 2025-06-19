@@ -147,7 +147,7 @@ const decodeLogData = (event) => {
 
 /**
  * Should we send the aggregated logs now?
- * Checks if it's been at least 5 minutes since the last send
+ * Checks if it's been at least 4 minutes since the last send
  * @returns {boolean} True if it's time to send logs
  */
 const shouldSendAggregatedLogs = () => {

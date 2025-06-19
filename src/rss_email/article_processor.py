@@ -479,6 +479,83 @@ def _log_api_success(
     )
 
 
+def _process_article_entry(article, articles, category):
+    """Process a single article entry."""
+    article_id = article["id"]
+    idx = int(article_id.split("_")[1])
+    if idx < len(articles):
+        original_desc = articles[idx].get("description", "")
+    else:
+        logger.warning(
+            "Article index %s out of range. Using empty description.",
+            idx
+        )
+        original_desc = ""
+
+    return ProcessedArticle(
+        title=article["title"],
+        link=article["link"],
+        summary=article["summary"],
+        category=category,
+        pubdate=article["pubdate"],
+        related_articles=article.get("related_articles", []),
+        original_description=original_desc,
+    )
+
+
+def _process_dictionary_categories(categories_data, articles):
+    """Process categories in dictionary format."""
+    processed_categories = {}
+    for category, category_data in categories_data.items():
+        articles_data = category_data
+        # Handle both possible structures for articles
+        if isinstance(category_data, dict) and "articles" in category_data:
+            articles_data = category_data["articles"]
+
+        # Ensure articles_data is actually iterable
+        if not isinstance(articles_data, (list, tuple)):
+            logger.error(
+                "Expected list of articles but got %s for category %s",
+                type(articles_data), category
+            )
+            continue
+
+        processed_articles = []
+        for article in articles_data:
+            processed_article = _process_article_entry(article, articles, category)
+            processed_articles.append(processed_article)
+
+        if processed_articles:
+            processed_categories[category] = processed_articles
+    return processed_categories
+
+
+def _process_list_categories(categories_data, articles):
+    """Process categories in list format."""
+    processed_categories = {}
+    for category_obj in categories_data:
+        if "name" in category_obj and "articles" in category_obj:
+            category = category_obj["name"]
+            articles_list = category_obj["articles"]
+
+            # Ensure articles_list is actually iterable
+            if not isinstance(articles_list, (list, tuple)):
+                logger.error(
+                    "Expected list of articles but got %s for category %s",
+                    type(articles_list), category
+                )
+                continue
+
+            processed_articles = []
+            for article in articles_list:
+                processed_article = _process_article_entry(article, articles, category)
+                processed_articles.append(processed_article)
+
+            if processed_articles:
+                processed_categories[category] = processed_articles
+    return processed_categories
+
+
 def _create_categorized_articles(
     categorized_data: Dict[str, Any],
     articles: List[Dict[str, Any]],
@@ -494,92 +571,17 @@ def _create_categorized_articles(
 
             # Handle structure where categories are keys
             if isinstance(categories_data, dict):
-                for category, category_data in categories_data.items():
-                    articles_data = category_data
-                    # Handle both possible structures for articles
-                    if isinstance(category_data, dict) and "articles" in category_data:
-                        articles_data = category_data["articles"]
-
-                    # Ensure articles_data is actually iterable
-                    if not isinstance(articles_data, (list, tuple)):
-                        logger.error(
-                            f"Expected list of articles but got {type(articles_data)} for category {category}"
-                        )
-                        continue
-
-                    processed_articles = []
-                    for article in articles_data:
-                        # Find original description
-                        article_id = article["id"]
-                        idx = int(article_id.split("_")[1])
-                        if idx < len(articles):
-                            original_desc = articles[idx].get("description", "")
-                        else:
-                            logger.warning(
-                                f"Article index {idx} out of range. Using empty description."
-                            )
-                            original_desc = ""
-
-                        processed_article = ProcessedArticle(
-                            title=article["title"],
-                            link=article["link"],
-                            summary=article["summary"],
-                            category=category,
-                            pubdate=article["pubdate"],
-                            related_articles=article.get("related_articles", []),
-                            original_description=original_desc,
-                        )
-                        processed_articles.append(processed_article)
-
-                    if processed_articles:
-                        processed_categories[category] = processed_articles
-
+                processed_categories = _process_dictionary_categories(categories_data, articles)
             # Handle structure where categories is a list of category objects
             elif isinstance(categories_data, list):
-                for category_obj in categories_data:
-                    if "name" in category_obj and "articles" in category_obj:
-                        category = category_obj["name"]
-                        articles_list = category_obj["articles"]
-
-                        # Ensure articles_list is actually iterable
-                        if not isinstance(articles_list, (list, tuple)):
-                            logger.error(
-                                f"Expected list of articles but got {type(articles_list)} for category {category}"
-                            )
-                            continue
-
-                        processed_articles = []
-                        for article in articles_list:
-                            article_id = article["id"]
-                            idx = int(article_id.split("_")[1])
-                            if idx < len(articles):
-                                original_desc = articles[idx].get("description", "")
-                            else:
-                                logger.warning(
-                                    f"Article index {idx} out of range. Using empty description."
-                                )
-                                original_desc = ""
-
-                            processed_article = ProcessedArticle(
-                                title=article["title"],
-                                link=article["link"],
-                                summary=article["summary"],
-                                category=category,
-                                pubdate=article["pubdate"],
-                                related_articles=article.get("related_articles", []),
-                                original_description=original_desc,
-                            )
-                            processed_articles.append(processed_article)
-
-                        if processed_articles:
-                            processed_categories[category] = processed_articles
+                processed_categories = _process_list_categories(categories_data, articles)
 
         return CategorizedArticles(
             categories=processed_categories,
             processing_metadata=usage_stats,
         )
-    except Exception as e:
-        logger.error(f"Error creating categorized articles: {e}")
+    except (ValueError, KeyError, TypeError, IndexError) as e:
+        logger.error("Error creating categorized articles: %s", e)
         # Return an empty structure rather than failing
         return CategorizedArticles(
             categories={},

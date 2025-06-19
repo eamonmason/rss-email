@@ -1,5 +1,7 @@
 """Unit tests for the email_articles module."""
 
+# pylint: disable=duplicate-code
+
 # Rename this file to test_email_articles.py to ensure pytest discovers it
 
 import unittest
