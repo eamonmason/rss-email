@@ -59,17 +59,17 @@ To receive email correctly, post deployment the SES Active Rule Set has to be en
 
 ## Building locally
 
-```poetry install```
+```uv sync```
 
 ## Running locally
 
 To retrieve the last 3 days of articles from a set of sources to the console (does not store in S3):
 
-```poetry run python src/rss_email/retrieve_articles.py <feed_url_json_file>```
+```uv run python src/rss_email/retrieve_articles.py <feed_url_json_file>```
 
 and to retrieve the articles from a file in S3, and format an email, but not actually send it:
 
-```poetry run python src/rss_email/email_articles.py```
+```uv run python src/rss_email/email_articles.py```
 
 ## Deploying the Pipeline
 

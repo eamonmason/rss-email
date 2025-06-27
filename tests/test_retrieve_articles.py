@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import boto3
-from moto import mock_s3
+from moto import mock_aws
 from pydantic import HttpUrl
 
 import rss_email.retrieve_articles
@@ -122,7 +122,7 @@ class TestRetrieveArticles(unittest.TestCase):
         )
         self.assertIn("<rss>RSS content</rss>", result)
 
-    @mock_s3
+    @mock_aws
     def test_create_rss(self):
         """Test RSS file creation and S3 upload using moto mock."""
         # Set up environment variables
@@ -131,7 +131,7 @@ class TestRetrieveArticles(unittest.TestCase):
         os.environ["FEED_DEFINITIONS_FILE"] = "test-file"
 
         # Set up S3 and mock
-        s3 = boto3.client("s3")
+        s3 = boto3.client("s3", region_name="us-east-1")
         s3.create_bucket(Bucket="test-bucket")
         test_content = "<rss><title>Test RSS</title></rss>"
         rss_email.retrieve_articles.retrieve_rss_feeds = MagicMock(
@@ -226,14 +226,14 @@ class TestRetrieveArticles(unittest.TestCase):
         }
     """
 
-    @mock_s3
+    @mock_aws
     def test_create_rss2(self):
         """Test RSS file creation and S3 upload with different test conditions."""
         # Set up mock S3 bucket
         bucket_name = "test-bucket"
         key = "test-key"
         content = "test"
-        s3 = boto3.client("s3")
+        s3 = boto3.client("s3", region_name="us-east-1")
         s3.create_bucket(Bucket=bucket_name)
         rss_email.retrieve_articles.retrieve_rss_feeds = MagicMock(return_value=content)
 
