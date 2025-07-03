@@ -824,6 +824,7 @@ dependencies = [
     { name = "feedparser" },
     { name = "pydantic" },
     { name = "pyrss2gen" },
+    { name = "python-dotenv" },
     { name = "regex" },
 ]
 
@@ -861,6 +862,7 @@ requires-dist = [
     { name = "pylint", marker = "extra == 'dev'", specifier = ">=3.0.2" },
     { name = "pyrss2gen", specifier = ">=1.1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.4.3" },
+    { name = "python-dotenv", specifier = ">=1.1.1" },
     { name = "python-dotenv", marker = "extra == 'dev'", specifier = ">=0.9.9" },
     { name = "regex", specifier = ">=2024.11.6" },
 ]

@@ -147,6 +147,57 @@ def estimate_tokens(articles: List[Dict[str, Any]]) -> int:
     return total_chars // 4
 
 
+def truncate_description(description: str, max_length: int = 200) -> str:
+    """Truncate article description to reduce token usage."""
+    if not description:
+        return ""
+
+    if len(description) <= max_length:
+        return description
+
+    # Find a good truncation point (at word boundary)
+    truncated = description[:max_length]
+    last_space = truncated.rfind(' ')
+
+    if last_space > max_length * 0.8:  # If we can find a space in the last 20%
+        truncated = truncated[:last_space]
+
+    return truncated + "..."
+
+
+def optimize_articles_for_claude(
+    articles: List[Dict[str, Any]], max_description_length: int = 200
+) -> List[Dict[str, Any]]:
+    """Optimize articles for Claude processing by reducing description length."""
+    optimized = []
+    for article in articles:
+        optimized_article = article.copy()
+        description = article.get("description", "")
+
+        # Store original description for later use
+        optimized_article["original_description"] = description
+
+        # Truncate description to reduce token usage
+        optimized_article["description"] = truncate_description(
+            description, max_description_length
+        )
+
+        optimized.append(optimized_article)
+
+    return optimized
+
+
+def split_articles_into_batches(
+    articles: List[Dict[str, Any]], max_batch_size: int = 15
+) -> List[List[Dict[str, Any]]]:
+    """Split articles into smaller batches for processing."""
+    batches = []
+    for i in range(0, len(articles), max_batch_size):
+        batch = articles[i:i + max_batch_size]
+        batches.append(batch)
+    return batches
+
+
 # Add these utility functions
 def compress_json(data: Dict[str, Any]) -> str:
     """Compress JSON data to base64-encoded gzipped string."""
@@ -164,8 +215,10 @@ def decompress_json(compressed_str: str) -> Dict[str, Any]:
 
 def create_categorization_prompt(articles: List[Dict[str, Any]]) -> str:
     """Create the prompt for Claude to categorize and summarize articles."""
+    # Optimize articles for processing
+    optimized_articles = optimize_articles_for_claude(articles)
     articles_json = []
-    for idx, article in enumerate(articles):
+    for idx, article in enumerate(optimized_articles):
         articles_json.append(
             {
                 "id": f"article_{idx}",
@@ -199,7 +252,7 @@ Return a JSON response in this exact format (before compression):
 
 YOU MUST FOLLOW THESE STRICT FORMAT RULES:
 - First process all articles normally into the JSON structure described below
-- Then compress the entire JSON object with the following steps: 
+- Then compress the entire JSON object with the following steps:
    1. Convert your JSON to a compact string with no whitespace
    2. Return ONLY that compressed JSON with no other text
 - Do not include any explanations, notes, or additional text before or after the JSON
@@ -213,7 +266,7 @@ Required JSON structure (compress before returning):
         "id": "article_X",
         "title": "original title",
         "link": "original link",
-        "summary": "2-3 sentence summary",
+        "summary": "brief 1-2 sentence summary",
         "category": "category_name",
         "pubdate": "original pubdate",
         "related_articles": ["article_Y", "article_Z"]
@@ -257,8 +310,13 @@ def process_articles_with_claude(
         return None
 
     try:
-        # Initialize client and process articles
-        result = _process_with_claude_client(articles, rate_limiter)
+        # Check if we need to split into batches for large article sets
+        if len(articles) > 15:
+            logger.info("Large article set detected (%d articles), processing in batches", len(articles))
+            result = _process_articles_in_batches(articles, rate_limiter)
+        else:
+            # Initialize client and process articles normally
+            result = _process_with_claude_client(articles, rate_limiter)
 
         # Validate the result is properly formatted before returning
         if result is not None and not isinstance(result, CategorizedArticles):
@@ -276,6 +334,65 @@ def process_articles_with_claude(
         logger.error("Failed to process articles with Claude: %s", e)
 
     return result
+
+
+def _process_articles_in_batches(
+    articles: List[Dict[str, Any]], rate_limiter: ClaudeRateLimiter
+) -> Optional[CategorizedArticles]:
+    """Process articles in smaller batches to avoid token limits."""
+    batches = split_articles_into_batches(articles, max_batch_size=10)
+
+    all_categories = {}
+    combined_metadata = {
+        "processed_at": datetime.now().isoformat(),
+        "articles_count": len(articles),
+        "batches_processed": 0,
+        "total_batches": len(batches),
+        "tokens_used": 0,
+        "model": os.environ.get("CLAUDE_MODEL", "claude-3-5-haiku-latest"),
+        "processing_time_seconds": 0,
+    }
+
+    start_time = datetime.now()
+
+    for batch_idx, batch in enumerate(batches):
+        logger.info(
+            "Processing batch %d/%d with %d articles",
+            batch_idx + 1, len(batches), len(batch)
+        )
+
+        # Process this batch
+        batch_result = _process_with_claude_client(batch, rate_limiter)
+
+        if batch_result is None:
+            logger.warning("Batch %d failed to process, skipping", batch_idx + 1)
+            continue
+
+        # Merge results
+        for category, category_articles in batch_result.categories.items():
+            if category not in all_categories:
+                all_categories[category] = []
+            all_categories[category].extend(category_articles)
+
+        # Update metadata
+        combined_metadata["batches_processed"] += 1
+        if "tokens_used" in batch_result.processing_metadata:
+            combined_metadata["tokens_used"] += (
+                batch_result.processing_metadata["tokens_used"]
+            )
+
+    combined_metadata["processing_time_seconds"] = (
+        datetime.now() - start_time
+    ).total_seconds()
+
+    if not all_categories:
+        logger.error("No articles were successfully processed in any batch")
+        return None
+
+    return CategorizedArticles(
+        categories=all_categories,
+        processing_metadata=combined_metadata,
+    )
 
 
 def _process_with_claude_client(
@@ -435,30 +552,30 @@ def _call_claude_api(
 def _get_max_tokens_for_model(model_name: str) -> int:
     """Get the maximum token limit for a given Claude model."""
     if "claude-sonnet-4" in model_name:
-        return 28000  # Claude 4 Sonnet has a higher token limit
+        return 8000  # Conservative limit to prevent truncation
 
     if "claude-3-7-sonnet" in model_name:
-        return 40000
+        return 8000  # Conservative limit to prevent truncation
 
     if "claude-3-5-sonnet" in model_name:
-        return 8000  # Safe value below the 8,192 limit
+        return 4000  # More conservative to avoid truncation issues
 
     if "claude-3-opus" in model_name:
-        return 30000
+        return 8000  # Conservative limit
 
     if "claude-3-haiku" in model_name:
-        return 8192
+        return 4000  # Conservative limit for haiku models
 
     if "claude-3-5-haiku" in model_name:
-        return 8192  # Safe value below the 8,192 limit
+        return 4000  # Conservative limit for haiku models
 
     if "claude-2" in model_name:
-        return 100000  # Claude 2 had very high limits
+        return 8000  # Conservative even for Claude 2
 
     if "claude-sonnet" in model_name:
-        return 8000
+        return 4000
 
-    return 4000  # Default conservative value
+    return 2000  # Very conservative default
 
 
 def _log_api_success(

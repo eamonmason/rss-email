@@ -251,6 +251,7 @@ def test_all_feeds():
         return feed_results
     # In pytest context, just assert something basic
     assert True
+    return None
 
 
 if __name__ == "__main__":

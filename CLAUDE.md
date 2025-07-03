@@ -31,8 +31,11 @@ uv run python -m pytest tests/test_specific_module.py
 # Run pylint (must score 9.9+ to pass CI)
 uv run pylint --fail-under=9.9 $(git ls-files '*.py')
 
-# Run flake8 linting
+# Run flake8 linting (enforces PEP 8 standards)
 uv run flake8
+
+# Run both linting tools together
+uv run pylint --fail-under=9.9 $(git ls-files '*.py') && uv run flake8
 ```
 
 ### Local Development
@@ -42,6 +45,12 @@ uv run python src/rss_email/retrieve_articles.py <feed_url_json_file>
 
 # Test email formatting locally (doesn't actually send email)
 uv run python src/rss_email/email_articles.py
+
+# Test all feeds in feed_urls.json for connectivity
+uv run python tests/test_all_feeds.py
+
+# Run CLI article processor for testing Claude integration
+uv run python src/cli_article_processor.py
 ```
 
 ### CDK Operations
@@ -62,17 +71,18 @@ cdk diff
 ## Architecture
 
 ### Core Components
-- **retrieve_articles.py**: Lambda function that fetches RSS feeds and stores aggregated data in S3
-- **email_articles.py**: Lambda function that processes stored articles and sends formatted emails via SES  
+- **retrieve_articles.py**: Key orchestrating Lambda function that fetches RSS feeds and stores aggregated data in S3
+- **email_articles.py**: Key orchestrating Lambda function that processes stored articles and sends formatted emails via SES  
 - **article_processor.py**: Claude AI integration for intelligent article categorization and summarization
 - **lib/rss_lambda_stack.ts**: Main CDK infrastructure stack defining all AWS resources
+- **cli_article_processor.py**: CLI tool for testing article processing with Claude API locally
+- **compression_utils.py**: Utilities for compressing/decompressing article data for S3 storage
+- **json_repair.py**: JSON repair utilities for handling malformed API responses
 
 ### Data Flow
-1. Scheduled Lambda retrieves articles from RSS feeds configured in `feed_urls.json`
-2. Articles are processed through Claude API for categorization (Technology, AI/ML, Cybersecurity, etc.)
-3. Processed articles are stored in S3 
-4. Email Lambda formats articles into HTML email and sends via SES
-5. Error handling and logging via SNS and CloudWatch
+1. **retrieve_articles.py** orchestrates RSS feed processing: fetches articles from feeds configured in `feed_urls.json`, creates aggregated file of recent articles, and stores in S3
+2. **email_articles.py** orchestrates email delivery: retrieves aggregated articles from S3, processes them through Claude API for categorization (Technology, AI/ML, Cybersecurity, etc.), formats into HTML email, and sends via SES
+3. Error handling and logging via SNS and CloudWatch with automated alerts
 
 ### AWS Services Used
 - **Lambda**: Serverless execution
@@ -111,6 +121,17 @@ RSS sources are configured in `feed_urls.json` with this structure:
 - Integration tests validate RSS feed processing and email formatting
 - CI runs tests against Python 3.13
 - Pylint enforces code quality with 9.9+ score requirement
+- All Python code must conform to PEP 8 standards (enforced by flake8)
+
+## Development Workflow
+
+When making changes to Python code, always follow this workflow:
+
+1. **Make your changes** to the Python code
+2. **Run unit tests** to ensure functionality: `uv run python -m pytest tests`
+3. **Run linting** to ensure code quality: `uv run pylint --fail-under=9.9 $(git ls-files '*.py') && uv run flake8`
+4. **Update documentation** if the changes affect public APIs or functionality
+5. **Ensure PEP compliance** - flake8 will catch most PEP 8 violations automatically
 
 ## Deployment
 

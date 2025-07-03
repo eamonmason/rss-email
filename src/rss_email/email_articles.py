@@ -38,7 +38,7 @@ except ImportError:
 CHARSET = "UTF-8"
 DAYS_OF_NEWS = 3
 EMAIL_SUBJECT = "Daily News"
-DESCRIPTION_MAX_LENGTH = 1000
+DESCRIPTION_MAX_LENGTH = 400
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)

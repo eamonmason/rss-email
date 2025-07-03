@@ -19,6 +19,9 @@ def repair_truncated_json(json_str: str) -> Optional[Dict[str, Any]]:
     Returns:
         Dict or None: Repaired JSON as dict if successful, None otherwise
     """
+    if not json_str or not json_str.strip():
+        logger.error("Empty or whitespace-only JSON string provided")
+        return None
     try:
         # First try direct parsing
         return json.loads(json_str)
