@@ -21,6 +21,11 @@ from botocore.exceptions import ClientError
 from bs4 import BeautifulSoup
 
 try:
+    import anthropic
+except ImportError:
+    anthropic = None
+
+try:
     from .article_processor import (
         ClaudeRateLimiter,
         group_articles_by_priority,
@@ -187,12 +192,13 @@ def generate_enhanced_html_content(
         <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 30px;">
             <tr>
                 <td>
-                    <table width="100%" cellpadding="12" cellspacing="0" border="0" 
+                    <table width="100%" cellpadding="12" cellspacing="0" border="0"
                     style="background-color: {category_color}; border-radius: 6px; margin-bottom: 15px;">
                         <tr>
                             <td>
-                                <h2 style="color: #ffffff; margin: 0; 
-                                font-size: 18px; font-weight: bold;">{category}</h2>
+                                <h2 style="color: #ffffff; margin: 0; font-size: 18px; font-weight: bold;">
+                                    {category}
+                                </h2>
                             </td>
                         </tr>
                     </table>
@@ -234,8 +240,9 @@ def generate_enhanced_html_content(
             content_parts.append(f'''
             <tr>
                 <td>
-                    <table width="100%" cellpadding="15" cellspacing="0" border="0" 
-                                 style="background-color: #f8f9fa; border-left: 4px solid #3498db; margin-bottom: 15px;">
+                    <table width="100%" cellpadding="15" cellspacing="0" border="0"
+                                 style="background-color: #f8f9fa; border-left: 4px solid #3498db; 
+                                 margin-bottom: 15px;">
                         <tr>
                             <td>
                                 <h3 style="margin: 0 0 8px 0;">
@@ -262,6 +269,9 @@ def _generate_claude_enhanced_html(
     filtered_items: List[Dict[str, Any]],
 ) -> Optional[str]:
     """Generate HTML using Claude categorization if available."""
+    if not filtered_items:
+        logger.info("No articles to process with Claude")
+        return None
     if not (
         CLAUDE_AVAILABLE
         and os.environ.get("CLAUDE_ENABLED", "true").lower() == "true"
@@ -315,8 +325,9 @@ def _generate_claude_enhanced_html(
         logger.warning(
             "Claude processing returned no results, falling back to original format"
         )
-    except (ImportError, AttributeError, ValueError) as e:
+    except (ImportError, AttributeError, ValueError, json.JSONDecodeError) as e:
         logger.error("Error during Claude processing: %s", e, exc_info=True)
+        logger.info("Falling back to original email format due to Claude processing error")
 
     return None
 
@@ -333,12 +344,16 @@ def generate_html(
     filtered_items = filter_items(rss_file, last_run_date)
 
     # Try Claude processing first
-    claude_html = _generate_claude_enhanced_html(filtered_items)
-    if claude_html:
-        return claude_html
+    try:
+        claude_html = _generate_claude_enhanced_html(filtered_items)
+        if claude_html:
+            logger.info("Successfully generated Claude-enhanced HTML")
+            return claude_html
+    except (json.JSONDecodeError, anthropic.APIError, ValueError, KeyError, IndexError) as e:
+        logger.error("Unexpected error in Claude processing: %s", e, exc_info=True)
 
     # Fallback to original HTML generation
-    logger.info("Using original HTML generation (Claude not available or disabled)")
+    logger.info("Using original HTML generation (Claude not available, disabled, or failed)")
     list_output = ""
     previous_day = ""
     for item in sorted(filtered_items, key=lambda k: k["sortDate"], reverse=True):

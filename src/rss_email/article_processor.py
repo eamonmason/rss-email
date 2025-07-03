@@ -251,12 +251,12 @@ CATEGORIES (in priority order - prefer tech-related when applicable):
 Return a JSON response in this exact format (before compression):
 
 YOU MUST FOLLOW THESE STRICT FORMAT RULES:
-- First process all articles normally into the JSON structure described below
-- Then compress the entire JSON object with the following steps:
-   1. Convert your JSON to a compact string with no whitespace
-   2. Return ONLY that compressed JSON with no other text
-- Do not include any explanations, notes, or additional text before or after the JSON
-- Your entire response must be valid JSON with no whitespace that can be directly parsed
+- Return ONLY valid JSON with no explanations or additional text
+- Use proper JSON syntax with commas between all properties and array elements
+- Do not include any text before or after the JSON
+- Ensure all strings are properly quoted with double quotes
+- Ensure all commas are properly placed between properties and array elements
+- Test your JSON mentally for syntax errors before responding
 
 Required JSON structure (compress before returning):
 {{
@@ -332,6 +332,7 @@ def process_articles_with_claude(
         ClientError,
     ) as e:
         logger.error("Failed to process articles with Claude: %s", e)
+        logger.info("Claude processing failed, original email format will be used")
 
     return result
 
@@ -511,6 +512,9 @@ def _call_claude_api(
             # If parsing fails, use the json_repair module instead of manual repair
             logger.warning("JSON parse error: %s. Attempting to repair response.", e)
 
+            # Log the problematic response for debugging
+            logger.debug("Problematic JSON response: %s", response_text[:1000])
+
             # Try to repair the JSON (using the top-level import)
             categorized_data = repair_truncated_json(response_text)
 
@@ -518,7 +522,28 @@ def _call_claude_api(
                 logger.error(
                     "Failed to repair truncated JSON using repair_truncated_json"
                 )
-                return None, None
+                # Instead of returning None, let's try a more aggressive approach
+                # Look for the actual JSON object within the response
+                try:
+                    # Find first opening brace
+                    start = response_text.find('{')
+                    if start == -1:
+                        logger.error("No JSON object found in response")
+                        return None, None
+
+                    # Find last closing brace
+                    end = response_text.rfind('}')
+                    if end == -1:
+                        logger.error("No closing brace found in response")
+                        return None, None
+
+                    # Extract potential JSON substring
+                    json_substring = response_text[start:end+1]
+                    categorized_data = json.loads(json_substring)
+                    logger.info("Successfully extracted JSON from response substring")
+                except (json.JSONDecodeError, ValueError) as extract_error:
+                    logger.error("Failed to extract JSON from response: %s", extract_error)
+                    return None, None
 
         if not categorized_data:
             logger.error("Could not extract valid JSON from response")
