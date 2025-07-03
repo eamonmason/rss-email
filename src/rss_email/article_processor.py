@@ -621,6 +621,9 @@ def _process_dictionary_categories(categories_data, articles):
     """Process categories in dictionary format."""
     processed_categories = {}
     for category, category_data in categories_data.items():
+        # Skip metadata fields that are not actual categories
+        if category in ("article_count", "verification"):
+            continue
         articles_data = category_data
         # Handle both possible structures for articles
         if isinstance(category_data, dict) and "articles" in category_data:
@@ -695,6 +698,16 @@ def _create_categorized_articles(
                 processed_categories = _process_list_categories(
                     categories_data, articles
                 )
+        else:
+            # Handle case where categories are at the top level
+            # Filter out metadata fields first
+            categories_data = {
+                k: v for k, v in categorized_data.items()
+                if k not in ("article_count", "verification")
+            }
+            processed_categories = _process_dictionary_categories(
+                categories_data, articles
+            )
 
         return CategorizedArticles(
             categories=processed_categories,
