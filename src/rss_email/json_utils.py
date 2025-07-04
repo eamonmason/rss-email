@@ -135,7 +135,7 @@ def extract_json_aggressive(
             if bracket_count == 0 and start_positions:
                 # Found a complete JSON object
                 start = start_positions.pop()
-                potential_json = text_no_html[start : i + 1]
+                potential_json = text_no_html[start: i + 1]
                 try:
                     parsed = json.loads(potential_json)
                     if is_valid_json_object(parsed, required_fields):
@@ -161,7 +161,7 @@ def extract_json_aggressive(
     if end_idx == -1:
         return None
 
-    potential_json = text_no_html[start_idx : end_idx + 1]
+    potential_json = text_no_html[start_idx: end_idx + 1]
 
     try:
         parsed = json.loads(potential_json)
@@ -250,7 +250,7 @@ def extract_json_with_common_fixes(
         # Fix single quotes to double quotes
         re.sub(r"\'([^\']*?)\'(\s*:)", r'"\1"\2', text),
         # Remove non-JSON text before the first {
-        text[text.find("{") :] if "{" in text else text,
+        text[text.find("{"):] if "{" in text else text,
         # Remove non-JSON text after the last }
         text[: text.rfind("}") + 1] if "}" in text else text,
         # Remove potential HTML tags that might be in the response
@@ -321,7 +321,7 @@ def extract_json_at_position(text: str, start: int) -> Optional[Dict[str, Any]]:
 
             if bracket_count == 0:
                 # Found potential complete JSON
-                potential = text[start : i + 1]
+                potential = text[start: i + 1]
                 try:
                     return json.loads(potential)
                 except json.JSONDecodeError:

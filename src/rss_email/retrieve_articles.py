@@ -460,7 +460,7 @@ def detect_and_decompress(content: bytes, url: str) -> bytes:
             break
         # Try gzip with offset
         try:
-            if len(content) > i + 2 and content[i : i + 2] == b"\x1f\x8b":
+            if len(content) > i + 2 and content[i: i + 2] == b"\x1f\x8b":
                 buffer = io.BytesIO(content[i:])
                 with gzip.GzipFile(fileobj=buffer) as gzipped:
                     decompressed = gzipped.read()

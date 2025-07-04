@@ -19,6 +19,7 @@ This script tests the new improvements:
 
 import os
 import sys
+import xml.etree.ElementTree as ET  # noqa: N817
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -49,12 +50,12 @@ except ImportError:
 # Add src to path
 sys.path.insert(0, "src")
 
-from rss_email.article_processor import (
+from rss_email.article_processor import (  # noqa: E402
     ClaudeRateLimiter,
     group_articles_by_priority,
     process_articles_with_claude,
 )
-from rss_email.email_articles import filter_items
+from rss_email.email_articles import filter_items  # noqa: E402
 
 
 def main():
@@ -104,8 +105,6 @@ def main():
                 "⚠️  RSS file appears to be very old, using first 10 articles for testing..."
             )
             # Parse RSS manually to get some articles for testing
-            import xml.etree.ElementTree as ET
-
             try:
                 root = ET.fromstring(rss_content)
                 items = root.findall(".//item")[:10]
@@ -132,16 +131,16 @@ def main():
                     print("❌ Could not extract any articles from RSS file.")
                     return False
 
-            except Exception as e:
-                print(f"❌ Error parsing RSS file: {e}")
+            except Exception as exc:
+                print(f"❌ Error parsing RSS file: {exc}")
                 return False
 
-        print("📰 Found {len(filtered_items)} articles to process")
+        print(f"📰 Found {len(filtered_items)} articles to process")
 
         # Show what improvements will be tested
         print("\n🔧 Testing improvements:")
         print("   • Description truncation (reduces input tokens)")
-        print("   • Batch processing ({len(filtered_items)} articles)")
+        print(f"   • Batch processing ({len(filtered_items)} articles)")
         if len(filtered_items) > 15:
             print("   • Will use batch processing (>15 articles)")
         else:
@@ -191,22 +190,21 @@ def main():
 
             print("\n🎉 All improvements working correctly!")
             return True
-        else:
-            print("❌ Claude processing failed")
-            return False
+        print("❌ Claude processing failed")
+        return False
 
     except FileNotFoundError:
         print("❌ rss.xml file not found")
         print("Please run this script from the project root directory.")
         return False
-    except Exception as e:
-        print(f"❌ Error: {e}")
+    except Exception as exc:
+        print(f"❌ Error: {exc}")
         return False
 
 
 if __name__ == "__main__":
-    success = main()
-    if not success:
+    SUCCESS = main()
+    if not SUCCESS:
         sys.exit(1)
 
     print("\n" + "=" * 60)

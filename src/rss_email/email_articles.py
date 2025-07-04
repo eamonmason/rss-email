@@ -241,7 +241,7 @@ def generate_enhanced_html_content(
             <tr>
                 <td>
                     <table width="100%" cellpadding="15" cellspacing="0" border="0"
-                                 style="background-color: #f8f9fa; border-left: 4px solid #3498db; 
+                                 style="background-color: #f8f9fa; border-left: 4px solid #3498db;
                                  margin-bottom: 15px;">
                         <tr>
                             <td>

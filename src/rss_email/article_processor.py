@@ -72,7 +72,7 @@ class ClaudeRateLimiter:
 
     def __init__(self):
         self.max_tokens = int(os.environ.get("CLAUDE_MAX_TOKENS", "100000"))
-        self.max_requests = int(os.environ.get("CLAUDE_MAX_REQUESTS", "5"))
+        self.max_requests = int(os.environ.get("CLAUDE_MAX_REQUESTS", "10"))
         self.current_requests = 0
         self.current_tokens = 0
 
@@ -157,7 +157,7 @@ def truncate_description(description: str, max_length: int = 200) -> str:
 
     # Find a good truncation point (at word boundary)
     truncated = description[:max_length]
-    last_space = truncated.rfind(' ')
+    last_space = truncated.rfind(" ")
 
     if last_space > max_length * 0.8:  # If we can find a space in the last 20%
         truncated = truncated[:last_space]
@@ -193,7 +193,7 @@ def split_articles_into_batches(
     """Split articles into smaller batches for processing."""
     batches = []
     for i in range(0, len(articles), max_batch_size):
-        batch = articles[i:i + max_batch_size]
+        batch = articles[i : i + max_batch_size]
         batches.append(batch)
     return batches
 
@@ -312,7 +312,10 @@ def process_articles_with_claude(
     try:
         # Check if we need to split into batches for large article sets
         if len(articles) > 15:
-            logger.info("Large article set detected (%d articles), processing in batches", len(articles))
+            logger.info(
+                "Large article set detected (%d articles), processing in batches",
+                len(articles),
+            )
             result = _process_articles_in_batches(articles, rate_limiter)
         else:
             # Initialize client and process articles normally
@@ -359,7 +362,9 @@ def _process_articles_in_batches(
     for batch_idx, batch in enumerate(batches):
         logger.info(
             "Processing batch %d/%d with %d articles",
-            batch_idx + 1, len(batches), len(batch)
+            batch_idx + 1,
+            len(batches),
+            len(batch),
         )
 
         # Process this batch
@@ -378,9 +383,9 @@ def _process_articles_in_batches(
         # Update metadata
         combined_metadata["batches_processed"] += 1
         if "tokens_used" in batch_result.processing_metadata:
-            combined_metadata["tokens_used"] += (
-                batch_result.processing_metadata["tokens_used"]
-            )
+            combined_metadata["tokens_used"] += batch_result.processing_metadata[
+                "tokens_used"
+            ]
 
     combined_metadata["processing_time_seconds"] = (
         datetime.now() - start_time
@@ -526,23 +531,25 @@ def _call_claude_api(
                 # Look for the actual JSON object within the response
                 try:
                     # Find first opening brace
-                    start = response_text.find('{')
+                    start = response_text.find("{")
                     if start == -1:
                         logger.error("No JSON object found in response")
                         return None, None
 
                     # Find last closing brace
-                    end = response_text.rfind('}')
+                    end = response_text.rfind("}")
                     if end == -1:
                         logger.error("No closing brace found in response")
                         return None, None
 
                     # Extract potential JSON substring
-                    json_substring = response_text[start:end+1]
+                    json_substring = response_text[start : end + 1]
                     categorized_data = json.loads(json_substring)
                     logger.info("Successfully extracted JSON from response substring")
                 except (json.JSONDecodeError, ValueError) as extract_error:
-                    logger.error("Failed to extract JSON from response: %s", extract_error)
+                    logger.error(
+                        "Failed to extract JSON from response: %s", extract_error
+                    )
                     return None, None
 
         if not categorized_data:
@@ -727,7 +734,8 @@ def _create_categorized_articles(
             # Handle case where categories are at the top level
             # Filter out metadata fields first
             categories_data = {
-                k: v for k, v in categorized_data.items()
+                k: v
+                for k, v in categorized_data.items()
                 if k not in ("article_count", "verification")
             }
             processed_categories = _process_dictionary_categories(

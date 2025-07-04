@@ -71,7 +71,8 @@ class TestRetrieveArticles(unittest.TestCase):
         result = get_feed_urls("local_feed_file.json")
         self.assertEqual(result, ["http://example.com/rss"])
 
-        mock_boto3_client.return_value.get_object.return_value.get.return_value.read.return_value.decode.return_value = '{"feeds": [{"url": "http://example.com/rss"}]}'  # pylint: disable=C0301
+        mock_response_chain = mock_boto3_client.return_value.get_object.return_value.get.return_value.read.return_value
+        mock_response_chain.decode.return_value = '{"feeds": [{"url": "http://example.com/rss"}]}'
         result = get_feed_urls("s3://bucket/feed_file.json")
         self.assertEqual(result, ["http://example.com/rss"])
 

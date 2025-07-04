@@ -1,10 +1,11 @@
 """Comprehensive end-to-end tests for the email articles flow."""
 
 import json
+import os
+import tempfile
 import unittest
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock, patch, Mock
-import os
+from unittest.mock import MagicMock, patch
 
 from rss_email.email_articles import send_email, generate_html
 from rss_email.article_processor import process_articles_with_claude, ClaudeRateLimiter
@@ -18,9 +19,9 @@ class TestComprehensiveEmailFlow(unittest.TestCase):
         # Use current dates to ensure articles pass date filtering
         now = datetime.now()
         recent_date1 = now - timedelta(minutes=30)
-        recent_date2 = now - timedelta(minutes=45)  
+        recent_date2 = now - timedelta(minutes=45)
         recent_date3 = now - timedelta(minutes=60)
-        
+
         self.sample_rss = f"""<?xml version="1.0" encoding="UTF-8" ?>
             <rss version="2.0">
             <channel>
@@ -28,19 +29,19 @@ class TestComprehensiveEmailFlow(unittest.TestCase):
                 <item>
                     <title>AI Breakthrough: New Machine Learning Model</title>
                     <link>https://example.com/ai-breakthrough</link>
-                    <description>Researchers have developed a new ML model that shows promising results in natural language processing.</description>
+                    <description>New ML model shows promising NLP results.</description>
                     <pubDate>{recent_date1.strftime('%a, %d %b %Y %H:%M:%S GMT')}</pubDate>
                 </item>
                 <item>
                     <title>Cybersecurity Alert: New Vulnerability Discovered</title>
                     <link>https://example.com/security-alert</link>
-                    <description>Security researchers have identified a critical vulnerability in popular web frameworks.</description>
+                    <description>Critical vulnerability found in web frameworks.</description>
                     <pubDate>{recent_date2.strftime('%a, %d %b %Y %H:%M:%S GMT')}</pubDate>
                 </item>
                 <item>
                     <title>Tech News: Python 3.13 Released</title>
                     <link>https://example.com/python-release</link>
-                    <description>The latest version of Python includes several performance improvements and new features.</description>
+                    <description>Python latest version has performance improvements.</description>
                     <pubDate>{recent_date3.strftime('%a, %d %b %Y %H:%M:%S GMT')}</pubDate>
                 </item>
             </channel>
@@ -134,7 +135,7 @@ class TestComprehensiveEmailFlow(unittest.TestCase):
         with patch("rss_email.article_processor.anthropic.Anthropic") as mock_anthropic:
             mock_client_instance = MagicMock()
             mock_anthropic.return_value = mock_client_instance
-            
+
             # Create mock response
             mock_response = MagicMock()
             mock_response.content = [MagicMock()]
@@ -155,13 +156,13 @@ class TestComprehensiveEmailFlow(unittest.TestCase):
 
             # Verify S3 was called
             mock_s3_client.get_object.assert_called_once_with(Bucket="test-bucket", Key="test-key")
-            
+
             # Verify Claude API was called
             mock_client_instance.messages.create.assert_called_once()
-            
+
             # Verify email was sent
             mock_ses_client.send_email.assert_called_once()
-            
+
             # Verify the email content includes Claude-processed content
             call_args = mock_ses_client.send_email.call_args
             email_body = call_args[1]["Message"]["Body"]["Html"]["Data"]
@@ -218,7 +219,7 @@ class TestComprehensiveEmailFlow(unittest.TestCase):
         with patch("rss_email.article_processor.anthropic.Anthropic") as mock_anthropic:
             mock_client_instance = MagicMock()
             mock_anthropic.return_value = mock_client_instance
-            
+
             # Create mock response with truly malformed JSON that can't be repaired
             malformed_json = '{"categories": {"AI/ML": [{"id": "article_0", "tit'
             mock_response = MagicMock()
@@ -240,13 +241,13 @@ class TestComprehensiveEmailFlow(unittest.TestCase):
 
             # Verify S3 was called
             mock_s3_client.get_object.assert_called_once()
-            
+
             # Verify Claude API was called
             mock_client_instance.messages.create.assert_called_once()
-            
+
             # Verify email was sent (fallback to original format)
             mock_ses_client.send_email.assert_called_once()
-            
+
             # Verify the email content falls back to original format
             call_args = mock_ses_client.send_email.call_args
             email_body = call_args[1]["Message"]["Body"]["Html"]["Data"]
@@ -308,10 +309,10 @@ class TestComprehensiveEmailFlow(unittest.TestCase):
 
         # Verify S3 was called
         mock_s3_client.get_object.assert_called_once()
-        
+
         # Verify email was sent
         mock_ses_client.send_email.assert_called_once()
-        
+
         # Verify the email content uses original format
         call_args = mock_ses_client.send_email.call_args
         email_body = call_args[1]["Message"]["Body"]["Html"]["Data"]
@@ -321,19 +322,16 @@ class TestComprehensiveEmailFlow(unittest.TestCase):
     def test_generate_html_with_local_file(self):
         """Test HTML generation with local file instead of S3."""
         # Create a temporary RSS file
-        import tempfile
-        import os
-        
         with tempfile.NamedTemporaryFile(mode='w', suffix='.xml', delete=False) as f:
             f.write(self.sample_rss)
             temp_file = f.name
-        
+
         try:
             # Test with Claude disabled
             with patch.dict("os.environ", {"CLAUDE_ENABLED": "false"}):
                 last_run_date = datetime.now() - timedelta(hours=2)
                 html = generate_html(last_run_date, "dummy-bucket", "dummy-key", temp_file)
-                
+
                 # Verify HTML contains articles
                 self.assertIn("AI Breakthrough", html)
                 self.assertIn("Cybersecurity Alert", html)
@@ -345,17 +343,17 @@ class TestComprehensiveEmailFlow(unittest.TestCase):
     def test_claude_rate_limiter(self):
         """Test the Claude rate limiter functionality."""
         rate_limiter = ClaudeRateLimiter()
-        
+
         # Test initial state
         self.assertTrue(rate_limiter.can_make_request(1000))
         self.assertEqual(rate_limiter.current_requests, 0)
         self.assertEqual(rate_limiter.current_tokens, 0)
-        
+
         # Test recording usage
         rate_limiter.record_usage(1000)
         self.assertEqual(rate_limiter.current_requests, 1)
         self.assertEqual(rate_limiter.current_tokens, 1000)
-        
+
         # Test usage stats
         stats = rate_limiter.get_usage_stats()
         self.assertEqual(stats["requests_made"], 1)
@@ -371,23 +369,23 @@ class TestComprehensiveEmailFlow(unittest.TestCase):
             {
                 "title": "AI Breakthrough: New Machine Learning Model",
                 "link": "https://example.com/ai-breakthrough",
-                "description": "Researchers have developed a new ML model that shows promising results in natural language processing.",
+                "description": "New ML model shows promising NLP results.",
                 "pubDate": "Thu, 02 Jan 2025 12:00:00 GMT",
                 "sortDate": 1735819200
             },
             {
                 "title": "Cybersecurity Alert: New Vulnerability Discovered",
                 "link": "https://example.com/security-alert",
-                "description": "Security researchers have identified a critical vulnerability in popular web frameworks.",
+                "description": "Critical vulnerability found in web frameworks.",
                 "pubDate": "Thu, 02 Jan 2025 10:30:00 GMT",
                 "sortDate": 1735813800
             }
         ]
-        
+
         # Mock Claude client
         mock_client_instance = MagicMock()
         mock_anthropic.return_value = mock_client_instance
-        
+
         # Mock successful response
         mock_response = MagicMock()
         mock_response.content = [MagicMock()]
@@ -395,7 +393,7 @@ class TestComprehensiveEmailFlow(unittest.TestCase):
         mock_response.usage.input_tokens = 1000
         mock_response.usage.output_tokens = 500
         mock_client_instance.messages.create.return_value = mock_response
-        
+
         # Test with environment variables set
         with patch.dict("os.environ", {
             "CLAUDE_ENABLED": "true",
@@ -404,14 +402,14 @@ class TestComprehensiveEmailFlow(unittest.TestCase):
         }):
             rate_limiter = ClaudeRateLimiter()
             result = process_articles_with_claude(articles, rate_limiter)
-            
+
             # Verify processing was successful
             self.assertIsNotNone(result)
             self.assertIn("AI/ML", result.categories)
             self.assertIn("Cybersecurity", result.categories)
             self.assertEqual(len(result.categories["AI/ML"]), 1)
             self.assertEqual(len(result.categories["Cybersecurity"]), 1)
-            
+
             # Verify rate limiter was updated
             self.assertEqual(rate_limiter.current_requests, 1)
             self.assertEqual(rate_limiter.current_tokens, 1500)
@@ -428,20 +426,25 @@ class TestComprehensiveEmailFlow(unittest.TestCase):
                 "sortDate": 1735819200
             }
         ]
-        
+
         # Mock Claude client
         mock_client_instance = MagicMock()
         mock_anthropic.return_value = mock_client_instance
-        
+
         # Mock response with malformed JSON that can be repaired
-        malformed_json = '{"categories": {"Technology": [{"id": "article_0", "title": "Test Article", "link": "https://example.com/test" "summary": "Test", "category": "Technology", "pubdate": "Thu, 02 Jan 2025 12:00:00 GMT", "related_articles": []}]}, "article_count": 1, "verification": "processed_all_articles"}'
+        malformed_json = (
+            '{"categories": {"Technology": [{"id": "article_0", "title": "Test Article", '
+            '"link": "https://example.com/test" "summary": "Test", "category": "Technology", '
+            '"pubdate": "Thu, 02 Jan 2025 12:00:00 GMT", "related_articles": []}]}, '
+            '"article_count": 1, "verification": "processed_all_articles"}'
+        )
         mock_response = MagicMock()
         mock_response.content = [MagicMock()]
         mock_response.content[0].text = malformed_json
         mock_response.usage.input_tokens = 500
         mock_response.usage.output_tokens = 300
         mock_client_instance.messages.create.return_value = mock_response
-        
+
         # Test with environment variables set
         with patch.dict("os.environ", {
             "CLAUDE_ENABLED": "true",
@@ -450,7 +453,7 @@ class TestComprehensiveEmailFlow(unittest.TestCase):
         }):
             rate_limiter = ClaudeRateLimiter()
             result = process_articles_with_claude(articles, rate_limiter)
-            
+
             # Verify processing was successful despite JSON repair
             self.assertIsNotNone(result)
             self.assertIn("Technology", result.categories)

@@ -18,8 +18,7 @@ logger = logging.getLogger()
 # Add the src directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-# pylint: disable=wrong-import-position
-from rss_email.article_processor import (
+from rss_email.article_processor import (  # noqa: E402
     ClaudeRateLimiter,
     _create_categorized_articles,
     create_categorization_prompt,
@@ -28,9 +27,7 @@ from rss_email.article_processor import (
     group_articles_by_priority,
     process_articles_with_claude,
 )
-from rss_email.compression_utils import compress_json, decompress_json
-
-# pylint: enable=wrong-import-position
+from rss_email.compression_utils import compress_json, decompress_json  # noqa: E402
 
 
 def create_sample_articles() -> List[Dict[str, Any]]:
