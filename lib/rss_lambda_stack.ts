@@ -232,7 +232,7 @@ export class RSSEmailStack extends cdk.Stack {
       },
       role: role,
       layers: [layer],
-      timeout: cdk.Duration.seconds(120)  // Increased from 30s to accommodate Claude API calls
+      timeout: cdk.Duration.seconds(300)  // Increased from 30s to accommodate Claude API calls
     });
 
     const emailerEventRule = new events.Rule(this, 'emailerEventRule', {

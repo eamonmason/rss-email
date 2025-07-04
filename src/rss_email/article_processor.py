@@ -188,7 +188,7 @@ def optimize_articles_for_claude(
 
 
 def split_articles_into_batches(
-    articles: List[Dict[str, Any]], max_batch_size: int = 15
+    articles: List[Dict[str, Any]], max_batch_size: int = 30
 ) -> List[List[Dict[str, Any]]]:
     """Split articles into smaller batches for processing."""
     batches = []
@@ -344,7 +344,7 @@ def _process_articles_in_batches(
     articles: List[Dict[str, Any]], rate_limiter: ClaudeRateLimiter
 ) -> Optional[CategorizedArticles]:
     """Process articles in smaller batches to avoid token limits."""
-    batches = split_articles_into_batches(articles, max_batch_size=10)
+    batches = split_articles_into_batches(articles, max_batch_size=30)
 
     all_categories = {}
     combined_metadata = {
