@@ -213,7 +213,7 @@ All HTML email templates must be mobile-friendly:
 - **Responsive breakpoints**: 768px (tablet), 480px (mobile)
 
 #### Template Structure
-- Use `<meta name="viewport" content="width=device-width, initial-scale=1.0">`
+- Use the meta tag with attributes `name="viewport" content="width=device-width, initial-scale=1.0"`
 - Combine CSS media queries with inline styles for email client compatibility
 - Maintain table-based layouts for better email client support
 
