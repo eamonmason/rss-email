@@ -41,6 +41,13 @@ import PyRSS2Gen
 from botocore.exceptions import ClientError
 from pydantic import BaseModel, Field, HttpUrl
 
+try:
+    from .models import RSSItem, FeedList
+except ImportError:
+    # For local testing or when models module is not available
+    RSSItem = None
+    FeedList = None
+
 # Import brotli if available
 try:
     import brotli
@@ -540,6 +547,7 @@ def get_feed_urls(feed_file: str) -> List[str]:
     """
     Extract feed urls from a json file containing a list of items 'url'.
     It detects whether the file is local or on S3.
+    Uses FeedList model for validation when available.
     """
     url_list = []
     text_data = ""
@@ -554,25 +562,48 @@ def get_feed_urls(feed_file: str) -> List[str]:
         )
     else:
         text_data = files("rss_email").joinpath(feed_file).read_text()
+
     data = json.loads(text_data)
-    for i in data["feeds"]:
-        if "url" in i:
-            url_list.append(i["url"])
+
+    # Use FeedList model if available for validation
+    if FeedList is not None:
+        try:
+            feed_list = FeedList.from_json_data(data)
+            # Only return URLs for enabled feeds
+            for feed in feed_list.feeds:
+                if feed.enabled:
+                    url_list.append(str(feed.url))
+        except Exception as e:
+            logger.warning("Failed to parse feed list with FeedList model: %s", str(e))
+            # Fallback to original parsing
+            for i in data["feeds"]:
+                if "url" in i:
+                    url_list.append(i["url"])
+    else:
+        # Original parsing when FeedList is not available
+        for i in data["feeds"]:
+            if "url" in i:
+                url_list.append(i["url"])
+
     return url_list
 
 
-class Article(BaseModel):
-    """
-    RSS Article model.
-    """
+# Use shared RSSItem model if available, otherwise fallback to local Article class
+if RSSItem is not None:
+    Article = RSSItem
+else:
+    class Article(BaseModel):
+        """
+        RSS Article model.
+        """
 
-    title: str = Field(min_length=1)
-    link: HttpUrl
-    description: Optional[str] = ""
-    pubdate: datetime
+        title: str = Field(min_length=1)
+        link: HttpUrl
+        description: Optional[str] = ""
+        pubdate: datetime
 
-    def __lt__(self, other):
-        return self.pubdate < other.pubdate
+        def __lt__(self, other):
+            return self.pubdate < other.pubdate
 
 
 @pydantic.validate_call(validate_return=True)
@@ -593,11 +624,18 @@ def get_feed(url: str, item: bytes, update_date: datetime) -> List[Article]:
             break
         feed_datetime = datetime.fromtimestamp(mktime(feed_date))
         if feed_datetime > update_date:
-            out_article = Article(
-                title=article.title,
-                link=article.link,
-                pubdate=feed_datetime,
-            )
+            # Create article with proper fields based on model type
+            article_kwargs = {
+                "title": article.title,
+                "link": article.link,
+                "pubdate": feed_datetime,
+            }
+
+            # Add sort_date if using RSSItem
+            if RSSItem is not None:
+                article_kwargs["sort_date"] = mktime(feed_date)
+
+            out_article = Article(**article_kwargs)
 
             if hasattr(article, "summary"):
                 out_article.description = article["summary"]

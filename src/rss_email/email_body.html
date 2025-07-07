@@ -3,6 +3,7 @@
   <head>
     <title>{subject}</title>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <style>
       .tooltip {{
         position: relative;
@@ -60,6 +61,39 @@
 
       body {{
           font-family: "Arial", sans-serif;
+          font-size: 16px;
+          line-height: 1.6;
+          padding: 20px;
+          margin: 0;
+      }}
+
+      /* Basic mobile responsiveness */
+      @media (max-width: 768px) {{
+        body {{
+          font-size: 18px;
+          padding: 10px;
+        }}
+        
+        .tooltip {{
+          width: 100%;
+          font-size: 1.1em;
+        }}
+        
+        .tooltip a {{
+          font-size: 1.1em;
+          padding: 8px 12px;
+        }}
+        
+        img {{
+          max-width: 80%; /* Slightly larger on mobile */
+        }}
+      }}
+      
+      @media (max-width: 480px) {{
+        body {{
+          font-size: 20px;
+          padding: 8px;
+        }}
       }}
     </style>
   </head>

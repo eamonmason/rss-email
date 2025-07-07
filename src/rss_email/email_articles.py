@@ -40,6 +40,12 @@ except ImportError:
     group_articles_by_priority = None
     process_articles_with_claude = None
 
+try:
+    from .models import RSSItem
+except ImportError:
+    # For local testing or when models module is not available
+    RSSItem = None
+
 CHARSET = "UTF-8"
 DAYS_OF_NEWS = 3
 EMAIL_SUBJECT = "Daily News"
@@ -49,6 +55,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
+@pydantic.validate_call(validate_return=True)
 def get_description_body(html: Optional[str]) -> str:
     """Return the body of the description, without any iframes."""
     if html is None:
@@ -74,6 +81,7 @@ def get_description_body(html: Optional[str]) -> str:
     return body_text
 
 
+@pydantic.validate_call(validate_return=True)
 def get_last_run(parameter_name: str) -> datetime:
     """Get the last run timestamp from parameter store."""
     try:
@@ -104,6 +112,7 @@ def set_last_run(parameter_name: str) -> None:
     )
 
 
+@pydantic.validate_call(config={"arbitrary_types_allowed": True})
 def add_attribute_to_dict(
     item: ElementTree.Element, name: str, target_dict: Dict[str, str]
 ) -> None:
@@ -154,17 +163,48 @@ def filter_items(rss_file: str, last_run_date: datetime):
         for name in ["title", "link", "description", "pubDate"]:
             add_attribute_to_dict(item, name, item_dict)
 
-        published_date = time.mktime(
-            datetime.strptime(
-                str(item_dict["pubDate"]), "%a, %d %b %Y %H:%M:%S %Z"
-            ).timetuple()
-        )
+        # Skip items without pubDate
+        if "pubDate" not in item_dict:
+            logger.debug("Skipping item without pubDate: %s", item_dict.get("title", "Unknown"))
+            continue
+
+        try:
+            published_date = time.mktime(
+                datetime.strptime(
+                    str(item_dict["pubDate"]), "%a, %d %b %Y %H:%M:%S %Z"
+                ).timetuple()
+            )
+        except ValueError as e:
+            logger.warning("Failed to parse pubDate '%s': %s", item_dict["pubDate"], str(e))
+            continue
+
         item_dict["sortDate"] = published_date
-        if datetime.fromtimestamp(published_date) > last_run_date:
-            all_items.append(item_dict)
+
+        # Create RSSItem with proper datetime conversion
+        pubdate_dt = datetime.fromtimestamp(published_date)
+        if pubdate_dt > last_run_date:
+            # Use RSSItem if available, otherwise fallback to raw dict
+            if RSSItem is not None:
+                try:
+                    rss_item = RSSItem(
+                        title=item_dict["title"],
+                        link=item_dict["link"],
+                        description=item_dict.get("description", ""),
+                        pubdate=pubdate_dt,
+                        sort_date=published_date
+                    )
+                    all_items.append(rss_item)
+                except Exception as e:
+                    logger.warning("Failed to create RSSItem for %s: %s", item_dict.get("title", "Unknown"), str(e))
+                    # Fallback to raw dict if RSSItem creation fails
+                    all_items.append(item_dict)
+            else:
+                # RSSItem not available, use raw dict
+                all_items.append(item_dict)
     return all_items
 
 
+@pydantic.validate_call(validate_return=True)
 def generate_enhanced_html_content(
     categorized_articles, article_map: Dict[str, Dict[str, Any]]
 ) -> str:
@@ -196,7 +236,8 @@ def generate_enhanced_html_content(
                     style="background-color: {category_color}; border-radius: 6px; margin-bottom: 15px;">
                         <tr>
                             <td>
-                                <h2 style="color: #ffffff; margin: 0; font-size: 18px; font-weight: bold;">
+                                <h2 style="color: #ffffff; margin: 0; font-size: 20px;
+                                    font-weight: bold; line-height: 1.3;">
                                     {category}
                                 </h2>
                             </td>
@@ -225,8 +266,8 @@ def generate_enhanced_html_content(
             if related_titles:
                 related_html = f"""
                     <tr>
-                        <td style="padding: 8px 15px; background-color: #e9ecef; border-radius: 4px;">
-                            <p style="margin: 0; font-size: 12px; color: #666;">
+                        <td style="padding: 12px 15px; background-color: #e9ecef; border-radius: 4px;">
+                            <p style="margin: 0; font-size: 14px; color: #666; line-height: 1.5;">
                                 <strong>Related:</strong> {", ".join(related_titles)}
                             </p>
                         </td>
@@ -240,18 +281,18 @@ def generate_enhanced_html_content(
             content_parts.append(f'''
             <tr>
                 <td>
-                    <table width="100%" cellpadding="15" cellspacing="0" border="0"
+                    <table width="100%" cellpadding="18" cellspacing="0" border="0"
                                  style="background-color: #f8f9fa; border-left: 4px solid #3498db;
-                                 margin-bottom: 15px;">
+                                 margin-bottom: 18px;">
                         <tr>
                             <td>
-                                <h3 style="margin: 0 0 8px 0;">
+                                <h3 style="margin: 0 0 10px 0; line-height: 1.4;">
                                     <a href="{article_link}" target="_blank"
-                                    style="color: #0066cc; text-decoration: underline; font-size: 16px;">
+                                    style="color: #0066cc; text-decoration: underline; font-size: 18px;">
                                     {article.title}</a>
                                 </h3>
-                                <p style="margin: 0 0 10px 0; font-size: 12px; color: #666;">{article.pubdate}</p>
-                                <p style="margin: 0 0 10px 0; font-size: 14px; color: #555; line-height: 1.5;">
+                                <p style="margin: 0 0 12px 0; font-size: 14px; color: #666;">{article.pubdate}</p>
+                                <p style="margin: 0 0 12px 0; font-size: 16px; color: #555; line-height: 1.6;">
                                 {article.summary}</p>
                             </td>
                         </tr>
@@ -265,6 +306,7 @@ def generate_enhanced_html_content(
     return "\n".join(content_parts)
 
 
+@pydantic.validate_call(validate_return=True)
 def _generate_claude_enhanced_html(
     filtered_items: List[Dict[str, Any]],
 ) -> Optional[str]:
@@ -396,6 +438,7 @@ def is_valid_email(event_dict: Dict[str, Any], valid_emails: List[str]) -> bool:
     return True
 
 
+@pydantic.validate_call
 def send_email(event: Dict[str, Any], context: Optional[Any] = None) -> None:  # pylint: disable=W0613
     """Send the email."""
     logger.debug("Event body: %s", event)

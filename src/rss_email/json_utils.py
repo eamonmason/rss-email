@@ -7,10 +7,12 @@ import re
 from typing import Any, Dict, List, Optional
 
 import regex
+import pydantic
 
 logger = logging.getLogger(__name__)
 
 
+@pydantic.validate_call
 def extract_json_from_text(
     text: str, required_fields: Optional[List[str]] = None
 ) -> Optional[Dict[str, Any]]:
@@ -60,6 +62,7 @@ def extract_json_from_text(
     return None
 
 
+@pydantic.validate_call(validate_return=True)
 def process_html_entities_in_json(json_obj: Dict[str, Any]) -> Dict[str, Any]:
     """
     Process HTML entities in title and summary fields throughout the JSON object.
@@ -384,6 +387,7 @@ def extract_json_using_regex(
     return None
 
 
+@pydantic.validate_call(validate_return=True)
 def is_valid_json_object(obj: Any, required_fields: Optional[List[str]] = None) -> bool:
     """
     Check if an object is a valid JSON dictionary with required fields.

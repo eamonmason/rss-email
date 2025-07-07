@@ -193,7 +193,7 @@ def split_articles_into_batches(
     """Split articles into smaller batches for processing."""
     batches = []
     for i in range(0, len(articles), max_batch_size):
-        batch = articles[i : i + max_batch_size]
+        batch = articles[i:i + max_batch_size]
         batches.append(batch)
     return batches
 
@@ -543,7 +543,7 @@ def _call_claude_api(
                         return None, None
 
                     # Extract potential JSON substring
-                    json_substring = response_text[start : end + 1]
+                    json_substring = response_text[start:end + 1]
                     categorized_data = json.loads(json_substring)
                     logger.info("Successfully extracted JSON from response substring")
                 except (json.JSONDecodeError, ValueError) as extract_error:
