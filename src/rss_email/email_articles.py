@@ -112,7 +112,6 @@ def set_last_run(parameter_name: str) -> None:
     )
 
 
-@pydantic.validate_call(config={"arbitrary_types_allowed": True})
 def add_attribute_to_dict(
     item: ElementTree.Element, name: str, target_dict: Dict[str, str]
 ) -> None:
@@ -165,42 +164,68 @@ def filter_items(rss_file: str, last_run_date: datetime):
 
         # Skip items without pubDate
         if "pubDate" not in item_dict:
-            logger.debug("Skipping item without pubDate: %s", item_dict.get("title", "Unknown"))
+            logger.debug(
+                "Skipping item without pubDate: %s", item_dict.get("title", "Unknown")
+            )
             continue
 
         try:
-            published_date = time.mktime(
-                datetime.strptime(
-                    str(item_dict["pubDate"]), "%a, %d %b %Y %H:%M:%S %Z"
-                ).timetuple()
+            # Try multiple date formats to handle different RSS feeds
+            date_formats = [
+                "%a, %d %b %Y %H:%M:%S %Z",  # Standard RFC 822 format
+                "%a, %d %b %Y %H:%M:%S GMT",  # GMT specifically
+                "%a, %d %b %Y %H:%M:%S",  # Without timezone
+            ]
+
+            published_date = None
+            for fmt in date_formats:
+                try:
+                    parsed_dt = datetime.strptime(str(item_dict["pubDate"]), fmt)
+                    # If the format includes GMT, treat it as UTC time
+                    if "GMT" in str(item_dict["pubDate"]) or "%Z" in fmt:
+                        # Convert to local time for comparison
+                        import calendar
+
+                        published_date = calendar.timegm(parsed_dt.timetuple())
+                    else:
+                        # Local time
+                        published_date = time.mktime(parsed_dt.timetuple())
+                    break
+                except ValueError:
+                    continue
+
+            if published_date is None:
+                logger.warning(
+                    "Failed to parse pubDate '%s' with any format", item_dict["pubDate"]
+                )
+                continue
+
+        except Exception as e:
+            logger.warning(
+                "Unexpected error parsing pubDate '%s': %s",
+                item_dict["pubDate"],
+                str(e),
             )
-        except ValueError as e:
-            logger.warning("Failed to parse pubDate '%s': %s", item_dict["pubDate"], str(e))
             continue
 
         item_dict["sortDate"] = published_date
 
         # Create RSSItem with proper datetime conversion
         pubdate_dt = datetime.fromtimestamp(published_date)
+        logger.debug(
+            "Comparing article date %s with last_run_date %s", pubdate_dt, last_run_date
+        )
         if pubdate_dt > last_run_date:
-            # Use RSSItem if available, otherwise fallback to raw dict
-            if RSSItem is not None:
-                try:
-                    rss_item = RSSItem(
-                        title=item_dict["title"],
-                        link=item_dict["link"],
-                        description=item_dict.get("description", ""),
-                        pubdate=pubdate_dt,
-                        sort_date=published_date
-                    )
-                    all_items.append(rss_item)
-                except Exception as e:
-                    logger.warning("Failed to create RSSItem for %s: %s", item_dict.get("title", "Unknown"), str(e))
-                    # Fallback to raw dict if RSSItem creation fails
-                    all_items.append(item_dict)
-            else:
-                # RSSItem not available, use raw dict
-                all_items.append(item_dict)
+            # Always use dictionary format for compatibility with HTML generation
+            item_dict["sortDate"] = published_date
+            all_items.append(item_dict)
+            logger.debug("Added article: %s", item_dict.get("title", "Unknown"))
+        else:
+            logger.debug(
+                "Skipped article (too old): %s", item_dict.get("title", "Unknown")
+            )
+
+    logger.debug("Total filtered items: %d", len(all_items))
     return all_items
 
 
@@ -369,7 +394,9 @@ def _generate_claude_enhanced_html(
         )
     except (ImportError, AttributeError, ValueError, json.JSONDecodeError) as e:
         logger.error("Error during Claude processing: %s", e, exc_info=True)
-        logger.info("Falling back to original email format due to Claude processing error")
+        logger.info(
+            "Falling back to original email format due to Claude processing error"
+        )
 
     return None
 
@@ -391,11 +418,19 @@ def generate_html(
         if claude_html:
             logger.info("Successfully generated Claude-enhanced HTML")
             return claude_html
-    except (json.JSONDecodeError, anthropic.APIError, ValueError, KeyError, IndexError) as e:
-        logger.error("Unexpected error in Claude processing: %s", e, exc_info=True)
+    except Exception as e:
+        # Handle various exceptions that could occur during Claude processing
+        if anthropic and isinstance(e, anthropic.APIError):
+            logger.error("Claude API error: %s", e)
+        elif isinstance(e, (json.JSONDecodeError, ValueError, KeyError, IndexError)):
+            logger.error("Error processing Claude response: %s", e)
+        else:
+            logger.error("Unexpected error in Claude processing: %s", e, exc_info=True)
 
     # Fallback to original HTML generation
-    logger.info("Using original HTML generation (Claude not available, disabled, or failed)")
+    logger.info(
+        "Using original HTML generation (Claude not available, disabled, or failed)"
+    )
     list_output = ""
     previous_day = ""
     for item in sorted(filtered_items, key=lambda k: k["sortDate"], reverse=True):

@@ -45,10 +45,17 @@ class FeedConfig(BaseModel):
     def from_dict(cls, data: Dict[str, Any]) -> FeedConfig:
         """Create FeedConfig from dictionary, handling _url suffix for disabled feeds."""
         name = data.get("name", "")
-        url = data.get("url", "")
         enabled = True
 
-        # Handle feeds with "_url" suffix indicating disabled state
+        # Check if this is a disabled feed (using "_url" instead of "url")
+        if "_url" in data:
+            url = data.get("_url", "")
+            enabled = False
+        else:
+            url = data.get("url", "")
+            enabled = True
+
+        # Handle legacy pattern where name ends with "_url"
         if name.endswith("_url"):
             name = name[:-4]  # Remove "_url" suffix
             enabled = False
