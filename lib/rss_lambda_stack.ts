@@ -301,7 +301,7 @@ export class RSSEmailStack extends cdk.Stack {
 
     // Create a Lambda function that will forward log events to the SNS topic
     const logForwarderFunction = new lambda.Function(this, 'LogForwarderFunction', {
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'rss_email/log_forwarder.handler',
       code: lambda.Code.fromAsset('src'),
       environment: {
