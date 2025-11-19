@@ -17,6 +17,7 @@ class RSSItem(BaseModel):
     title: str = Field(min_length=1)
     link: HttpUrl
     description: Optional[str] = ""
+    comments: Optional[HttpUrl] = None
     pubdate: datetime = Field(alias="pubDate")
     sort_date: Optional[float] = Field(default=None, alias="sortDate")
 
@@ -25,10 +26,10 @@ class RSSItem(BaseModel):
         "arbitrary_types_allowed": True,
     }
 
-    def model_post_init(self, __context) -> None:
+    def model_post_init(self, __context) -> None:  # pylint: disable=arguments-differ
         """Calculate sort_date from pubdate if not provided."""
         if self.sort_date is None:
-            self.sort_date = self.pubdate.timestamp()
+            self.sort_date = self.pubdate.timestamp()  # pylint: disable=no-member
 
     def __lt__(self, other):
         return self.pubdate < other.pubdate

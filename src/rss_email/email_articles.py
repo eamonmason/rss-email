@@ -9,6 +9,8 @@ import logging
 import os
 import sys
 import time
+
+import calendar
 from datetime import datetime, timedelta
 from importlib.resources import files
 from typing import Any, Dict, List, Optional
@@ -40,11 +42,8 @@ except ImportError:
     group_articles_by_priority = None
     process_articles_with_claude = None
 
-try:
-    from .models import RSSItem
-except ImportError:
-    # For local testing or when models module is not available
-    RSSItem = None
+
+
 
 CHARSET = "UTF-8"
 DAYS_OF_NEWS = 3
@@ -159,7 +158,7 @@ def filter_items(rss_file: str, last_run_date: datetime):
     logger.debug("Retrieved RSS file. Last run date: %s", last_run_date)
     for item in ElementTree.fromstring(rss_file).findall(".//item"):
         item_dict = {}
-        for name in ["title", "link", "description", "pubDate"]:
+        for name in ["title", "link", "description", "pubDate", "comments"]:
             add_attribute_to_dict(item, name, item_dict)
 
         # Skip items without pubDate
@@ -184,8 +183,6 @@ def filter_items(rss_file: str, last_run_date: datetime):
                     # If the format includes GMT, treat it as UTC time
                     if "GMT" in str(item_dict["pubDate"]) or "%Z" in fmt:
                         # Convert to local time for comparison
-                        import calendar
-
                         published_date = calendar.timegm(parsed_dt.timetuple())
                     else:
                         # Local time
@@ -200,7 +197,7 @@ def filter_items(rss_file: str, last_run_date: datetime):
                 )
                 continue
 
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             logger.warning(
                 "Unexpected error parsing pubDate '%s': %s",
                 item_dict["pubDate"],
@@ -316,7 +313,14 @@ def generate_enhanced_html_content(
                                     style="color: #0066cc; text-decoration: underline; font-size: 18px;">
                                     {article.title}</a>
                                 </h3>
-                                <p style="margin: 0 0 12px 0; font-size: 14px; color: #666;">{article.pubdate}</p>
+                                <p style="margin: 0 0 12px 0; font-size: 14px; color: #666;">
+                                    {article.pubdate}
+                                    {
+                                        f' | <a href="{article.comments}" target="_blank" '
+                                        'style="color: #666; text-decoration: underline;">Comments</a>'
+                                        if article.comments else ''
+                                    }
+                                </p>
                                 <p style="margin: 0 0 12px 0; font-size: 16px; color: #555; line-height: 1.6;">
                                 {article.summary}</p>
                             </td>
@@ -418,7 +422,7 @@ def generate_html(
         if claude_html:
             logger.info("Successfully generated Claude-enhanced HTML")
             return claude_html
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         # Handle various exceptions that could occur during Claude processing
         if anthropic and isinstance(e, anthropic.APIError):
             logger.error("Claude API error: %s", e)
@@ -447,6 +451,11 @@ def generate_html(
             <div class="tooltip">
             <a href="{item_link}" style="color: white; text-decoration: underline;">{item["title"]}</a>
             <span class="tooltiptext">{item["pubDate"]}</span>
+            {
+                f' <a href="{item["comments"]}" style="color: #ccc; font-size: 0.8em; text-decoration: none;">'
+                '[Comments]</a>'
+                if "comments" in item and item["comments"] else ''
+            }
             </div>\n
             <section class="longdescription">{item["description"]}</section>\n"""
 

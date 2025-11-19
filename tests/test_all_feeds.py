@@ -11,6 +11,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 
+from rss_email.retrieve_articles import get_feed_items
+
 # Configure logging first so we can see all outputs
 logger = logging.getLogger()
 handler = logging.StreamHandler(sys.stdout)
@@ -19,22 +21,6 @@ handler.setFormatter(formatter)
 logger.addHandler(handler)
 logger.setLevel(logging.INFO)
 
-try:
-    # Try importing directly
-    from rss_email.retrieve_articles import get_feed_items
-
-    logger.info("Successfully imported from rss_email package")
-except ImportError:
-    # Fallback to direct import
-    logger.info("Trying alternative import path")
-    sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-    try:
-        from rss_email.retrieve_articles import get_feed_items
-
-        logger.info("Successfully imported from src/rss_email")
-    except ImportError as e:
-        logger.error("Import error: %s", e)
-        sys.exit(1)
 
 # Get logger for this module
 logger = logging.getLogger(__name__)

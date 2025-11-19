@@ -15,8 +15,6 @@ from typing import Any, Dict, List, Optional
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger()
 
-# Add the src directory to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from rss_email.article_processor import (  # noqa: E402
     ClaudeRateLimiter,

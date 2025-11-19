@@ -26,6 +26,7 @@ import ssl
 import sys
 import urllib.request
 import zlib
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from importlib.resources import files
@@ -102,146 +103,168 @@ def get_feed_items(url: str, timestamp: datetime) -> bytes:
 
     req_retrieve = urllib.request.Request(url, data=None, headers=headers)
 
-    try:
-        # Try to handle common edge cases for HTTP(S) request problems
+    # Retry logic
+    max_retries = 3
+    retry_delay = 2  # seconds
 
-        # First attempt - use the standard approach with SSL verification
-        if url.startswith("https"):
-            try:
-                # First try with SSL verification
-                with contextlib.closing(
-                    urllib.request.urlopen(req_check_new, timeout=10)
-                ):
-                    with urllib.request.urlopen(req_retrieve, timeout=10) as conn:
-                        content = conn.read()
-                        feed_items = detect_and_decompress(content, url)
-            except (ssl.SSLError, URLError, HTTPError) as ssl_error:
-                logger.debug(
-                    "SSL verification failed for %s: %s. Trying without verification.",
-                    url,
-                    str(ssl_error),
-                )
-                # If SSL verification fails, try with an unverified context
+    for attempt in range(max_retries):
+        try:
+            # Try to handle common edge cases for HTTP(S) request problems
+
+            # First attempt - use the standard approach with SSL verification
+            if url.startswith("https"):
                 try:
-                    unverified_context = ssl._create_unverified_context()
+                    # First try with SSL verification
                     with contextlib.closing(
-                        urllib.request.urlopen(
-                            req_check_new, timeout=10, context=unverified_context
-                        )
+                        urllib.request.urlopen(req_check_new, timeout=10)
                     ):
-                        with urllib.request.urlopen(
-                            req_retrieve, timeout=10, context=unverified_context
-                        ) as conn:
+                        with urllib.request.urlopen(req_retrieve, timeout=10) as conn:
                             content = conn.read()
                             feed_items = detect_and_decompress(content, url)
-                except (
-                    ssl.SSLError,
-                    ConnectionError,
-                    TimeoutError,
-                    OSError,
-                    socket.timeout,
-                    URLError,
-                    HTTPError,
-                ) as e:
+                except (ssl.SSLError, URLError, HTTPError) as ssl_error:
                     logger.debug(
-                        "Unverified SSL attempt failed for %s: %s. Trying opener approach.",
+                        "SSL verification failed for %s: %s. Trying without verification.",
                         url,
-                        str(e),
+                        str(ssl_error),
                     )
-                    # If that fails too, try with a custom opener
+                    # If SSL verification fails, try with an unverified context
                     try:
-                        opener = urllib.request.build_opener(
-                            urllib.request.HTTPSHandler(context=unverified_context)
-                        )
-                        opener.addheaders = list(headers.items())
-                        with contextlib.closing(opener.open(url, timeout=10)) as conn:
-                            content = conn.read()
-                            feed_items = detect_and_decompress(content, url)
+                        unverified_context = ssl._create_unverified_context()
+                        with contextlib.closing(
+                            urllib.request.urlopen(
+                                req_check_new, timeout=10, context=unverified_context
+                            )
+                        ):
+                            with urllib.request.urlopen(
+                                req_retrieve, timeout=10, context=unverified_context
+                            ) as conn:
+                                content = conn.read()
+                                feed_items = detect_and_decompress(content, url)
                     except (
                         ssl.SSLError,
                         ConnectionError,
                         TimeoutError,
                         OSError,
-                        timeout,
+                        socket.timeout,
                         URLError,
                         HTTPError,
-                    ) as e3:
+                    ) as e:
                         logger.debug(
-                            "All SSL approaches failed for %s: %s", url, str(e3)
+                            "Unverified SSL attempt failed for %s: %s. Trying opener approach.",
+                            url,
+                            str(e),
                         )
+                        # If that fails too, try with a custom opener
+                        try:
+                            opener = urllib.request.build_opener(
+                                urllib.request.HTTPSHandler(context=unverified_context)
+                            )
+                            opener.addheaders = list(headers.items())
+                            with contextlib.closing(opener.open(url, timeout=10)) as conn:
+                                content = conn.read()
+                                feed_items = detect_and_decompress(content, url)
+                        except (
+                            ssl.SSLError,
+                            ConnectionError,
+                            TimeoutError,
+                            OSError,
+                            timeout,
+                            URLError,
+                            HTTPError,
+                        ) as e3:
+                            logger.debug(
+                                "All SSL approaches failed for %s: %s", url, str(e3)
+                            )
+                            raise
+                except (ConnectionError, TimeoutError, OSError) as e:
+                    logger.debug(
+                        "First attempt failed for %s: %s. Trying alternate approach.",
+                        url,
+                        str(e),
+                    )
+                    # Try a different approach for some sites (non-SSL related issues)
+                    try:
+                        opener = urllib.request.build_opener()
+                        opener.addheaders = list(headers.items())
+                        with contextlib.closing(opener.open(url, timeout=10)) as conn:
+                            content = conn.read()
+                            feed_items = detect_and_decompress(content, url)
+                    except Exception as e2:
+                        logger.debug("Alternative approach failed for %s: %s", url, str(e2))
                         raise
-            except (ConnectionError, TimeoutError, OSError) as e:
-                logger.debug(
-                    "First attempt failed for %s: %s. Trying alternate approach.",
-                    url,
-                    str(e),
-                )
-                # Try a different approach for some sites (non-SSL related issues)
-                try:
-                    opener = urllib.request.build_opener()
-                    opener.addheaders = list(headers.items())
-                    with contextlib.closing(opener.open(url, timeout=10)) as conn:
+            else:
+                # Non-HTTPS case
+                with contextlib.closing(urllib.request.urlopen(req_check_new, timeout=10)):
+                    with urllib.request.urlopen(req_retrieve, timeout=10) as conn:
                         content = conn.read()
                         feed_items = detect_and_decompress(content, url)
-                except Exception as e2:
-                    logger.debug("Alternative approach failed for %s: %s", url, str(e2))
-                    raise
-        else:
-            # Non-HTTPS case
-            with contextlib.closing(urllib.request.urlopen(req_check_new, timeout=10)):
-                with urllib.request.urlopen(req_retrieve, timeout=10) as conn:
-                    content = conn.read()
-                    feed_items = detect_and_decompress(content, url)
 
-        # As a final fallback for binary/compressed content, try to detect if it's XML
-        if feed_items and not (
-            b"<rss" in feed_items or b"<feed" in feed_items or b"<?xml" in feed_items
-        ):
-            logger.debug(
-                "Content doesn't look like XML, attempting decompression for: %s", url
-            )
-            feed_items = detect_and_decompress(feed_items, url)
-
-    except HTTPError as error:
-        if error.code == 304:
-            logger.debug("URL: %s not modified in 3 days", url)
-        elif error.code == 403:
-            logger.error(
-                "URL: %s returned 403 Forbidden. This might be a site that aggressively blocks scrapers.",
-                url,
-            )
-        else:
-            logger.error("URL: %s, data not retrieved because %s", url, error)
-    except URLError as error:
-        error_str = str(error)
-        logger.error("URL: %s, url error %s", url, error)
-
-        # For HTTP protocol errors, try converting HTTPS to HTTP as a last resort
-        if "ssl" in error_str.lower() and url.startswith("https://"):
-            try:
-                logger.debug("Trying HTTP fallback for %s", url)
-                http_url = url.replace("https://", "http://")
-                http_req = urllib.request.Request(http_url, data=None, headers=headers)
-                with contextlib.closing(
-                    urllib.request.urlopen(http_req, timeout=10)
-                ) as conn:
-                    content = conn.read()
-                    if content:
-                        feed_items = detect_and_decompress(content, url)
-                        logger.info(
-                            "Successfully retrieved feed using HTTP fallback: %s", url
-                        )
-            except Exception as http_error:
+            # As a final fallback for binary/compressed content, try to detect if it's XML
+            if feed_items and not (
+                b"<rss" in feed_items or b"<feed" in feed_items or b"<?xml" in feed_items
+            ):
                 logger.debug(
-                    "HTTP fallback also failed for %s: %s", url, str(http_error)
+                    "Content doesn't look like XML, attempting decompression for: %s", url
                 )
-    except timeout:
-        logger.error("socket timed out - URL %s", url)
-    except Exception as general_error:
-        logger.error("Unexpected error retrieving %s: %s", url, str(general_error))
-    else:
-        if not feed_items:
-            logger.debug("URL: %s - no feed items", url)
+                feed_items = detect_and_decompress(feed_items, url)
+
+            # If we got here successfully, break the retry loop
+            break
+
+        except HTTPError as error:
+            if error.code == 304:
+                logger.debug("URL: %s not modified in 3 days", url)
+                break
+            if error.code == 403:
+                logger.error(
+                    "URL: %s returned 403 Forbidden. This might be a site that aggressively blocks scrapers.",
+                    url,
+                )
+                break
+            logger.error("URL: %s, data not retrieved because %s", url, error)
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay)
+                continue
+        except URLError as error:
+            error_str = str(error)
+            logger.error("URL: %s, url error %s", url, error)
+
+            # For HTTP protocol errors, try converting HTTPS to HTTP as a last resort
+            if "ssl" in error_str.lower() and url.startswith("https://"):
+                try:
+                    logger.debug("Trying HTTP fallback for %s", url)
+                    http_url = url.replace("https://", "http://")
+                    http_req = urllib.request.Request(http_url, data=None, headers=headers)
+                    with contextlib.closing(
+                        urllib.request.urlopen(http_req, timeout=10)
+                    ) as conn:
+                        content = conn.read()
+                        if content:
+                            feed_items = detect_and_decompress(content, url)
+                            logger.info(
+                                "Successfully retrieved feed using HTTP fallback: %s", url
+                            )
+                            break
+                except Exception as http_error:
+                    logger.debug(
+                        "HTTP fallback also failed for %s: %s", url, str(http_error)
+                    )
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay)
+                continue
+        except timeout:
+            logger.error("socket timed out - URL %s", url)
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay)
+                continue
+        except Exception as general_error:
+            logger.error("Unexpected error retrieving %s: %s", url, str(general_error))
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay)
+                continue
+        else:
+            if not feed_items:
+                logger.debug("URL: %s - no feed items", url)
     return feed_items
 
 
@@ -635,6 +658,10 @@ def get_feed(url: str, item: bytes, update_date: datetime) -> List[Article]:
             if RSSItem is not None:
                 article_kwargs["sort_date"] = mktime(feed_date)
 
+            # Add comments link if available
+            if hasattr(article, "comments"):
+                article_kwargs["comments"] = article.comments
+
             out_article = Article(**article_kwargs)
 
             if hasattr(article, "summary"):
@@ -679,6 +706,7 @@ def generate_rss(articles: List[Article]) -> str:
                 description=article.description,
                 guid=PyRSS2Gen.Guid(str(article.link)),
                 pubDate=article.pubdate,
+                comments=str(article.comments) if article.comments else None,
             )
         )
 

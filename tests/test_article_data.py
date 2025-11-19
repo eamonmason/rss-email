@@ -1,13 +1,10 @@
 """Test to debug article processor data structure issues."""
 
 import logging
-import os
-import sys
+
 
 from rss_email.article_processor import _create_categorized_articles
 
-# Add the src directory to the path so we can import the module
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
 # Enable debugging output
 logging.basicConfig(level=logging.DEBUG)

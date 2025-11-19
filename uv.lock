@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.13"
 
 [[package]]
@@ -861,7 +861,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.10.6" },
     { name = "pylint", marker = "extra == 'dev'", specifier = ">=3.0.2" },
     { name = "pyrss2gen", specifier = ">=1.1" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.4.3" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.4.1" },
     { name = "python-dotenv", specifier = ">=1.1.1" },
     { name = "python-dotenv", marker = "extra == 'dev'", specifier = ">=0.9.9" },
     { name = "regex", specifier = ">=2024.11.6" },

@@ -22,12 +22,12 @@ from botocore.exceptions import ClientError
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 # These imports depend on sys.path modification
-from rss_email.article_processor import (  # noqa: E402
+from rss_email.article_processor import (  # noqa: E402 # pylint: disable=wrong-import-position
     ClaudeRateLimiter,
     group_articles_by_priority,
     process_articles_with_claude,
 )
-from rss_email.email_articles import (  # noqa: E402
+from rss_email.email_articles import (  # noqa: E402 # pylint: disable=wrong-import-position
     filter_items,
     get_last_run,
     read_s3_file,

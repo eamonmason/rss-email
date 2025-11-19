@@ -4,7 +4,9 @@
 import logging
 import sys
 from datetime import datetime, timedelta
-from pathlib import Path
+
+
+from rss_email.retrieve_articles import detect_and_decompress, get_feed_items
 
 # Configure logging
 logging.basicConfig(
@@ -14,13 +16,6 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
-
-try:
-    from rss_email.retrieve_articles import detect_and_decompress, get_feed_items
-except ImportError:
-    # Add src to path for direct imports
-    sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-    from rss_email.retrieve_articles import detect_and_decompress, get_feed_items
 
 # List of problematic feeds that need special handling
 PROBLEM_FEEDS = [

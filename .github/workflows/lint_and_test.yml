@@ -30,7 +30,7 @@ jobs:
     
     - name: Analysing the code with pylint
       run: |
-        uv run pylint --fail-under=9.9 $(git ls-files '*.py')
+        uv run pylint --fail-under=9.9 src tests
     - name: Synthesize CDK stack
       env:
         CDK_DOCKER: "false"

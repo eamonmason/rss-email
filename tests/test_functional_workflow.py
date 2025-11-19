@@ -35,8 +35,6 @@ except ImportError:
     print("⚠️  python-dotenv not installed. Install with: uv add python-dotenv")
     print("You can set environment variables manually if needed.")
 
-# Add src to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from rss_email.email_articles import generate_html, get_last_run  # noqa: E402
 

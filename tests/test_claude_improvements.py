@@ -47,8 +47,6 @@ except ImportError:
     print("Or set environment variables manually:")
     print("export ANTHROPIC_API_KEY='your-key-here'")
 
-# Add src to path
-sys.path.insert(0, "src")
 
 from rss_email.article_processor import (  # noqa: E402
     ClaudeRateLimiter,
