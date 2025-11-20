@@ -316,9 +316,9 @@ def generate_enhanced_html_content(
                                 <p style="margin: 0 0 12px 0; font-size: 14px; color: #666;">
                                     {article.pubdate}
                                     {
-                                        f' | <a href="{article.comments}" target="_blank" '
+                                        f' | <a href="{getattr(article, "comments", None)}" target="_blank" '
                                         'style="color: #666; text-decoration: underline;">Comments</a>'
-                                        if article.comments else ''
+                                        if getattr(article, "comments", None) else ''
                                     }
                                 </p>
                                 <p style="margin: 0 0 12px 0; font-size: 16px; color: #555; line-height: 1.6;">

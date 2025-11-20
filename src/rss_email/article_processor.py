@@ -56,6 +56,7 @@ class ProcessedArticle(BaseModel):
     pubdate: str
     related_articles: List[str] = Field(default_factory=list)
     original_description: Optional[str] = None
+    comments: Optional[str] = None
     model_config = {"arbitrary_types_allowed": True}
 
 
@@ -634,9 +635,11 @@ def _process_article_entry(article, articles, category):
     idx = int(article_id.split("_")[1])
     if idx < len(articles):
         original_desc = articles[idx].get("description", "")
+        comments = articles[idx].get("comments", None)
     else:
         logger.warning("Article index %s out of range. Using empty description.", idx)
         original_desc = ""
+        comments = None
 
     return ProcessedArticle(
         title=article["title"],
@@ -646,6 +649,7 @@ def _process_article_entry(article, articles, category):
         pubdate=article["pubdate"],
         related_articles=article.get("related_articles", []),
         original_description=original_desc,
+        comments=comments,
     )
 
 
