@@ -341,6 +341,36 @@ def process_articles_with_claude(
     return result
 
 
+def _create_fallback_articles(articles: List[Dict[str, Any]]) -> List[ProcessedArticle]:
+    """
+    Create fallback ProcessedArticle objects for articles that failed Claude processing.
+
+    This ensures articles are still displayed even if categorization fails.
+    """
+    fallback_articles = []
+    for article in articles:
+        # Use the original description as the summary
+        description = article.get("description", "")
+        if not description:
+            description = article.get("title", "")
+
+        # Truncate if too long
+        summary = truncate_description(description, max_length=300)
+
+        fallback_article = ProcessedArticle(
+            title=article.get("title", "Untitled"),
+            link=article.get("link", ""),
+            summary=summary,
+            category="Uncategorized",
+            pubdate=article.get("pubDate", ""),
+            related_articles=[],
+            original_description=description,
+        )
+        fallback_articles.append(fallback_article)
+
+    return fallback_articles
+
+
 def _process_articles_in_batches(
     articles: List[Dict[str, Any]], rate_limiter: ClaudeRateLimiter
 ) -> Optional[CategorizedArticles]:
@@ -353,6 +383,7 @@ def _process_articles_in_batches(
         "articles_count": len(articles),
         "batches_processed": 0,
         "total_batches": len(batches),
+        "batches_failed": 0,
         "tokens_used": 0,
         "model": os.environ.get("CLAUDE_MODEL", "claude-3-5-haiku-latest"),
         "processing_time_seconds": 0,
@@ -372,7 +403,17 @@ def _process_articles_in_batches(
         batch_result = _process_with_claude_client(batch, rate_limiter)
 
         if batch_result is None:
-            logger.warning("Batch %d failed to process, skipping", batch_idx + 1)
+            logger.warning(
+                "Batch %d failed to process, using fallback display for %d articles",
+                batch_idx + 1,
+                len(batch),
+            )
+            combined_metadata["batches_failed"] += 1
+            # Create fallback articles for failed batch
+            fallback_articles = _create_fallback_articles(batch)
+            if "Uncategorized" not in all_categories:
+                all_categories["Uncategorized"] = []
+            all_categories["Uncategorized"].extend(fallback_articles)
             continue
 
         # Merge results
@@ -752,9 +793,14 @@ def _create_categorized_articles(
         )
     except (ValueError, KeyError, TypeError, IndexError) as e:
         logger.error("Error creating categorized articles: %s", e)
-        # Return an empty structure rather than failing
+        logger.warning(
+            "Using fallback display for %d articles due to categorization error",
+            len(articles),
+        )
+        # Create fallback articles so they're still displayed
+        fallback_articles = _create_fallback_articles(articles)
         return CategorizedArticles(
-            categories={},
+            categories={"Uncategorized": fallback_articles},
             processing_metadata=usage_stats,
         )
 
