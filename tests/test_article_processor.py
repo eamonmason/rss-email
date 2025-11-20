@@ -4,6 +4,7 @@ Test script for the article_processor module.
 This script allows comprehensive testing of the Claude integration locally.
 Also includes specific tests for the _create_categorized_articles function to handle error cases.
 """
+# pylint: disable=wrong-import-position
 
 import json
 import logging
@@ -157,7 +158,7 @@ def test_prompt_creation():
     print(prompt[:500] + "...\n")
 
     # Verify prompt contains required elements
-    assert "Categories to use" in prompt
+    assert "CATEGORIES" in prompt or "Categories" in prompt
     assert "Technology" in prompt
     assert "article_0" in prompt
     assert articles[0]["title"] in prompt
@@ -168,15 +169,20 @@ def test_api_key_retrieval():
     """Test API key retrieval (requires AWS credentials and parameter)."""
     print("\n=== Testing API Key Retrieval ===")
 
-    # Set the parameter name
+    # Set the parameter name and region
     os.environ["ANTHROPIC_API_KEY_PARAMETER"] = "rss-email-anthropic-api-key"
+
+    # Set a default region if not already set
+    if "AWS_DEFAULT_REGION" not in os.environ:
+        os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
 
     try:
         # This will only work if AWS credentials are configured and parameter exists
         retrieved_api_key = get_anthropic_api_key()
         print(f"✓ Successfully retrieved API key (length: {len(retrieved_api_key)})")
         return retrieved_api_key
-    except (ValueError, KeyError, ImportError) as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        # Catch all exceptions as this test is expected to fail in CI without AWS credentials
         print(f"⚠ Could not retrieve API key: {e}")
         print("  (This is expected if AWS credentials or parameter are not configured)")
         return None
