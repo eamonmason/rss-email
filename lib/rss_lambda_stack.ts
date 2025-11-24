@@ -13,6 +13,7 @@ import * as actions from 'aws-cdk-lib/aws-ses-actions';
 import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
+import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -27,6 +28,7 @@ const RSS_RULE_SET_NAME = 'RSSRuleSet';
 const LAST_RUN_PARAMETER = 'rss-email-lastrun';
 
 const PODCAST_LAST_RUN_PARAMETER = 'rss-podcast-lastrun';
+const PODCAST_CLOUDFRONT_DOMAIN_PARAMETER = 'rss-podcast-cloudfront-domain';
 const ANTHROPIC_API_KEY_PARAMETER = 'rss-email-anthropic-api-key';
 
 export class RSSEmailStack extends cdk.Stack {
@@ -259,6 +261,7 @@ export class RSSEmailStack extends cdk.Stack {
         BUCKET: bucket.bucketName,
         KEY: KEY,
         PODCAST_LAST_RUN_PARAMETER: PODCAST_LAST_RUN_PARAMETER,
+        PODCAST_CLOUDFRONT_DOMAIN_PARAMETER: PODCAST_CLOUDFRONT_DOMAIN_PARAMETER,
         ANTHROPIC_API_KEY_PARAMETER: ANTHROPIC_API_KEY_PARAMETER,
         CLAUDE_MODEL: 'claude-3-5-haiku-20241022',
         CLAUDE_MAX_TOKENS: '4000',
@@ -286,6 +289,13 @@ export class RSSEmailStack extends cdk.Stack {
       effect: iam.Effect.ALLOW,
       actions: ['ssm:PutParameter', 'ssm:GetParameter'],
       resources: [`arn:aws:ssm:*:*:parameter/${PODCAST_LAST_RUN_PARAMETER}`],
+    }));
+
+    // Add SSM permission for CloudFront domain parameter
+    role.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['ssm:GetParameter'],
+      resources: [`arn:aws:ssm:*:*:parameter/${PODCAST_CLOUDFRONT_DOMAIN_PARAMETER}`],
     }));
 
     const rssGenerationLogGroup = new logs.LogGroup(this, 'rssGenerationLogGroup', {
@@ -430,6 +440,14 @@ export class RSSEmailStack extends cdk.Stack {
         }
       }
     }));
+
+    // Store CloudFront domain in Parameter Store for Lambda to use
+    new ssm.StringParameter(this, 'PodcastCloudFrontDomainParameter', {
+      parameterName: PODCAST_CLOUDFRONT_DOMAIN_PARAMETER,
+      stringValue: podcastDistribution.distributionDomainName,
+      description: 'CloudFront distribution domain for podcast RSS feed',
+      tier: ssm.ParameterTier.STANDARD,
+    });
 
     // Output the CloudFront URL for the podcast feed
     new cdk.CfnOutput(this, 'PodcastFeedUrl', {

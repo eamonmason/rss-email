@@ -386,12 +386,36 @@ def upload_to_s3(bucket: str, key: str, data: bytes, content_type: str) -> bool:
 
 
 @pydantic.validate_call(validate_return=True)
+def get_cloudfront_domain(parameter_name: str) -> Optional[str]:
+    """
+    Retrieve CloudFront domain from Parameter Store.
+
+    Args:
+        parameter_name: SSM parameter name containing CloudFront domain
+
+    Returns:
+        CloudFront domain name or None if not found
+    """
+    ssm = boto3.client("ssm")
+    try:
+        response = ssm.get_parameter(Name=parameter_name)
+        domain = response['Parameter']['Value']
+        logger.info("Retrieved CloudFront domain: %s", domain)
+        return domain
+    except ClientError as e:
+        logger.warning("Failed to retrieve CloudFront domain from parameter store: %s", e)
+        return None
+
+
+@pydantic.validate_call(validate_return=True)
 def update_podcast_feed(
     bucket: str,
     audio_url: str,
     title: str,
     description: str,
-    pub_date: str
+    pub_date: str,
+    *,
+    cloudfront_domain: Optional[str] = None
 ) -> bool:
     """
     Update or create the podcast RSS feed with a new episode.
@@ -402,6 +426,7 @@ def update_podcast_feed(
         title: Episode title
         description: Episode description
         pub_date: Publication date in ISO format
+        cloudfront_domain: Optional CloudFront domain to use for feed link
 
     Returns:
         True if successful, False otherwise
@@ -433,7 +458,15 @@ def update_podcast_feed(
 
     # Channel metadata
     SubElement(channel, 'title').text = "Eamon's Daily Tech News"
-    SubElement(channel, 'link').text = f"https://{bucket}.s3.amazonaws.com/podcasts/feed.xml"
+
+    # Use CloudFront domain if available, otherwise fall back to S3
+    feed_link = (
+        f"https://{cloudfront_domain}/podcasts/feed.xml"
+        if cloudfront_domain
+        else f"https://{bucket}.s3.amazonaws.com/podcasts/feed.xml"
+    )
+    SubElement(channel, 'link').text = feed_link
+
     SubElement(channel, 'description').text = (
         "Daily tech news podcast covering AI/ML, cybersecurity, and technology trends"
     )
@@ -504,6 +537,17 @@ def generate_podcast(_event: Dict[str, Any], _context: Optional[Any] = None) -> 
         "PODCAST_LAST_RUN_PARAMETER",
         "rss-podcast-lastrun"
     )
+    cloudfront_domain_param = os.environ.get(
+        "PODCAST_CLOUDFRONT_DOMAIN_PARAMETER",
+        "rss-podcast-cloudfront-domain"
+    )
+
+    # Get CloudFront domain for public URLs
+    cloudfront_domain = get_cloudfront_domain(cloudfront_domain_param)
+    if not cloudfront_domain:
+        logger.warning(
+            "CloudFront domain not found in parameter store, using S3 URLs as fallback"
+        )
 
     # 1. Get Articles
     run_date = get_last_run(last_run_param)
@@ -542,7 +586,14 @@ def generate_podcast(_event: Dict[str, Any], _context: Optional[Any] = None) -> 
     logger.info("Podcast uploaded to s3://%s/%s", bucket, s3_key)
 
     # 5. Update Feed
-    audio_url = f"https://{bucket}.s3.amazonaws.com/{s3_key}"
+    # Use CloudFront domain if available, otherwise fall back to S3
+    if cloudfront_domain:
+        audio_url = f"https://{cloudfront_domain}/{s3_key}"
+        logger.info("Using CloudFront URL: %s", audio_url)
+    else:
+        audio_url = f"https://{bucket}.s3.amazonaws.com/{s3_key}"
+        logger.info("Using S3 URL: %s", audio_url)
+
     episode_title = f"Daily Tech News - {datetime.now().strftime('%Y-%m-%d')}"
     episode_description = (
         f"Tech news roundup for {datetime.now().strftime('%B %d, %Y')} "
@@ -554,7 +605,8 @@ def generate_podcast(_event: Dict[str, Any], _context: Optional[Any] = None) -> 
         audio_url,
         episode_title,
         episode_description,
-        datetime.now().isoformat()
+        datetime.now().isoformat(),
+        cloudfront_domain=cloudfront_domain
     ):
         logger.error("Failed to update podcast feed.")
         return
