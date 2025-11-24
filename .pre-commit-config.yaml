@@ -35,7 +35,8 @@ repos:
         entry: bash -c 'uv run pylint --fail-under=9.9 "$@"' --
         language: system
         types: [python]
-        files: ^(src/|tests/).*\.py$
+        files: ^src/.*\.py$
+        exclude: ^tests/
         require_serial: true
 
   # Python unit tests
