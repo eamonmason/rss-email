@@ -18,7 +18,7 @@ from rss_email.podcast_generator import (  # noqa: E402
     chunk_text,
     enhance_text_with_ssml,
     MARCO_VOICE,
-    JOHN_VOICE,
+    JOANNA_VOICE,
     POLLY_NEURAL_CHAR_LIMIT,
     SSML_ENABLED
 )
@@ -28,31 +28,31 @@ from rss_email.podcast_generator import (  # noqa: E402
 SAMPLE_SCRIPT = """Marco: Welcome to Eamon's Daily Tech News! I'm Marco, and today we have some exciting \
 stories from the tech world.
 
-John: And I'm John. Thanks for joining us! We're covering some interesting developments in AI, cloud \
+Joanna: And I'm Joanna. Thanks for joining us! We're covering some interesting developments in AI, cloud \
 computing, and cybersecurity.
 
 Marco: That's right! Let's start with the big story. OpenAI has announced a revolutionary new reasoning \
 model that shows significant improvements in complex problem-solving tasks. This is absolutely game-changing!
 
-John: This is fascinating, Marco. The new model uses a breakthrough technique called chain-of-thought \
+Joanna: This is fascinating, Marco. The new model uses a breakthrough technique called chain-of-thought \
 reasoning, which allows it to break down complex problems into smaller, more manageable steps.
 
 Marco: Exactly! Early benchmarks show it performing exceptionally well on mathematical and coding \
 challenges. Developers are already finding innovative ways to integrate it into their applications.
 
-John: Speaking of development, there's also important news from Amazon Web Services. They've introduced a \
+Joanna: Speaking of development, there's also important news from Amazon Web Services. They've introduced a \
 new serverless database service that promises to reduce costs by up to 70 percent compared to traditional \
 database solutions. That's impressive!
 
 Marco: Absolutely! This is a game-changer for startups and enterprises alike. The pay-per-request pricing \
 model means you only pay for what you use, which could significantly reduce infrastructure costs.
 
-John: And finally, in cybersecurity news, researchers have discovered a new vulnerability affecting certain \
+Joanna: And finally, in cybersecurity news, researchers have discovered a new vulnerability affecting certain \
 IoT devices. The good news is that patches are already available from major manufacturers.
 
 Marco: Always important to keep those devices updated! That wraps up today's tech news roundup.
 
-John: Thanks for listening to Eamon's Daily Tech News. Stay curious, and we'll see you next time!
+Joanna: Thanks for listening to Eamon's Daily Tech News. Stay curious, and we'll see you next time!
 
 Marco: Take care, everyone!"""
 
@@ -87,7 +87,7 @@ def synthesize_speech_local(script: str, output_file: str = "test_podcast.mp3") 
 
     for i, (speaker, text) in enumerate(segments, 1):
         # Choose voice based on speaker
-        voice_id = MARCO_VOICE if speaker == "Marco" else JOHN_VOICE
+        voice_id = MARCO_VOICE if speaker == "Marco" else JOANNA_VOICE
 
         print(f"Segment {i}/{len(segments)}: {speaker}")
         print(f"  Text length: {len(text)} characters")
@@ -157,8 +157,8 @@ def check_aws_access():
 
         if MARCO_VOICE not in available_voices:
             print(f"⚠️  Warning: Voice '{MARCO_VOICE}' not found")
-        if JOHN_VOICE not in available_voices:
-            print(f"⚠️  Warning: Voice '{JOHN_VOICE}' not found")
+        if JOANNA_VOICE not in available_voices:
+            print(f"⚠️  Warning: Voice '{JOANNA_VOICE}' not found")
 
         print("✓ AWS Polly access confirmed")
         print(f"✓ Region: {polly.meta.region_name}")
@@ -222,9 +222,9 @@ def main():
         print(f"  Windows: start {output_file}")
         print("\nVoices used:")
         print(f"  Marco: {MARCO_VOICE} (US English, conversational)")
-        print(f"  John:  {JOHN_VOICE} (US English, analytical)")
+        print(f"  Joanna:  {JOANNA_VOICE} (US English, analytical)")
         print("\nSSML Enhancements applied:")
-        print("  ✓ Faster speaking rate (Marco: 20% faster, John: 22% faster)")
+        print("  ✓ Faster speaking rate (Marco: 20% faster, Joanna: 22% faster)")
         print("  ✓ Strategic pauses between sentences (250ms)")
         print("  ✓ Natural pauses after questions (200ms)")
         print("  ✓ Phrasing pauses after commas (150ms)")

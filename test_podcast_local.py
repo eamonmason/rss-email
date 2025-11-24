@@ -9,11 +9,11 @@ from rss_email.podcast_generator import parse_speaker_segments, chunk_text  # no
 
 # Test data
 sample_script = """Marco: Welcome to Eamon's Daily Tech News! I'm Marco.
-John: And I'm John. Today we have some exciting stories about AI and technology.
+Joanna: And I'm Joanna. Today we have some exciting stories about AI and technology.
 Marco: That's right! Let's start with the big news about OpenAI's latest model release.
-John: This is really interesting. The new model shows significant improvements in reasoning capabilities.
+Joanna: This is really interesting. The new model shows significant improvements in reasoning capabilities.
 Marco: Absolutely. And there's also news about quantum computing breakthroughs.
-John: Yes, researchers at IBM have made some impressive progress."""
+Joanna: Yes, researchers at IBM have made some impressive progress."""
 
 long_text = "This is a sentence. " * 200  # Create text >3000 chars
 

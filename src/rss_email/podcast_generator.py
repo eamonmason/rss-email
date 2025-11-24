@@ -24,16 +24,16 @@ from .email_articles import get_feed_file, filter_items, get_last_run, set_last_
 # Constants
 PODCAST_PROMPT = """
 You are creating an audio podcast for a tech news show called "Eamon's Daily Tech News".
-Given the following list of articles, create an engaging 5-10 minute podcast that:
+Given the following list of articles, create an engaging 5-10 minute podcast script that:
 
 STRUCTURE:
-- Opening: Warm welcome with today's date and a brief teaser of top stories
+- Opening: Warm welcome with the ACTUAL date from the articles provided and a brief teaser of top stories
 - Main Segments: Cover the most significant stories, grouped by theme (AI/ML, Business, Cybersecurity, etc.)
 - Transitions: Natural segues between topics
 - Closing: Brief recap and sign-off
 
 STYLE GUIDELINES:
-- Two hosts: Marco (enthusiastic, detail-oriented) and John (analytical, asks clarifying questions)
+- Two hosts: Marco (male, enthusiastic, detail-oriented) and Joanna (female, analytical, asks clarifying questions)
 - Conversational tone - like two knowledgeable friends discussing the news
 - Explain technical concepts in accessible terms
 - Add context: why each story matters, potential implications
@@ -46,14 +46,15 @@ EMPHASIS:
 - Connect related stories when relevant
 - Avoid reading headlines verbatim - synthesize the information naturally
 - Skip minor or redundant updates unless they add unique value
-- Stick to the facts, use information in the article text provided, or that is historically accurate and verified.
+- Stick to the facts, use information in the article text provided, or that is historically accurate and verified
 - Conclude with one or two lighter articles that are fun or nerdy
+- DO NOT mention this is a draft or include any meta-commentary about the script itself
 
 FORMAT REQUIREMENTS (CRITICAL):
-- Mark each speaker change with "Marco:" or "John:" at the start of their dialogue
+- Mark each speaker change with "Marco:" or "Joanna:" at the start of their dialogue
 - Example format:
   Marco: Welcome to Eamon's Daily Tech News! I'm Marco.
-  John: And I'm John. Today we're covering some exciting developments in AI.
+  Joanna: And I'm Joanna. Today we're covering some exciting developments in AI.
   Marco: That's right! Let's dive in...
 
 Articles to cover:
@@ -62,12 +63,12 @@ Articles to cover:
 # AWS Polly limits
 POLLY_NEURAL_CHAR_LIMIT = 3000
 MARCO_VOICE = "Matthew"  # US English male, conversational
-JOHN_VOICE = "Joanna"    # US English female, animated and engaging
+JOANNA_VOICE = "Joanna"    # US English female, animated and engaging
 
 # SSML configuration for more dynamic speech
 SSML_ENABLED = True
 MARCO_SPEAKING_RATE = "120%"  # Fast and energetic
-JOHN_SPEAKING_RATE = "122%"   # Slightly faster for animated delivery
+JOANNA_SPEAKING_RATE = "122%"   # Slightly faster for animated delivery
 
 # Chunking configuration
 MIN_CONTENT_SIZE = 100  # Minimum content size after accounting for SSML wrapper overhead
@@ -83,10 +84,10 @@ def parse_speaker_segments(script: str) -> List[Tuple[str, str]]:
     Parse script into segments with speaker identification.
 
     Args:
-        script: Full podcast script with "Marco:" and "John:" speaker labels
+        script: Full podcast script with "Marco:" and "Joanna:" speaker labels
 
     Returns:
-        List of tuples (speaker, text) where speaker is 'Marco' or 'John'
+        List of tuples (speaker, text) where speaker is 'Marco' or 'Joanna'
     """
     segments = []
     lines = script.split('\n')
@@ -100,7 +101,7 @@ def parse_speaker_segments(script: str) -> List[Tuple[str, str]]:
 
         # Check if line starts with speaker label
         marco_match = re.match(r'^Marco:\s*(.*)', line, re.IGNORECASE)
-        john_match = re.match(r'^John:\s*(.*)', line, re.IGNORECASE)
+        joanna_match = re.match(r'^Joanna:\s*(.*)', line, re.IGNORECASE)
 
         if marco_match:
             # Save previous segment if exists
@@ -110,14 +111,14 @@ def parse_speaker_segments(script: str) -> List[Tuple[str, str]]:
             current_speaker = "Marco"
             if marco_match.group(1):
                 current_text.append(marco_match.group(1))
-        elif john_match:
+        elif joanna_match:
             # Save previous segment if exists
             if current_text:
                 segments.append((current_speaker, ' '.join(current_text)))
                 current_text = []
-            current_speaker = "John"
-            if john_match.group(1):
-                current_text.append(john_match.group(1))
+            current_speaker = "Joanna"
+            if joanna_match.group(1):
+                current_text.append(joanna_match.group(1))
         else:
             current_text.append(line)
 
@@ -179,7 +180,7 @@ def enhance_text_with_ssml(text: str, speaker: str) -> str:
 
     Args:
         text: Plain text to enhance
-        speaker: Speaker name ("Marco" or "John") for voice-specific settings
+        speaker: Speaker name ("Marco" or "Joanna") for voice-specific settings
 
     Returns:
         SSML-enhanced text
@@ -188,7 +189,7 @@ def enhance_text_with_ssml(text: str, speaker: str) -> str:
         return text
 
     # Choose speaking rate based on speaker
-    rate = MARCO_SPEAKING_RATE if speaker == "Marco" else JOHN_SPEAKING_RATE
+    rate = MARCO_SPEAKING_RATE if speaker == "Marco" else JOANNA_SPEAKING_RATE
 
     # Add minimal pauses for natural phrasing without slowing down
     enhanced = text
@@ -230,7 +231,7 @@ def chunk_ssml_text(ssml_text: str, speaker: str, max_chars: int = POLLY_NEURAL_
         return chunk_text(ssml_text, max_chars)
 
     inner_content = prosody_match.group(1)
-    rate = MARCO_SPEAKING_RATE if speaker == "Marco" else JOHN_SPEAKING_RATE
+    rate = MARCO_SPEAKING_RATE if speaker == "Marco" else JOANNA_SPEAKING_RATE
 
     # Calculate overhead for SSML wrapper tags
     wrapper_overhead = len(f'<speak><prosody rate="{rate}"></prosody></speak>')
@@ -337,7 +338,7 @@ def synthesize_speech(script: str) -> Optional[bytes]:
     audio_chunks = []
     for speaker, text in segments:
         # Choose voice based on speaker
-        voice_id = MARCO_VOICE if speaker == "Marco" else JOHN_VOICE
+        voice_id = MARCO_VOICE if speaker == "Marco" else JOANNA_VOICE
 
         # Enhance with SSML first, then chunk to ensure chunks stay under limit
         enhanced_text = enhance_text_with_ssml(text, speaker)

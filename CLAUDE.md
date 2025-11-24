@@ -375,7 +375,7 @@ The podcast generation feature (`podcast_generator.py`) creates audio podcasts f
 
 - Use Claude 3.5 Haiku for cost-effective script generation
 - Token limits: 4,000 tokens (lower than email processing to control costs)
-- Prompt must specify clear speaker labels ("Marco:", "John:")
+- Prompt must specify clear speaker labels ("Marco:", "Joanna:")
 - Scripts should be 5-10 minutes in length
 
 ```python
@@ -396,7 +396,7 @@ def parse_speaker_segments(script: str) -> List[Tuple[str, str]]:
     Extract (speaker, text) tuples from script.
     Handles multi-line segments without speaker labels.
     """
-    # Implementation splits on "Marco:" and "John:" labels
+    # Implementation splits on "Marco:" and "Joanna:" labels
     # Returns list of (speaker_name, dialogue_text) tuples
 ```
 
@@ -426,7 +426,7 @@ Synthesize audio with distinct voices for each speaker:
 # Voice constants
 POLLY_NEURAL_CHAR_LIMIT = 3000
 MARCO_VOICE = "Matthew"  # US English male, conversational
-JOHN_VOICE = "Joey"      # US English male, analytical
+JOANNA_VOICE = "Joanna"      # US English male, analytical
 
 @pydantic.validate_call(validate_return=True)
 def synthesize_speech(script: str) -> Optional[bytes]:
@@ -502,13 +502,13 @@ except ClientError as e:
 ```python
 def test_parse_speaker_segments():
     script = """Marco: Welcome to the show!
-John: Thanks Marco. Let's dive in."""
+Joanna: Thanks Marco. Let's dive in."""
 
     segments = parse_speaker_segments(script)
 
     assert len(segments) == 2
     assert segments[0] == ("Marco", "Welcome to the show!")
-    assert segments[1] == ("John", "Thanks Marco. Let's dive in.")
+    assert segments[1] == ("Joanna", "Thanks Marco. Let's dive in.")
 ```
 
 #### Testing Text Chunking
@@ -535,7 +535,7 @@ def test_synthesize_speech_with_voice_switching(mock_boto3):
         "AudioStream": MagicMock(read=lambda: b"audio chunk")
     }
 
-    script = "Marco: Hello!\nJohn: Hi there!"
+    script = "Marco: Hello!\nJoanna: Hi there!"
     audio = synthesize_speech(script)
 
     # Should call synthesize_speech twice (once per speaker)
@@ -545,7 +545,7 @@ def test_synthesize_speech_with_voice_switching(mock_boto3):
     calls = mock_polly.synthesize_speech.call_args_list
     voices = [call[1]['VoiceId'] for call in calls]
     assert MARCO_VOICE in voices
-    assert JOHN_VOICE in voices
+    assert JOANNA_VOICE in voices
 ```
 
 #### Testing RSS Feed Generation
@@ -588,7 +588,7 @@ def test_update_podcast_feed_new(mock_boto3):
 ```python
 # Neural voices (high quality, higher cost)
 MARCO_VOICE = "Matthew"  # $16/M chars
-JOHN_VOICE = "Joey"
+JOANNA_VOICE = "Joanna"
 
 # Alternative: Standard voices (lower quality, 75% cheaper)
 # MARCO_VOICE = "Matthew" with Engine="standard"  # $4/M chars
@@ -608,7 +608,7 @@ logger.info("Audio synthesized successfully (%d bytes)", len(audio_data))
 ### Common Pitfalls
 
 1. **Forgetting to chunk text**: Always chunk before calling Polly or you'll hit the 3000-char limit
-2. **Not handling speaker labels**: Ensure Claude prompt explicitly requests "Marco:" and "John:" labels
+2. **Not handling speaker labels**: Ensure Claude prompt explicitly requests "Marco:" and "Joanna:" labels
 3. **Missing newlines in test scripts**: Parser looks for line breaks between speakers
 4. **Catching too broad exceptions**: Use specific exception types (ClientError, APIError, etc.)
 5. **Not preserving sentence boundaries**: Split on sentence endings, not arbitrary character counts

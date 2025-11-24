@@ -48,29 +48,29 @@ class TestPodcastGenerator(unittest.TestCase):
 
     def test_parse_speaker_segments(self):
         script = """Marco: Welcome to the show!
-John: Thanks Marco. Let's dive into today's news.
+Joanna: Thanks Marco. Let's dive into today's news.
 Marco: First up, we have a story about AI developments.
-John: That's really interesting."""
+Joanna: That's really interesting."""
 
         segments = podcast_generator.parse_speaker_segments(script)
 
         self.assertEqual(len(segments), 4)
         self.assertEqual(segments[0], ("Marco", "Welcome to the show!"))
-        self.assertEqual(segments[1], ("John", "Thanks Marco. Let's dive into today's news."))
+        self.assertEqual(segments[1], ("Joanna", "Thanks Marco. Let's dive into today's news."))
         self.assertEqual(segments[2], ("Marco", "First up, we have a story about AI developments."))
-        self.assertEqual(segments[3], ("John", "That's really interesting."))
+        self.assertEqual(segments[3], ("Joanna", "That's really interesting."))
 
     def test_parse_speaker_segments_multiline(self):
         script = """Marco: This is a longer segment
 that spans multiple lines
 without a speaker label.
-John: Now I'm talking."""
+Joanna: Now I'm talking."""
 
         segments = podcast_generator.parse_speaker_segments(script)
 
         self.assertEqual(len(segments), 2)
         self.assertIn("This is a longer segment that spans multiple lines", segments[0][1])
-        self.assertEqual(segments[1][0], "John")
+        self.assertEqual(segments[1][0], "Joanna")
 
     def test_chunk_text_short(self):
         short_text = "This is a short text."
@@ -97,17 +97,17 @@ John: Now I'm talking."""
             "AudioStream": MagicMock(read=lambda: b"audio chunk")
         }
 
-        script = "Marco: Hello!\nJohn: Hi there!"
+        script = "Marco: Hello!\nJoanna: Hi there!"
         audio = podcast_generator.synthesize_speech(script)
 
-        # Should have called synthesize_speech twice (once for Marco, once for John)
+        # Should have called synthesize_speech twice (once for Marco, once for Joanna)
         self.assertEqual(mock_polly.synthesize_speech.call_count, 2)
 
         # Check that different voices were used
         calls = mock_polly.synthesize_speech.call_args_list
         voices_used = [call_args[1]['VoiceId'] for call_args in calls]
         self.assertIn(podcast_generator.MARCO_VOICE, voices_used)
-        self.assertIn(podcast_generator.JOHN_VOICE, voices_used)
+        self.assertIn(podcast_generator.JOANNA_VOICE, voices_used)
 
         # Audio should be concatenated
         self.assertEqual(audio, b"audio chunkaudio chunk")
