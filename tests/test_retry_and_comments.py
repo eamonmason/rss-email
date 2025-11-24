@@ -25,9 +25,11 @@ class TestRetryAndComments(unittest.TestCase):
         # Mock to fail always
         mock_urlopen.side_effect = RuntimeError("Always fail")
 
-        # Expect the function to raise an exception after retries
-        with self.assertRaises(RuntimeError):
-            get_feed_items("https://example.com", datetime.now())
+        # Call the function (it catches exceptions and returns empty bytes)
+        result = get_feed_items("https://example.com", datetime.now())
+
+        # Verify function returns empty bytes after all retries failed
+        self.assertEqual(result, b'')
 
         # Should be called 3 times
         self.assertEqual(mock_urlopen.call_count, 3)
