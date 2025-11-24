@@ -132,8 +132,14 @@ def get_anthropic_api_key(api_key: Optional[str] = None) -> str:
         response = ssm.get_parameter(Name=parameter_name, WithDecryption=True)
         return response["Parameter"]["Value"]
     except ClientError as e:
-        logger.error("Error retrieving Anthropic API key: %s", e)
-        raise ValueError(f"Could not retrieve API key from Parameter Store: {e}") from e
+        logger.error(
+            "Error retrieving parameter '%s' from parameter store: %s",
+            parameter_name,
+            e
+        )
+        raise ValueError(
+            f"Could not retrieve parameter '{parameter_name}' from Parameter Store: {e}"
+        ) from e
 
 
 def estimate_tokens(articles: List[Dict[str, Any]]) -> int:

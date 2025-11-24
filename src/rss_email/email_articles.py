@@ -87,9 +87,10 @@ def get_last_run(parameter_name: str) -> datetime:
             parameter["Parameter"]["Value"], "%Y-%m-%dT%H:%M:%S.%f"
         )
     except ClientError as e:
-        logger.warning(e)
         logger.warning(
-            "Error retrieving parameter from parameter store, retrieving default days."
+            "Error retrieving parameter '%s' from parameter store: %s. Using default days.",
+            parameter_name,
+            e
         )
         return datetime.today() - timedelta(days=DAYS_OF_NEWS)
 
