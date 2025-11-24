@@ -224,7 +224,7 @@ def main():
         print(f"  Marco: {MARCO_VOICE} (US English, conversational)")
         print(f"  John:  {JOHN_VOICE} (US English, analytical)")
         print("\nSSML Enhancements applied:")
-        print("  ✓ Faster speaking rate (Marco: 15% faster, John: 18% faster)")
+        print("  ✓ Faster speaking rate (Marco: 20% faster, John: 22% faster)")
         print("  ✓ Strategic pauses between sentences (600ms)")
         print("  ✓ Natural pauses after questions (400ms)")
         print("  ✓ Phrasing pauses after commas (250ms)")
