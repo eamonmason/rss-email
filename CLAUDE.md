@@ -347,3 +347,288 @@ except ImportError:
     RSSItem = None
     FeedList = None
 ```
+
+## Podcast Development Patterns
+
+### Overview
+
+The podcast generation feature (`podcast_generator.py`) creates audio podcasts from RSS articles using Claude AI for script generation and AWS Polly for text-to-speech synthesis.
+
+### Key Components
+
+#### Script Generation with Claude
+
+- Use Claude 3.5 Haiku for cost-effective script generation
+- Token limits: 4,000 tokens (lower than email processing to control costs)
+- Prompt must specify clear speaker labels ("Marco:", "John:")
+- Scripts should be 5-10 minutes in length
+
+```python
+@pydantic.validate_call(validate_return=True)
+def generate_script(articles: List[Dict[str, Any]]) -> Optional[str]:
+    # Generate conversational podcast script
+    # Returns script with speaker labels or None on error
+```
+
+#### Speaker Parsing
+
+Parse scripts to identify speaker segments and their text:
+
+```python
+@pydantic.validate_call(validate_return=True)
+def parse_speaker_segments(script: str) -> List[Tuple[str, str]]:
+    """
+    Extract (speaker, text) tuples from script.
+    Handles multi-line segments without speaker labels.
+    """
+    # Implementation splits on "Marco:" and "John:" labels
+    # Returns list of (speaker_name, dialogue_text) tuples
+```
+
+#### Text Chunking for Polly
+
+AWS Polly Neural voices have a 3,000 character limit per request. Handle this with chunking:
+
+```python
+@pydantic.validate_call(validate_return=True)
+def chunk_text(text: str, max_chars: int = POLLY_NEURAL_CHAR_LIMIT) -> List[str]:
+    """
+    Split text at sentence boundaries to stay under char limit.
+    Never splits mid-sentence.
+    """
+    # Use regex to split on sentence endings: . ! ?
+    # Preserve separators
+    # Combine sentences until reaching max_chars
+```
+
+**Critical**: Always chunk text before passing to Polly to avoid runtime failures.
+
+#### Voice Synthesis with Multiple Voices
+
+Synthesize audio with distinct voices for each speaker:
+
+```python
+# Voice constants
+POLLY_NEURAL_CHAR_LIMIT = 3000
+MARCO_VOICE = "Matthew"  # US English male, conversational
+JOHN_VOICE = "Joey"      # US English male, analytical
+
+@pydantic.validate_call(validate_return=True)
+def synthesize_speech(script: str) -> Optional[bytes]:
+    """
+    1. Parse script into speaker segments
+    2. For each segment:
+       - Choose voice based on speaker
+       - Chunk text if needed
+       - Synthesize each chunk
+    3. Concatenate all audio chunks
+    """
+    # Returns combined MP3 audio as bytes
+```
+
+#### RSS Feed Generation
+
+Generate standard podcast RSS 2.0 feed with iTunes tags:
+
+```python
+@pydantic.validate_call(validate_return=True)
+def update_podcast_feed(
+    bucket: str,
+    audio_url: str,
+    title: str,
+    description: str,
+    pub_date: str
+) -> bool:
+    """
+    Create or update podcast RSS feed.
+    - Read existing feed from S3 (if exists)
+    - Add new episode at top
+    - Keep last 10 episodes
+    - Generate XML with iTunes tags
+    - Upload to S3 at podcasts/feed.xml
+    """
+```
+
+### Error Handling
+
+#### Graceful Degradation
+
+Always handle errors gracefully and log with context:
+
+```python
+try:
+    message = client.messages.create(...)
+    return message.content[0].text
+except (anthropic.APIError, anthropic.APIConnectionError, RuntimeError, ValueError) as e:
+    logger.error("Error generating script with Claude: %s", e)
+    return None
+```
+
+#### Polly Error Handling
+
+```python
+try:
+    response = polly.synthesize_speech(
+        Text=chunk,
+        OutputFormat="mp3",
+        VoiceId=voice_id,
+        Engine="neural"
+    )
+    audio_chunks.append(response["AudioStream"].read())
+except ClientError as e:
+    logger.error("Error synthesizing speech chunk: %s", e)
+    return None
+```
+
+### Testing Patterns
+
+#### Testing Speaker Parsing
+
+```python
+def test_parse_speaker_segments():
+    script = """Marco: Welcome to the show!
+John: Thanks Marco. Let's dive in."""
+
+    segments = parse_speaker_segments(script)
+
+    assert len(segments) == 2
+    assert segments[0] == ("Marco", "Welcome to the show!")
+    assert segments[1] == ("John", "Thanks Marco. Let's dive in.")
+```
+
+#### Testing Text Chunking
+
+```python
+def test_chunk_text_long():
+    long_text = "This is sentence one. " * 200  # ~4400 chars
+
+    chunks = chunk_text(long_text, max_chars=3000)
+
+    assert len(chunks) > 1
+    for chunk in chunks:
+        assert len(chunk) <= 3000
+```
+
+#### Testing Voice Switching
+
+```python
+@patch('podcast_generator.boto3.client')
+def test_synthesize_speech_with_voice_switching(mock_boto3):
+    mock_polly = MagicMock()
+    mock_boto3.return_value = mock_polly
+    mock_polly.synthesize_speech.return_value = {
+        "AudioStream": MagicMock(read=lambda: b"audio chunk")
+    }
+
+    script = "Marco: Hello!\nJohn: Hi there!"
+    audio = synthesize_speech(script)
+
+    # Should call synthesize_speech twice (once per speaker)
+    assert mock_polly.synthesize_speech.call_count == 2
+
+    # Verify different voices used
+    calls = mock_polly.synthesize_speech.call_args_list
+    voices = [call[1]['VoiceId'] for call in calls]
+    assert MARCO_VOICE in voices
+    assert JOHN_VOICE in voices
+```
+
+#### Testing RSS Feed Generation
+
+```python
+@patch('podcast_generator.boto3.client')
+def test_update_podcast_feed_new(mock_boto3):
+    mock_s3 = MagicMock()
+    mock_boto3.return_value = mock_s3
+
+    # Simulate no existing feed
+    class NoSuchKey(Exception):
+        pass
+    mock_s3.exceptions.NoSuchKey = NoSuchKey
+    mock_s3.get_object.side_effect = NoSuchKey("Not found")
+
+    success = update_podcast_feed(
+        bucket="test-bucket",
+        audio_url="https://example.com/audio.mp3",
+        title="Test Episode",
+        description="Test Description",
+        pub_date="2025-01-01T12:00:00"
+    )
+
+    assert success
+    # Verify RSS feed uploaded to correct location
+    assert mock_s3.put_object.call_args[1]['Key'] == 'podcasts/feed.xml'
+```
+
+### Cost Optimization
+
+#### Token Management
+
+- Use Claude 3.5 Haiku (most cost-effective model)
+- Set conservative token limits (4,000 for podcasts vs 100,000 for email)
+- Limit script length to 5-10 minutes to control Polly costs
+
+#### Voice Selection
+
+```python
+# Neural voices (high quality, higher cost)
+MARCO_VOICE = "Matthew"  # $16/M chars
+JOHN_VOICE = "Joey"
+
+# Alternative: Standard voices (lower quality, 75% cheaper)
+# MARCO_VOICE = "Matthew" with Engine="standard"  # $4/M chars
+```
+
+#### Monitoring Costs
+
+Log key metrics for cost tracking:
+
+```python
+logger.info("Script generated successfully (length: %d chars)", len(script))
+logger.info("Found %d speaker segments", len(segments))
+logger.info("Synthesizing %d chunks for %s", len(text_chunks), speaker)
+logger.info("Audio synthesized successfully (%d bytes)", len(audio_data))
+```
+
+### Common Pitfalls
+
+1. **Forgetting to chunk text**: Always chunk before calling Polly or you'll hit the 3000-char limit
+2. **Not handling speaker labels**: Ensure Claude prompt explicitly requests "Marco:" and "John:" labels
+3. **Missing newlines in test scripts**: Parser looks for line breaks between speakers
+4. **Catching too broad exceptions**: Use specific exception types (ClientError, APIError, etc.)
+5. **Not preserving sentence boundaries**: Split on sentence endings, not arbitrary character counts
+
+### Integration with Existing System
+
+The podcast generator reuses functions from `email_articles.py`:
+
+```python
+from .email_articles import get_feed_file, filter_items, get_last_run, set_last_run
+
+def generate_podcast(event, context):
+    # Reuse existing RSS feed retrieval
+    run_date = get_last_run(last_run_param)
+    rss_file = get_feed_file(bucket, rss_key)
+    filtered_items = filter_items(rss_file, run_date)
+
+    # Podcast-specific processing
+    script = generate_script(filtered_items)
+    audio = synthesize_speech(script)
+
+    # Store and update feed
+    upload_to_s3(bucket, s3_key, audio, "audio/mpeg")
+    update_podcast_feed(bucket, audio_url, title, description, pub_date)
+
+    # Update state using shared function
+    set_last_run(last_run_param)
+```
+
+### Future Enhancements
+
+Consider these patterns for future improvements:
+
+1. **SSML Support**: Use Speech Synthesis Markup Language for more natural pauses, emphasis
+2. **Audio Post-Processing**: Add intro/outro music, normalize volume levels
+3. **CDN Integration**: Use CloudFront for podcast audio delivery to reduce bandwidth costs
+4. **Compression**: Compress MP3 files to reduce storage and bandwidth costs
+5. **Local Testing CLI**: Create `cli_podcast_generator.py` similar to `cli_article_processor.py`

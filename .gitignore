@@ -12,4 +12,6 @@ node_modules
 /blob-report/
 /playwright/.cache/
 rss.xml
+test_podcast.mp3
+.claude/settings.local.json
 

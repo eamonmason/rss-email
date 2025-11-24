@@ -1,5 +1,7 @@
 # RSS Emailer
 
+![RSS Emailer Logo](assets/logo.png)
+
 ![Lint and Unit Testing](https://github.com/eamonmason/rss-email/actions/workflows/lint_and_test.yml/badge.svg)
 
 RSS Email is an AWS Lambda-based serverless application that aggregates RSS feeds, processes articles using Claude AI, and sends curated daily email newsletters. The architecture uses event-driven AWS services with Infrastructure as Code via CDK.
@@ -59,7 +61,8 @@ uv run python src/cli_article_processor.py
 
 ### Core Components
 - **retrieve_articles.py**: Key orchestrating Lambda function that fetches RSS feeds and stores aggregated data in S3
-- **email_articles.py**: Key orchestrating Lambda function that processes stored articles and sends formatted emails via SES  
+- **email_articles.py**: Key orchestrating Lambda function that processes stored articles and sends formatted emails via SES
+- **podcast_generator.py**: Lambda function that generates audio podcast versions of the daily news
 - **article_processor.py**: Claude AI integration for intelligent article categorization and summarization
 - **lib/rss_lambda_stack.ts**: Main CDK infrastructure stack defining all AWS resources
 - **cli_article_processor.py**: CLI tool for testing article processing with Claude API locally
@@ -69,14 +72,16 @@ uv run python src/cli_article_processor.py
 ### Data Flow
 1. **retrieve_articles.py** orchestrates RSS feed processing: fetches articles from feeds configured in `feed_urls.json`, creates aggregated file of recent articles, and stores in S3
 2. **email_articles.py** orchestrates email delivery: retrieves aggregated articles from S3, processes them through Claude API for categorization (Technology, AI/ML, Cybersecurity, etc.), formats into HTML email, and sends via SES
-3. Error handling and logging via SNS and CloudWatch with automated alerts
+3. **podcast_generator.py** (optional) creates audio podcast: generates conversational script using Claude, synthesizes speech with two distinct voices using AWS Polly, and publishes to podcast RSS feed
+4. Error handling and logging via SNS and CloudWatch with automated alerts
 
 ### AWS Services Used
 - **Lambda**: Serverless execution
-- **S3**: Storage for RSS data and configuration  
+- **S3**: Storage for RSS data, configuration, and podcast audio files
 - **SES**: Email sending and receiving
 - **SNS**: Error notifications
 - **CloudWatch**: Logging and monitoring
+- **Polly**: Text-to-speech for podcast generation
 - **Parameter Store**: Environment configuration
 
 ## Configuration
@@ -217,6 +222,171 @@ To disable Claude integration and revert to the original behavior:
 2. Or remove the Anthropic API key from Parameter Store
 
 The system will automatically fall back to the original HTML generation.
+
+## Podcast Generation
+
+The RSS Email system includes an optional podcast generation feature that creates audio versions of the daily news digest using Claude AI and AWS Polly.
+
+### Features
+
+#### Two-Host Conversational Format
+
+- Podcast features two distinct AI hosts: **Marco** (enthusiastic, detail-oriented) and **John** (analytical, asks clarifying questions)
+- Natural dialogue format makes technical news more engaging and accessible
+- Hosts discuss stories, provide context, and offer insights
+
+#### Intelligent Script Generation
+
+- Claude AI generates 5-10 minute podcast scripts from the day's articles
+- Content is organized by theme (AI/ML, Cybersecurity, Business, etc.)
+- Technical concepts are explained in accessible terms
+- Scripts prioritize high-impact stories and connect related topics
+
+#### High-Quality Audio Synthesis
+
+- AWS Polly Neural voices provide natural-sounding speech
+- Marco uses "Matthew" voice (US English, conversational)
+- John uses "Joey" voice (US English, analytical)
+- Automatic text chunking handles scripts of any length (bypasses Polly's 3000-char limit)
+
+#### Podcast RSS Feed
+
+- Standard podcast RSS 2.0 feed with iTunes tags
+- Compatible with all major podcast apps (Apple Podcasts, Spotify, etc.)
+- Feed URL: `https://{your-bucket}.s3.amazonaws.com/podcasts/feed.xml`
+- Maintains history of last 10 episodes
+
+### Architecture
+
+```
+┌─────────────────┐
+│  Retrieve RSS   │
+│    Articles     │
+└────────┬────────┘
+         │
+         ├──────────────┐
+         │              │
+         v              v
+┌─────────────────┐  ┌─────────────────┐
+│  Email          │  │  Podcast        │
+│  Generator      │  │  Generator      │
+└─────────────────┘  └────────┬────────┘
+                              │
+                     ┌────────┴────────┐
+                     │                 │
+                     v                 v
+              ┌─────────────┐   ┌──────────────┐
+              │   Claude    │   │  AWS Polly   │
+              │   Script    │   │  Synthesis   │
+              └─────────────┘   └──────┬───────┘
+                                       │
+                                       v
+                                ┌──────────────┐
+                                │  S3 Storage  │
+                                │  + RSS Feed  │
+                                └──────────────┘
+```
+
+### Configuration
+
+#### Environment Variables
+
+The podcast function uses these environment variables (configured in CDK):
+
+- `BUCKET`: S3 bucket for storing podcast audio files
+- `KEY`: S3 key for the aggregated RSS feed file
+- `PODCAST_LAST_RUN_PARAMETER`: SSM parameter name for tracking last run (default: `rss-podcast-lastrun`)
+- `ANTHROPIC_API_KEY_PARAMETER`: SSM parameter containing the Anthropic API key
+- `CLAUDE_MODEL`: Claude model to use for script generation (default: `claude-3-5-haiku-latest`)
+- `CLAUDE_MAX_TOKENS`: Maximum tokens for script generation (default: `4000`)
+
+#### IAM Permissions
+
+The podcast Lambda function requires:
+
+- **S3**: Read access to RSS feed, write access to `podcasts/` prefix
+- **Polly**: `polly:SynthesizeSpeech` permission
+- **SSM**: Read/write access to the last run parameter
+
+### Cost Analysis
+
+Daily cost estimate for 1 podcast per day:
+
+| Service | Usage | Unit Cost | Daily Cost | Monthly Cost |
+|---------|-------|-----------|------------|--------------|
+| Lambda | 10 min × 128 MB | $0.0000166667/GB-sec | $0.0013 | $0.04 |
+| Claude API | ~2,000 tokens | $0.25-$1.00/M tokens | $0.0005-$0.002 | $0.015-$0.06 |
+| AWS Polly (Neural) | ~8,000 chars | $16/M chars | $0.128 | $3.84 |
+| S3 Storage | 8 MB/day = 240 MB/mo | $0.023/GB | $0.0001 | $0.006 |
+| **Total** | | | **~$0.13** | **~$3.95** |
+
+**Cost Optimization Tips:**
+
+- Polly Neural voices account for ~87% of costs
+- Consider Standard voices (75% cheaper) for lower cost at slightly reduced quality
+- Audio files stored in S3 indefinitely (minimal cost)
+- No charges for RSS feed downloads from S3
+
+### Usage
+
+#### Subscribing to the Podcast
+
+Once deployed, subscribe to the podcast feed using the URL:
+
+```
+https://{your-bucket-name}.s3.amazonaws.com/podcasts/feed.xml
+```
+
+Add this URL to your podcast app:
+
+- **Apple Podcasts**: Library → Edit → Add a Show by URL
+- **Spotify**: Not supported for custom RSS feeds (requires Spotify for Podcasters)
+- **Pocket Casts**: Discover → Search → Enter feed URL
+- **Overcast**: + → Add URL
+
+#### Trigger
+
+The podcast generation Lambda is triggered by the same SNS topic as the email function, so podcasts are generated automatically when new articles are retrieved.
+
+### Monitoring
+
+CloudWatch logs include:
+
+- Script generation success/failure
+- Script length (character count)
+- Number of speaker segments detected
+- Number of audio chunks synthesized
+- S3 upload status
+- RSS feed update status
+
+### Troubleshooting
+
+**No audio generated:**
+
+- Check CloudWatch logs for errors
+- Verify Polly permissions in IAM role
+- Ensure Claude API key is valid in SSM Parameter Store
+
+**Podcast feed not updating:**
+
+- Check S3 permissions for writing to `podcasts/feed.xml`
+- Verify feed URL is accessible (S3 bucket policy may need public read access)
+- Check CloudWatch logs for XML generation errors
+
+**Audio quality issues:**
+
+- Neural voices provide best quality but cost more
+- Standard voices are 75% cheaper with slightly robotic sound
+- Voice selection is configurable in `podcast_generator.py` constants
+
+### Disabling Podcast Generation
+
+To disable podcast generation:
+
+1. Remove the SNS subscription for the podcast Lambda function
+2. Or delete the `RSSPodcastFunction` from the CDK stack
+
+The email functionality will continue to work independently.
 
 ## Deployment
 
