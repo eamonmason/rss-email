@@ -23,11 +23,13 @@ const SNS_RECEIVE_EMAIL = 'rss-receive-email';
 const SNS_ERROR_ALERTS = 'rss-error-alerts';
 const RSS_RULE_SET_NAME = 'RSSRuleSet';
 const LAST_RUN_PARAMETER = 'rss-email-lastrun';
+
+const PODCAST_LAST_RUN_PARAMETER = 'rss-podcast-lastrun';
 const ANTHROPIC_API_KEY_PARAMETER = 'rss-email-anthropic-api-key';
 
 export class RSSEmailStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
-    super(scope, id, props);    
+    super(scope, id, props);
     const SOURCE_DOMAIN = process.env.SOURCE_DOMAIN || "";
     const SOURCE_EMAIL_ADDRESS = process.env.SOURCE_EMAIL_ADDRESS || "";
     const TO_EMAIL_ADDRESS = process.env.TO_EMAIL_ADDRESS || "";
@@ -39,7 +41,7 @@ export class RSSEmailStack extends cdk.Stack {
     });
 
     const receive_topic = new sns.Topic(this, SNS_RECEIVE_EMAIL);
-    
+
     // Create an SNS topic for error alerts
     const error_alerts_topic = new sns.Topic(this, SNS_ERROR_ALERTS);
     const errorSubscription = new sns.Subscription(this, 'ErrorEmailSubscription', {
@@ -50,39 +52,41 @@ export class RSSEmailStack extends cdk.Stack {
 
     const MyTopicPolicy = new sns.TopicPolicy(this, 'RSSTopicSNSPolicy', {
       topics: [receive_topic],
-    }); 
-    
+    });
+
     MyTopicPolicy.document.addStatements(new iam.PolicyStatement({
       sid: "0",
       actions: ["SNS:Publish"],
       principals: [new iam.ServicePrincipal('ses.amazonaws.com')],
       resources: [receive_topic.topicArn],
-      conditions: 
-        {
-          "StringEquals": {
-            "AWS:SourceAccount": process.env.CDK_DEFAULT_ACCOUNT,
-          },
-          "StringLike": {
-            "AWS:SourceArn": "arn:aws:ses:*"
-          }
+      conditions:
+      {
+        "StringEquals": {
+          "AWS:SourceAccount": process.env.CDK_DEFAULT_ACCOUNT,
+        },
+        "StringLike": {
+          "AWS:SourceArn": "arn:aws:ses:*"
         }
       }
+    }
     ));
 
     const receipt_rule_set = new ses.ReceiptRuleSet(this, RSS_RULE_SET_NAME, {
       rules: [
-        { 
+        {
           enabled: true,
           scanEnabled: true,
           tlsPolicy: ses.TlsPolicy.OPTIONAL,
           recipients: EMAIL_RECIPIENTS,
           actions: [
             new actions.Sns({
-              topic: receive_topic, 
-              encoding: actions.EmailEncoding.UTF8})
+              topic: receive_topic,
+              encoding: actions.EmailEncoding.UTF8
+            })
           ]
-        }          
-      ]}
+        }
+      ]
+    }
     )
 
     const role = new iam.Role(this, 'RSSLambdaRole', {
@@ -97,7 +101,7 @@ export class RSSEmailStack extends cdk.Stack {
               effect: iam.Effect.ALLOW,
               actions: ['s3:PutObject', 's3:GetObject', 's3:ListBucket', 's3:ListObjects'],
               resources: [bucket.bucketArn + '/*'],
-            }),            
+            }),
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
               actions: ['ssm:PutParameter', 'ssm:GetParameter'],
@@ -118,7 +122,8 @@ export class RSSEmailStack extends cdk.Stack {
             }),
           ]
         })
-    }});
+      }
+    });
 
     const layer = new lambda.LayerVersion(this, 'RSSLibsLayer', {
       code: lambda.Code.fromAsset('.', {
@@ -136,42 +141,37 @@ export class RSSEmailStack extends cdk.Stack {
                 console.log('Docker not available, using local bundling for Lambda Layer');
                 const pythonDir = path.join(outputDir, 'python', 'lib', 'python3.13', 'site-packages');
                 fs.mkdirSync(pythonDir, { recursive: true });
-                
+
                 // Read dependencies from pyproject.toml and create requirements.txt
                 const pyprojectPath = path.join(process.cwd(), 'pyproject.toml');
                 const pyprojectContent = fs.readFileSync(pyprojectPath, 'utf-8');
-                
-                // Extract dependencies from pyproject.toml
+
+                // Extract dependencies from pyproject.toml (Standard [project] format)
                 const dependencies: string[] = [];
                 const lines = pyprojectContent.split('\n');
                 let inDependencies = false;
-                
+
                 for (const line of lines) {
-                  if (line.includes('[tool.poetry.dependencies]')) {
+                  const trimmed = line.trim();
+                  if (trimmed.startsWith('dependencies = [')) {
                     inDependencies = true;
                     continue;
                   }
-                  if (inDependencies && line.startsWith('[')) {
+                  if (inDependencies && trimmed === ']') {
+                    inDependencies = false;
                     break;
                   }
-                  if (inDependencies && line.includes('=')) {
-                    const match = line.match(/^(\w+)\s*=\s*"(.+)"/);
-                    if (match && match[1] !== 'python') {
-                      // Convert poetry version specifiers to pip format
-                      let dep = match[1];
-                      let version = match[2];
-                      if (version.startsWith('^')) {
-                        version = '>=' + version.substring(1);
-                      }
-                      dependencies.push(`${dep}${version}`);
-                    }
+                  if (inDependencies) {
+                    // Parse "package>=version",
+                    const cleanLine = trimmed.replace(/[",]/g, '');
+                    if (cleanLine) dependencies.push(cleanLine);
                   }
                 }
-                
+
                 // Create requirements.txt file
                 const requirementsPath = path.join(outputDir, 'requirements.txt');
                 fs.writeFileSync(requirementsPath, dependencies.join('\n'));
-                
+
                 // Use pip to install dependencies
                 try {
                   execSync(`pip install -r ${requirementsPath} -t ${pythonDir}`, {
@@ -240,6 +240,43 @@ export class RSSEmailStack extends cdk.Stack {
     });
     emailerEventRule.addTarget(new targets.LambdaFunction(RSSEMailerFunction))
     RSSEMailerFunction.addEventSource(new SnsEventSource(receive_topic));
+
+    const RSSPodcastFunction = new lambda.Function(this, 'RSSPodcastFunction', {
+      code: lambda.Code.fromAsset('src'),
+      handler: 'rss_email.podcast_generator.generate_podcast',
+      runtime: lambda.Runtime.PYTHON_3_13,
+      environment: {
+        BUCKET: bucket.bucketName,
+        KEY: KEY,
+        PODCAST_LAST_RUN_PARAMETER: PODCAST_LAST_RUN_PARAMETER,
+        ANTHROPIC_API_KEY_PARAMETER: ANTHROPIC_API_KEY_PARAMETER,
+        CLAUDE_MODEL: 'claude-3-5-haiku-20241022',
+        CLAUDE_MAX_TOKENS: '4000',
+      },
+      role: role,
+      layers: [layer],
+      timeout: cdk.Duration.minutes(10) // Longer timeout for TTS and generation
+    });
+
+    // Schedule podcast generation to run after email is sent (8:00 AM weekdays)
+    const podcastEventRule = new events.Rule(this, 'podcastEventRule', {
+      schedule: events.Schedule.cron({ minute: '0', hour: '8', weekDay: '2-6' }),
+    });
+    podcastEventRule.addTarget(new targets.LambdaFunction(RSSPodcastFunction));
+
+    // Add Polly permissions to the role
+    role.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['polly:SynthesizeSpeech'],
+      resources: ['*']
+    }));
+
+    // Add SSM permission for podcast last run
+    role.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['ssm:PutParameter', 'ssm:GetParameter'],
+      resources: [`arn:aws:ssm:*:*:parameter/${PODCAST_LAST_RUN_PARAMETER}`],
+    }));
 
     const rssGenerationLogGroup = new logs.LogGroup(this, 'rssGenerationLogGroup', {
       logGroupName: `/aws/lambda/${RSSGenerationFunction.functionName}`,
@@ -310,10 +347,10 @@ export class RSSEmailStack extends cdk.Stack {
       timeout: cdk.Duration.minutes(5), // Increased timeout to handle aggregation
       memorySize: 256 // Increased memory for log aggregation
     });
-    
+
     // Grant the Lambda function necessary permissions
     error_alerts_topic.grantPublish(logForwarderFunction);
-    
+
     // Add CloudWatch Logs permissions
     logForwarderFunction.addToRolePolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
@@ -336,6 +373,18 @@ export class RSSEmailStack extends cdk.Stack {
 
     const generationLogSubscription = new logs.SubscriptionFilter(this, 'GenerationLogSubscription', {
       logGroup: rssGenerationLogGroup,
+      destination: new destinations.LambdaDestination(logForwarderFunction),
+      filterPattern: logs.FilterPattern.anyTerm('ERROR', 'WARNING', 'Error', 'Warning', 'error', 'warning'),
+    });
+
+    const podcastLogGroup = new logs.LogGroup(this, 'podcastLogGroup', {
+      logGroupName: `/aws/lambda/${RSSPodcastFunction.functionName}`,
+      retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy: cdk.RemovalPolicy.DESTROY
+    });
+
+    const podcastLogSubscription = new logs.SubscriptionFilter(this, 'PodcastLogSubscription', {
+      logGroup: podcastLogGroup,
       destination: new destinations.LambdaDestination(logForwarderFunction),
       filterPattern: logs.FilterPattern.anyTerm('ERROR', 'WARNING', 'Error', 'Warning', 'error', 'warning'),
     });
