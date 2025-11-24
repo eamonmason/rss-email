@@ -69,6 +69,10 @@ SSML_ENABLED = True
 MARCO_SPEAKING_RATE = "120%"  # Fast and energetic
 JOHN_SPEAKING_RATE = "122%"   # Slightly faster for animated delivery
 
+# Chunking configuration
+MIN_CONTENT_SIZE = 100  # Minimum content size after accounting for SSML wrapper overhead
+SENTENCE_BOUNDARY_PATTERN = r'([.!?]+(?:<break[^>]*/>)?\s+)'  # Matches sentence endings with optional SSML break tags
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -143,9 +147,7 @@ def chunk_text(text: str, max_chars: int = POLLY_NEURAL_CHAR_LIMIT) -> List[str]
         return [text]
 
     chunks = []
-    # Match sentence endings with or without SSML break tags
-    # Pattern matches: . ! ? followed optionally by break tag, then whitespace
-    sentences = re.split(r'([.!?]+(?:<break[^>]*/>)?\s+)', text)
+    sentences = re.split(SENTENCE_BOUNDARY_PATTERN, text)
     current_chunk = ""
 
     for i in range(0, len(sentences), 2):
@@ -235,13 +237,12 @@ def chunk_ssml_text(ssml_text: str, speaker: str, max_chars: int = POLLY_NEURAL_
 
     # Chunk the inner content with reduced max to account for wrapper
     adjusted_max = max_chars - wrapper_overhead
-    if adjusted_max < 100:
+    if adjusted_max < MIN_CONTENT_SIZE:
         # If wrapper is too large, just chunk as-is
         adjusted_max = max_chars
 
     chunks = []
-    # Match sentence endings with break tags
-    sentences = re.split(r'([.!?]+(?:<break[^>]*/>)?\s+)', inner_content)
+    sentences = re.split(SENTENCE_BOUNDARY_PATTERN, inner_content)
     current_chunk = ""
 
     for i in range(0, len(sentences), 2):
