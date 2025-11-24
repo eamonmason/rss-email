@@ -258,7 +258,11 @@ export class RSSEmailStack extends cdk.Stack {
       timeout: cdk.Duration.minutes(10) // Longer timeout for TTS and generation
     });
 
-    RSSPodcastFunction.addEventSource(new SnsEventSource(receive_topic));
+    // Schedule podcast generation to run after email is sent (8:00 AM weekdays)
+    const podcastEventRule = new events.Rule(this, 'podcastEventRule', {
+      schedule: events.Schedule.cron({ minute: '0', hour: '8', weekDay: '2-6' }),
+    });
+    podcastEventRule.addTarget(new targets.LambdaFunction(RSSPodcastFunction));
 
     // Add Polly permissions to the role
     role.addToPolicy(new iam.PolicyStatement({

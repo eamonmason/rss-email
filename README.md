@@ -107,8 +107,32 @@ uv run python src/cli_article_processor.py
 - **SES**: Email sending and receiving
 - **SNS**: Error notifications
 - **CloudWatch**: Logging and monitoring
+- **EventBridge**: Scheduled triggers for Lambda functions
 - **Polly**: Text-to-speech for podcast generation
 - **Parameter Store**: Environment configuration
+
+### Scheduling
+
+The system runs on the following schedule (all times in UTC):
+
+- **RSS Retrieval**: Every 3 hours (`0 */3 * * *`) - Fetches latest articles from configured RSS feeds
+- **Email Delivery**: 7:30 AM, Monday-Friday (`30 7 * * 2-6`) - Sends daily digest email
+- **Podcast Generation**: 8:00 AM, Monday-Friday (`0 8 * * 2-6`) - Creates audio podcast (runs 30 minutes after email)
+
+**Manual Triggering:**
+
+You can manually trigger any Lambda function using the AWS CLI:
+
+```bash
+# Trigger RSS retrieval
+aws lambda invoke --function-name <RSSGenerationFunction-name> output.json
+
+# Trigger email sending
+aws lambda invoke --function-name <RSSEmailerFunction-name> output.json
+
+# Trigger podcast generation
+aws lambda invoke --function-name <RSSPodcastFunction-name> output.json
+```
 
 ## Configuration
 
