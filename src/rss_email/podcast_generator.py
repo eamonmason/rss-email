@@ -129,8 +129,11 @@ def chunk_text(text: str, max_chars: int = POLLY_NEURAL_CHAR_LIMIT) -> List[str]
     """
     Split text into chunks at sentence boundaries to stay under char limit.
 
+    Handles both plain text and SSML-enhanced text by recognizing sentence
+    boundaries even when SSML break tags are present.
+
     Args:
-        text: Text to chunk
+        text: Text to chunk (plain or SSML-enhanced)
         max_chars: Maximum characters per chunk (default: 3000 for Polly neural)
 
     Returns:
@@ -140,7 +143,9 @@ def chunk_text(text: str, max_chars: int = POLLY_NEURAL_CHAR_LIMIT) -> List[str]
         return [text]
 
     chunks = []
-    sentences = re.split(r'([.!?]+\s+)', text)
+    # Match sentence endings with or without SSML break tags
+    # Pattern matches: . ! ? followed optionally by break tag, then whitespace
+    sentences = re.split(r'([.!?]+(?:<break[^>]*/>)?\s+)', text)
     current_chunk = ""
 
     for i in range(0, len(sentences), 2):
@@ -196,6 +201,68 @@ def enhance_text_with_ssml(text: str, speaker: str) -> str:
     ssml = f'<speak><prosody rate="{rate}">{enhanced}</prosody></speak>'
 
     return ssml
+
+
+@pydantic.validate_call(validate_return=True)
+def chunk_ssml_text(ssml_text: str, speaker: str, max_chars: int = POLLY_NEURAL_CHAR_LIMIT) -> List[str]:
+    """
+    Split SSML-enhanced text into chunks at sentence boundaries while maintaining valid SSML.
+
+    Each chunk will be re-wrapped with proper SSML tags to ensure validity.
+
+    Args:
+        ssml_text: SSML-enhanced text to chunk
+        speaker: Speaker name for re-wrapping chunks
+        max_chars: Maximum characters per chunk (default: 3000 for Polly neural)
+
+    Returns:
+        List of valid SSML chunks, each under max_chars
+    """
+    if len(ssml_text) <= max_chars:
+        return [ssml_text]
+
+    # Extract the content between <prosody> tags
+    prosody_match = re.search(r'<speak><prosody[^>]*>(.*)</prosody></speak>', ssml_text, re.DOTALL)
+    if not prosody_match:
+        # If no prosody tags found, treat as plain text
+        return chunk_text(ssml_text, max_chars)
+
+    inner_content = prosody_match.group(1)
+    rate = MARCO_SPEAKING_RATE if speaker == "Marco" else JOHN_SPEAKING_RATE
+
+    # Calculate overhead for SSML wrapper tags
+    wrapper_overhead = len(f'<speak><prosody rate="{rate}"></prosody></speak>')
+
+    # Chunk the inner content with reduced max to account for wrapper
+    adjusted_max = max_chars - wrapper_overhead
+    if adjusted_max < 100:
+        # If wrapper is too large, just chunk as-is
+        adjusted_max = max_chars
+
+    chunks = []
+    # Match sentence endings with break tags
+    sentences = re.split(r'([.!?]+(?:<break[^>]*/>)?\s+)', inner_content)
+    current_chunk = ""
+
+    for i in range(0, len(sentences), 2):
+        sentence = sentences[i]
+        separator = sentences[i + 1] if i + 1 < len(sentences) else ""
+        combined = sentence + separator
+
+        if len(current_chunk) + len(combined) <= adjusted_max:
+            current_chunk += combined
+        else:
+            if current_chunk:
+                # Wrap chunk with SSML tags
+                wrapped = f'<speak><prosody rate="{rate}">{current_chunk.strip()}</prosody></speak>'
+                chunks.append(wrapped)
+            current_chunk = combined
+
+    if current_chunk:
+        wrapped = f'<speak><prosody rate="{rate}">{current_chunk.strip()}</prosody></speak>'
+        chunks.append(wrapped)
+
+    return chunks
 
 
 @pydantic.validate_call(validate_return=True)
@@ -271,17 +338,17 @@ def synthesize_speech(script: str) -> Optional[bytes]:
         # Choose voice based on speaker
         voice_id = MARCO_VOICE if speaker == "Marco" else JOHN_VOICE
 
-        # Chunk text if needed
-        text_chunks = chunk_text(text)
+        # Enhance with SSML first, then chunk to ensure chunks stay under limit
+        enhanced_text = enhance_text_with_ssml(text, speaker)
+
+        # Chunk the SSML-enhanced text if needed, maintaining valid SSML in each chunk
+        text_chunks = chunk_ssml_text(enhanced_text, speaker)
         logger.info("Synthesizing %d chunks for %s", len(text_chunks), speaker)
 
         for chunk in text_chunks:
             try:
-                # Enhance with SSML for more dynamic speech
-                enhanced_chunk = enhance_text_with_ssml(chunk, speaker)
-
                 response = polly.synthesize_speech(
-                    Text=enhanced_chunk,
+                    Text=chunk,
                     TextType="ssml" if SSML_ENABLED else "text",
                     OutputFormat="mp3",
                     VoiceId=voice_id,
