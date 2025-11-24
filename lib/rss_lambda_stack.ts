@@ -11,6 +11,8 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as destinations from 'aws-cdk-lib/aws-logs-destinations';
 import * as actions from 'aws-cdk-lib/aws-ses-actions';
 import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
+import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import { Construct } from 'constructs';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -387,6 +389,51 @@ export class RSSEmailStack extends cdk.Stack {
       logGroup: podcastLogGroup,
       destination: new destinations.LambdaDestination(logForwarderFunction),
       filterPattern: logs.FilterPattern.anyTerm('ERROR', 'WARNING', 'Error', 'Warning', 'error', 'warning'),
+    });
+
+    // Create CloudFront Origin Access Control for podcast bucket access
+    const podcastOAC = new cloudfront.S3OriginAccessControl(this, 'PodcastOAC', {
+      signing: cloudfront.Signing.SIGV4_ALWAYS,
+    });
+
+    // Create CloudFront distribution for public podcast access
+    const podcastDistribution = new cloudfront.Distribution(this, 'PodcastDistribution', {
+      defaultBehavior: {
+        origin: new origins.S3Origin(bucket, {
+          originAccessControl: podcastOAC,
+        }),
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+        allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
+      },
+      comment: 'RSS Email Podcast Distribution - serves all files under /podcasts/ prefix',
+    });
+
+    // Add bucket policy to restrict CloudFront access to only /podcasts/* prefix
+    bucket.addToResourcePolicy(new iam.PolicyStatement({
+      sid: 'AllowCloudFrontServicePrincipalReadOnly',
+      effect: iam.Effect.ALLOW,
+      principals: [new iam.ServicePrincipal('cloudfront.amazonaws.com')],
+      actions: ['s3:GetObject'],
+      resources: [bucket.arnForObjects('podcasts/*')],
+      conditions: {
+        'StringEquals': {
+          'AWS:SourceArn': `arn:aws:cloudfront::${this.account}:distribution/${podcastDistribution.distributionId}`
+        }
+      }
+    }));
+
+    // Output the CloudFront URL for the podcast feed
+    new cdk.CfnOutput(this, 'PodcastFeedUrl', {
+      value: `https://${podcastDistribution.distributionDomainName}/podcasts/feed.xml`,
+      description: 'Public URL for the podcast RSS feed',
+      exportName: 'PodcastFeedUrl',
+    });
+
+    new cdk.CfnOutput(this, 'PodcastDistributionDomain', {
+      value: podcastDistribution.distributionDomainName,
+      description: 'CloudFront distribution domain for podcast content',
+      exportName: 'PodcastDistributionDomain',
     });
   }
 }
