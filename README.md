@@ -41,6 +41,32 @@ uv run flake8
 uv run pylint --fail-under=9.9 $(git ls-files '*.py') && uv run flake8
 ```
 
+### Pre-commit Hooks
+
+The project uses pre-commit hooks to automatically check code quality before commits. These hooks match the CI checks and help catch issues early.
+
+```bash
+# Install pre-commit hooks (one-time setup)
+uv run pre-commit install
+uv run pre-commit install --hook-type pre-push
+
+# Run hooks manually on all files
+uv run pre-commit run --all-files
+
+# Run hooks on staged files only
+uv run pre-commit run
+```
+
+**Pre-commit checks include:**
+
+- File quality checks (trailing whitespace, end-of-file, YAML/JSON validation)
+- Flake8 linting (PEP 8 compliance)
+- Pylint code quality (9.9+ score required)
+- Unit tests (on pre-push only)
+- CDK synth validation (on pre-push only, for CDK infrastructure changes)
+
+The hooks will automatically fix some issues (trailing whitespace, end-of-file). For other issues, you'll need to fix them manually before committing.
+
 ### Local Development
 
 ```bash
@@ -110,7 +136,7 @@ RSS sources are configured in `feed_urls.json` with this structure:
 {
   "feeds": [
     {
-      "name": "Feed Name",  
+      "name": "Feed Name",
       "url": "https://example.com/feed.xml"
     }
   ]
@@ -441,7 +467,7 @@ Once the deploy has completed successfully, upload the `feed_urls.json` file to 
         {
             "name": "Krebs on Security",
             "url": "https://krebsonsecurity.com/feed/"
-        },        
+        },
         {
             "name": "The Register",
             "url": "http://www.theregister.co.uk/data_centre/cloud/headlines.atom"
@@ -553,7 +579,7 @@ You need AWS credentials configured for the target account. This can be done via
 #### Required AWS Permissions
 The test requires the following AWS permissions:
 - `ssm:GetParameter` - Read SSM parameters
-- `ssm:PutParameter` - Update SSM parameters  
+- `ssm:PutParameter` - Update SSM parameters
 - `ssm:DeleteParameter` - Clean up test parameters
 - `s3:GetObject` - Download RSS files from S3
 

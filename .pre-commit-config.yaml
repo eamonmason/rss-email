@@ -1,0 +1,61 @@
+# Pre-commit hooks for RSS Email project
+# Install pre-commit: pip install pre-commit
+# Setup hooks: pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: ['--unsafe']  # Allow custom YAML tags used by CDK
+      - id: check-json
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+      - id: mixed-line-ending
+
+  # Python linting with flake8 (PEP 8 compliance)
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.1.1
+    hooks:
+      - id: flake8
+        args: ['--max-line-length=120']
+        files: \.py$
+        exclude: ^(node_modules/|\.venv/|build/|dist/)
+
+  # Python linting with pylint (code quality)
+  - repo: local
+    hooks:
+      - id: pylint
+        name: pylint
+        entry: bash -c 'uv run pylint --fail-under=9.9 "$@"' --
+        language: system
+        types: [python]
+        files: ^(src/|tests/).*\.py$
+        require_serial: true
+
+  # Python unit tests
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: bash -c 'uv run python -m pytest tests'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+  # CDK synth check (optional, only on pre-push)
+  - repo: local
+    hooks:
+      - id: cdk-synth
+        name: cdk synth
+        entry: bash -c 'npx cdk synth --no-staging > /dev/null 2>&1 || true'
+        language: system
+        pass_filenames: false
+        files: ^(lib/|bin/).*\.(ts|js)$
+        stages: [pre-push]

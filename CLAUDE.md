@@ -38,6 +38,19 @@ uv run flake8
 uv run pylint --fail-under=9.9 $(git ls-files '*.py') && uv run flake8
 ```
 
+### Pre-commit Hooks
+
+Pre-commit hooks automatically check code quality before commits. They match GitHub Actions CI checks.
+
+```bash
+# Install hooks (one-time setup - should be done after cloning)
+uv run pre-commit install
+uv run pre-commit install --hook-type pre-push
+
+# Run manually on all files
+uv run pre-commit run --all-files
+```
+
 ### Local Development
 ```bash
 # Test RSS retrieval locally (outputs to console, doesn't store in S3)
@@ -72,7 +85,7 @@ cdk diff
 
 ### Core Components
 - **retrieve_articles.py**: Key orchestrating Lambda function that fetches RSS feeds and stores aggregated data in S3
-- **email_articles.py**: Key orchestrating Lambda function that processes stored articles and sends formatted emails via SES  
+- **email_articles.py**: Key orchestrating Lambda function that processes stored articles and sends formatted emails via SES
 - **article_processor.py**: Claude AI integration for intelligent article categorization and summarization
 - **models.py**: Shared Pydantic models for consistent data validation across the application
 - **lib/rss_lambda_stack.ts**: Main CDK infrastructure stack defining all AWS resources
@@ -88,7 +101,7 @@ cdk diff
 
 ### AWS Services Used
 - **Lambda**: Serverless execution
-- **S3**: Storage for RSS data and configuration  
+- **S3**: Storage for RSS data and configuration
 - **SES**: Email sending and receiving
 - **SNS**: Error notifications
 - **CloudWatch**: Logging and monitoring
@@ -109,7 +122,7 @@ RSS sources are configured in `feed_urls.json` with this structure:
 {
   "feeds": [
     {
-      "name": "Feed Name",  
+      "name": "Feed Name",
       "url": "https://example.com/feed.xml"
     }
   ]
@@ -134,6 +147,8 @@ When making changes to Python code, always follow this workflow:
 3. **Run linting** to ensure code quality: `uv run pylint --fail-under=9.9 $(git ls-files '*.py') && uv run flake8`
 4. **Update documentation** if the changes affect public APIs or functionality
 5. **Ensure PEP compliance** - flake8 will catch most PEP 8 violations automatically
+
+**Note:** If pre-commit hooks are installed, steps 2-3 will run automatically on commit/push. You can run them manually with `uv run pre-commit run --all-files`.
 
 ## Deployment
 
@@ -269,7 +284,7 @@ When making significant changes:
 4. Update function docstrings with parameter and return type information
 
 ### Testing Requirements
-- Maintain pylint score of 9.9+ 
+- Maintain pylint score of 9.9+
 - Ensure PEP 8 compliance with flake8
 - Write tests for new Pydantic models and validation
 - Test mobile HTML rendering across different screen sizes
@@ -322,7 +337,7 @@ When modifying email templates:
 
 ### File Organization
 - **models.py**: All Pydantic models and shared data structures
-- **{module}_articles.py**: Core business logic with Pydantic validation  
+- **{module}_articles.py**: Core business logic with Pydantic validation
 - **{module}.html**: Email templates with mobile-first responsive design
 - **json_utils.py**: JSON parsing utilities with validation
 

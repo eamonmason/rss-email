@@ -44,6 +44,7 @@ init-hook = "import sys; sys.path.insert(0, 'src')"
 dev = [
     "flake8>=7.3.0",
     "moto>=5.1.6",
+    "pre-commit>=4.5.0",
     "prospector>=1.17.2",
     "pylint>=3.3.7",
     "pytest>=8.4.1",

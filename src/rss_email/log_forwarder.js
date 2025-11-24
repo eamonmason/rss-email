@@ -1,6 +1,6 @@
 /**
  * CloudWatch Logs to SNS Forwarder
- * 
+ *
  * This Lambda function processes CloudWatch log events and forwards
  * aggregated ERROR and WARNING messages to an SNS topic for notification
  * no more than once every 5 minutes.
@@ -37,15 +37,15 @@ const getSNSClient = () => {
  */
 const detectLogLevel = (message) => {
   if (!message) return 'UNKNOWN';
-  
+
   const lowerMessage = message.toLowerCase();
-  
+
   if (lowerMessage.includes('error')) {
     return 'ERROR';
   } else if (lowerMessage.includes('warning') || lowerMessage.includes('warn')) {
     return 'WARNING';
   }
-  
+
   return 'INFO';
 };
 
@@ -57,7 +57,7 @@ const detectLogLevel = (message) => {
 const aggregateLogEvent = (logData, logEvent) => {
   const message = logEvent.message || '';
   const logLevel = detectLogLevel(message);
-  
+
   // Only aggregate ERROR and WARNING logs
   if (logLevel === 'ERROR' || logLevel === 'WARNING') {
     aggregatedLogs[logLevel].push({
@@ -78,15 +78,15 @@ const publishAggregatedLogsToSNS = async () => {
   if (!topicArn) {
     throw new Error('Missing required environment variable: SNS_TOPIC_ARN');
   }
-  
+
   const errorCount = aggregatedLogs.ERROR.length;
   const warningCount = aggregatedLogs.WARNING.length;
-  
+
   if (errorCount === 0 && warningCount === 0) {
     console.log('No logs to send');
     return null;
   }
-  
+
   // Format a summary subject line
   let subject = '';
   if (errorCount > 0 && warningCount > 0) {
@@ -96,10 +96,10 @@ const publishAggregatedLogsToSNS = async () => {
   } else {
     subject = `[WARNING] RSS Email: ${warningCount} warning${warningCount > 1 ? 's' : ''}`;
   }
-  
+
   // Format the message body with all aggregated logs
   let messageBody = 'Aggregated log events:\n\n';
-  
+
   if (errorCount > 0) {
     messageBody += `=== ERRORS (${errorCount}) ===\n\n`;
     aggregatedLogs.ERROR.forEach(log => {
@@ -109,7 +109,7 @@ const publishAggregatedLogsToSNS = async () => {
       messageBody += `Message: ${log.message}\n\n`;
     });
   }
-  
+
   if (warningCount > 0) {
     messageBody += `=== WARNINGS (${warningCount}) ===\n\n`;
     aggregatedLogs.WARNING.forEach(log => {
@@ -119,7 +119,7 @@ const publishAggregatedLogsToSNS = async () => {
       messageBody += `Message: ${log.message}\n\n`;
     });
   }
-  
+
   const params = {
     TopicArn: topicArn,
     Subject: subject,
@@ -139,7 +139,7 @@ const decodeLogData = (event) => {
   if (!event.awslogs || !event.awslogs.data) {
     throw new Error('Invalid event structure: missing awslogs.data');
   }
-  
+
   const payload = Buffer.from(event.awslogs.data, 'base64');
   const decompressed = zlib.gunzipSync(payload).toString('utf-8');
   return JSON.parse(decompressed);
@@ -173,23 +173,23 @@ const resetAggregatedLogs = () => {
  */
 exports.handler = async (event) => {
   console.log('Received event:', JSON.stringify(event, null, 2));
-  
+
   try {
     // Decode and parse the log data
     const logData = decodeLogData(event);
     console.log('Processing log events from:', logData.logGroup);
-    
+
     // Track results for each event
     let logsAggregated = 0;
-    
+
     // Process each log event by aggregating them
     for (const logEvent of logData.logEvents) {
       aggregateLogEvent(logData, logEvent);
       logsAggregated++;
     }
-    
+
     console.log(`Aggregated ${logsAggregated} log events (${aggregatedLogs.ERROR.length} errors, ${aggregatedLogs.WARNING.length} warnings)`);
-    
+
     // Check if we should send the aggregated logs (if it's been at least 5 minutes)
     let sendResult = null;
     if (shouldSendAggregatedLogs() && (aggregatedLogs.ERROR.length > 0 || aggregatedLogs.WARNING.length > 0)) {
@@ -204,10 +204,10 @@ exports.handler = async (event) => {
     } else {
       console.log('Not sending aggregated logs yet - time threshold not reached or no logs to send');
     }
-    
-    return { 
-      statusCode: 200, 
-      body: `Log events processed and aggregated: ${logsAggregated}, emails sent: ${sendResult ? '1' : '0'}` 
+
+    return {
+      statusCode: 200,
+      body: `Log events processed and aggregated: ${logsAggregated}, emails sent: ${sendResult ? '1' : '0'}`
     };
   } catch (error) {
     console.error('Error processing CloudWatch Logs data:', error);

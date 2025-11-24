@@ -4,7 +4,8 @@
 import sys
 sys.path.append('src')
 
-from rss_email.podcast_generator import parse_speaker_segments, chunk_text
+from rss_email.podcast_generator import parse_speaker_segments, chunk_text  # noqa: E402
+
 
 # Test data
 sample_script = """Marco: Welcome to Eamon's Daily Tech News! I'm Marco.
@@ -15,6 +16,7 @@ Marco: Absolutely. And there's also news about quantum computing breakthroughs.
 John: Yes, researchers at IBM have made some impressive progress."""
 
 long_text = "This is a sentence. " * 200  # Create text >3000 chars
+
 
 def test_speaker_parsing():
     """Test speaker segment parsing."""
@@ -29,6 +31,7 @@ def test_speaker_parsing():
         print(f"{i}. {speaker}: {text[:60]}...")
 
     print("\n✅ Speaker parsing works correctly!")
+
 
 def test_text_chunking():
     """Test text chunking for Polly limits."""
@@ -46,6 +49,7 @@ def test_text_chunking():
         assert len(chunk) <= 3000, f"Chunk {i} exceeds 3000 chars!"
 
     print("\n✅ Text chunking works correctly!")
+
 
 def test_combined_workflow():
     """Test the combined workflow."""
@@ -71,6 +75,7 @@ def test_combined_workflow():
     print("   (In production, each chunk would be sent to AWS Polly)")
 
     print("\n✅ Combined workflow works correctly!")
+
 
 def main():
     """Run all local tests."""
@@ -98,6 +103,7 @@ def main():
     except Exception as e:
         print(f"\n❌ TEST FAILED: {e}")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

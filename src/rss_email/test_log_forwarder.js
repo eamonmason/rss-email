@@ -34,7 +34,7 @@ const mockWarningEvent = {
 logForwarder.aggregateLogEvent(mockLogData, mockErrorEvent);
 logForwarder.aggregateLogEvent(mockLogData, mockWarningEvent);
 
-console.log('After aggregation:', 
+console.log('After aggregation:',
   'ERROR logs:', logForwarder.getAggregatedLogs().ERROR.length,
   'WARNING logs:', logForwarder.getAggregatedLogs().WARNING.length);
 

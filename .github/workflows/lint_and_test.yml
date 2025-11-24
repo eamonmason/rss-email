@@ -19,15 +19,15 @@ jobs:
 
     - name: Install library
       run: uv sync --dev
-    
+
     - name: Setup Node.js
       uses: actions/setup-node@v3
       with:
         node-version: '20'
-    
+
     - name: Install Node.js dependencies
       run: npm install
-    
+
     - name: Analysing the code with pylint
       run: |
         uv run pylint --fail-under=9.9 src tests

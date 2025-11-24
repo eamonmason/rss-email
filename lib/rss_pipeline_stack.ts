@@ -31,7 +31,7 @@ export class RSSPipelineStack extends cdk.Stack {
             FEED_DEFINITIONS_FILE: {value: 'rss-email-FEED_DEFINITIONS_FILE', type: BuildEnvironmentVariableType.PARAMETER_STORE}
           }
         }
-      })        
+      })
     });
 
     const testingStage = pipeline.addStage(new RSSPipelineAppStage(this, "cd", {
@@ -40,7 +40,7 @@ export class RSSPipelineStack extends cdk.Stack {
             region: process.env.AWS_REGION
         }
       }));
-    
+
     // Grant the pipeline role permission to use the CodeConnections connection
     // This must be done after the pipeline is built
     pipeline.buildPipeline();
@@ -53,7 +53,7 @@ export class RSSPipelineStack extends cdk.Stack {
         }
       }
     }));
-    
+
     //   testingStage.addPost(new ManualApprovalStep('approval'));
     //   testingStage.addPost(new ShellStep("validate", {
     //     commands: ['../tests/validate.sh'],

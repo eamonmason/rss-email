@@ -42,9 +42,6 @@ except ImportError:
     group_articles_by_priority = None
     process_articles_with_claude = None
 
-
-
-
 CHARSET = "UTF-8"
 DAYS_OF_NEWS = 3
 EMAIL_SUBJECT = "Daily News"

@@ -10,10 +10,10 @@ import os
 import sys
 sys.path.append('src')
 
-import boto3
-from botocore.exceptions import ClientError
+import boto3  # noqa: E402
+from botocore.exceptions import ClientError  # noqa: E402
 
-from rss_email.podcast_generator import (
+from rss_email.podcast_generator import (  # noqa: E402
     parse_speaker_segments,
     chunk_text,
     enhance_text_with_ssml,
@@ -24,21 +24,31 @@ from rss_email.podcast_generator import (
 )
 
 # Sample podcast script (pre-written to avoid needing Claude API)
-SAMPLE_SCRIPT = """Marco: Welcome to Eamon's Daily Tech News! I'm Marco, and today we have some exciting stories from the tech world.
+# Long lines are intentional for the script content  # noqa: E501
+SAMPLE_SCRIPT = """Marco: Welcome to Eamon's Daily Tech News! I'm Marco, and today we have some exciting \
+stories from the tech world.
 
-John: And I'm John. Thanks for joining us! We're covering some interesting developments in AI, cloud computing, and cybersecurity.
+John: And I'm John. Thanks for joining us! We're covering some interesting developments in AI, cloud \
+computing, and cybersecurity.
 
-Marco: That's right! Let's start with the big story. OpenAI has announced a revolutionary new reasoning model that shows significant improvements in complex problem-solving tasks. This is absolutely game-changing!
+Marco: That's right! Let's start with the big story. OpenAI has announced a revolutionary new reasoning \
+model that shows significant improvements in complex problem-solving tasks. This is absolutely game-changing!
 
-John: This is fascinating, Marco. The new model uses a breakthrough technique called chain-of-thought reasoning, which allows it to break down complex problems into smaller, more manageable steps.
+John: This is fascinating, Marco. The new model uses a breakthrough technique called chain-of-thought \
+reasoning, which allows it to break down complex problems into smaller, more manageable steps.
 
-Marco: Exactly! Early benchmarks show it performing exceptionally well on mathematical and coding challenges. Developers are already finding innovative ways to integrate it into their applications.
+Marco: Exactly! Early benchmarks show it performing exceptionally well on mathematical and coding \
+challenges. Developers are already finding innovative ways to integrate it into their applications.
 
-John: Speaking of development, there's also important news from Amazon Web Services. They've introduced a new serverless database service that promises to reduce costs by up to 70 percent compared to traditional database solutions. That's impressive!
+John: Speaking of development, there's also important news from Amazon Web Services. They've introduced a \
+new serverless database service that promises to reduce costs by up to 70 percent compared to traditional \
+database solutions. That's impressive!
 
-Marco: Absolutely! This is a game-changer for startups and enterprises alike. The pay-per-request pricing model means you only pay for what you use, which could significantly reduce infrastructure costs.
+Marco: Absolutely! This is a game-changer for startups and enterprises alike. The pay-per-request pricing \
+model means you only pay for what you use, which could significantly reduce infrastructure costs.
 
-John: And finally, in cybersecurity news, researchers have discovered a new vulnerability affecting certain IoT devices. The good news is that patches are already available from major manufacturers.
+John: And finally, in cybersecurity news, researchers have discovered a new vulnerability affecting certain \
+IoT devices. The good news is that patches are already available from major manufacturers.
 
 Marco: Always important to keep those devices updated! That wraps up today's tech news roundup.
 
@@ -109,7 +119,7 @@ def synthesize_speech_local(script: str, output_file: str = "test_podcast.mp3") 
                 print("✓")
 
             except ClientError as e:
-                print(f"❌")
+                print("❌")
                 print(f"\n❌ Error synthesizing speech: {e}")
                 return False
 
@@ -150,7 +160,7 @@ def check_aws_access():
         if JOHN_VOICE not in available_voices:
             print(f"⚠️  Warning: Voice '{JOHN_VOICE}' not found")
 
-        print(f"✓ AWS Polly access confirmed")
+        print("✓ AWS Polly access confirmed")
         print(f"✓ Region: {polly.meta.region_name}")
         print(f"✓ Available neural voices: {len(available_voices)}")
         return True
@@ -158,14 +168,14 @@ def check_aws_access():
     except ClientError as e:
         error_code = e.response['Error']['Code']
         if error_code == 'AccessDeniedException':
-            print(f"❌ Access denied to AWS Polly")
-            print(f"   Make sure your AWS credentials have 'polly:SynthesizeSpeech' permission")
+            print("❌ Access denied to AWS Polly")
+            print("   Make sure your AWS credentials have 'polly:SynthesizeSpeech' permission")
         else:
             print(f"❌ AWS Error: {e}")
         return False
     except Exception as e:
         print(f"❌ Error: {e}")
-        print(f"   Make sure AWS credentials are configured (aws configure)")
+        print("   Make sure AWS credentials are configured (aws configure)")
         return False
 
 
