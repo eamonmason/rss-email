@@ -40,6 +40,14 @@ export class RSSEmailStack extends cdk.Stack {
 
     const bucket = new s3.Bucket(this, BUCKET_NAME, {
       versioned: false,
+      lifecycleRules: [
+        {
+          id: 'DeleteOldPodcastEpisodes',
+          enabled: true,
+          prefix: 'podcasts/episodes/',
+          expiration: cdk.Duration.days(14),
+        }
+      ]
     });
 
     const receive_topic = new sns.Topic(this, SNS_RECEIVE_EMAIL);

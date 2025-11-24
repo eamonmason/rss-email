@@ -499,7 +499,7 @@ def generate_podcast(_event: Dict[str, Any], _context: Optional[Any] = None) -> 
 
     bucket = os.environ["BUCKET"]
     rss_key = os.environ["KEY"]
-    podcast_prefix = "podcasts/"
+    podcast_prefix = "podcasts/episodes/"
     last_run_param = os.environ.get(
         "PODCAST_LAST_RUN_PARAMETER",
         "rss-podcast-lastrun"
