@@ -1,6 +1,6 @@
 # RSS Emailer
 
-![RSS Emailer Logo](assets/logo.png)
+<img src="assets/logo.png" alt="RSS Emailer Logo" width="33%">
 
 ![Lint and Unit Testing](https://github.com/eamonmason/rss-email/actions/workflows/lint_and_test.yml/badge.svg)
 
