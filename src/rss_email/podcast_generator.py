@@ -465,6 +465,7 @@ def update_podcast_feed(
     description: str,
     pub_date: str,
     *,
+    audio_size: int,
     cloudfront_domain: Optional[str] = None,
     distribution_id: Optional[str] = None
 ) -> bool:
@@ -477,6 +478,7 @@ def update_podcast_feed(
         title: Episode title
         description: Episode description
         pub_date: Publication date in ISO format
+        audio_size: Size of audio file in bytes
         cloudfront_domain: Optional CloudFront domain to use for feed link
         distribution_id: Optional CloudFront distribution ID for cache invalidation
 
@@ -542,6 +544,7 @@ def update_podcast_feed(
     # Enclosure (audio file)
     enclosure = SubElement(item, 'enclosure')
     enclosure.set('url', audio_url)
+    enclosure.set('length', str(audio_size))
     enclosure.set('type', 'audio/mpeg')
 
     # Add existing items (up to 10 most recent)
@@ -672,6 +675,7 @@ def generate_podcast(_event: Dict[str, Any], _context: Optional[Any] = None) -> 
         episode_title,
         episode_description,
         datetime.now().isoformat(),
+        audio_size=len(audio_data),
         cloudfront_domain=cloudfront_domain,
         distribution_id=distribution_id
     ):

@@ -452,7 +452,11 @@ def update_podcast_feed(
     audio_url: str,
     title: str,
     description: str,
-    pub_date: str
+    pub_date: str,
+    *,
+    audio_size: int,
+    cloudfront_domain: Optional[str] = None,
+    distribution_id: Optional[str] = None
 ) -> bool:
     """
     Create or update podcast RSS feed.
@@ -461,8 +465,24 @@ def update_podcast_feed(
     - Keep last 10 episodes
     - Generate XML with iTunes tags
     - Upload to S3 at podcasts/feed.xml
+    - Invalidate CloudFront cache if distribution_id provided
     """
 ```
+
+**Important:** The RSS 2.0 specification requires the `<enclosure>` element to have three attributes:
+1. `url` - URL to the media file
+2. `length` - File size in bytes (required for podcast apps)
+3. `type` - MIME type (e.g., "audio/mpeg")
+
+```python
+# Enclosure (audio file)
+enclosure = SubElement(item, 'enclosure')
+enclosure.set('url', audio_url)
+enclosure.set('length', str(audio_size))  # Required by RSS 2.0 spec
+enclosure.set('type', 'audio/mpeg')
+```
+
+Many podcast apps will fail to download episodes if the `length` attribute is missing.
 
 ### Error Handling
 

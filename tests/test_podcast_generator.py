@@ -160,7 +160,8 @@ Joanna: Now I'm talking."""
             audio_url="https://example.com/audio.mp3",
             title="Test Episode",
             description="Test Description",
-            pub_date="2025-01-01T12:00:00"
+            pub_date="2025-01-01T12:00:00",
+            audio_size=1024000
         )
 
         self.assertTrue(success)
@@ -204,7 +205,8 @@ Joanna: Now I'm talking."""
             audio_url="https://example.com/new.mp3",
             title="New Episode",
             description="New Description",
-            pub_date="2025-01-02T12:00:00"
+            pub_date="2025-01-02T12:00:00",
+            audio_size=2048000
         )
 
         self.assertTrue(success)
