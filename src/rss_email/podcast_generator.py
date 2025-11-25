@@ -417,6 +417,47 @@ def get_cloudfront_domain(parameter_name: str) -> Optional[str]:
 
 
 @pydantic.validate_call(validate_return=True)
+def invalidate_cloudfront_cache(distribution_id: str, paths: List[str]) -> bool:
+    """
+    Invalidate CloudFront cache for specified paths.
+
+    Args:
+        distribution_id: CloudFront distribution ID
+        paths: List of paths to invalidate (e.g., ['/podcasts/feed.xml'])
+
+    Returns:
+        True if invalidation was successful, False otherwise
+    """
+    cloudfront = boto3.client("cloudfront")
+    try:
+        response = cloudfront.create_invalidation(
+            DistributionId=distribution_id,
+            InvalidationBatch={
+                'Paths': {
+                    'Quantity': len(paths),
+                    'Items': paths
+                },
+                'CallerReference': str(datetime.now().timestamp())
+            }
+        )
+        invalidation_id = response['Invalidation']['Id']
+        logger.info(
+            "Created CloudFront invalidation %s for distribution %s, paths: %s",
+            invalidation_id,
+            distribution_id,
+            paths
+        )
+        return True
+    except ClientError as e:
+        logger.error(
+            "Failed to create CloudFront invalidation for distribution %s: %s",
+            distribution_id,
+            e
+        )
+        return False
+
+
+@pydantic.validate_call(validate_return=True)
 def update_podcast_feed(
     bucket: str,
     audio_url: str,
@@ -424,7 +465,8 @@ def update_podcast_feed(
     description: str,
     pub_date: str,
     *,
-    cloudfront_domain: Optional[str] = None
+    cloudfront_domain: Optional[str] = None,
+    distribution_id: Optional[str] = None
 ) -> bool:
     """
     Update or create the podcast RSS feed with a new episode.
@@ -436,6 +478,7 @@ def update_podcast_feed(
         description: Episode description
         pub_date: Publication date in ISO format
         cloudfront_domain: Optional CloudFront domain to use for feed link
+        distribution_id: Optional CloudFront distribution ID for cache invalidation
 
     Returns:
         True if successful, False otherwise
@@ -522,6 +565,14 @@ def update_podcast_feed(
             ContentType='application/rss+xml'
         )
         logger.info("Podcast feed updated successfully at s3://%s/%s", bucket, feed_key)
+
+        # Invalidate CloudFront cache if distribution ID is provided
+        if distribution_id:
+            if invalidate_cloudfront_cache(distribution_id, ['/podcasts/feed.xml']):
+                logger.info("CloudFront cache invalidated successfully")
+            else:
+                logger.warning("Failed to invalidate CloudFront cache, feed may be stale")
+
         return True
     except ClientError as e:
         logger.error("Error uploading podcast feed: %s", e)
@@ -550,12 +601,18 @@ def generate_podcast(_event: Dict[str, Any], _context: Optional[Any] = None) -> 
         "PODCAST_CLOUDFRONT_DOMAIN_PARAMETER",
         "rss-podcast-cloudfront-domain"
     )
+    distribution_id = os.environ.get("PODCAST_CLOUDFRONT_DISTRIBUTION_ID")
 
     # Get CloudFront domain for public URLs
     cloudfront_domain = get_cloudfront_domain(cloudfront_domain_param)
     if not cloudfront_domain:
         logger.warning(
             "CloudFront domain not found in parameter store, using S3 URLs as fallback"
+        )
+
+    if not distribution_id:
+        logger.warning(
+            "CloudFront distribution ID not found, cache invalidation will be skipped"
         )
 
     # 1. Get Articles
@@ -615,7 +672,8 @@ def generate_podcast(_event: Dict[str, Any], _context: Optional[Any] = None) -> 
         episode_title,
         episode_description,
         datetime.now().isoformat(),
-        cloudfront_domain=cloudfront_domain
+        cloudfront_domain=cloudfront_domain,
+        distribution_id=distribution_id
     ):
         logger.error("Failed to update podcast feed.")
         return

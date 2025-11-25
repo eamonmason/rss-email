@@ -253,6 +253,25 @@ export class RSSEmailStack extends cdk.Stack {
     emailerEventRule.addTarget(new targets.LambdaFunction(RSSEMailerFunction))
     RSSEMailerFunction.addEventSource(new SnsEventSource(receive_topic));
 
+    // Create CloudFront distribution first (moved up from line 418)
+    // Create CloudFront Origin Access Control for podcast bucket access
+    const podcastOAC = new cloudfront.S3OriginAccessControl(this, 'PodcastOAC', {
+      signing: cloudfront.Signing.SIGV4_ALWAYS,
+    });
+
+    // Create CloudFront distribution for public podcast access
+    const podcastDistribution = new cloudfront.Distribution(this, 'PodcastDistribution', {
+      defaultBehavior: {
+        origin: new origins.S3Origin(bucket, {
+          originAccessControl: podcastOAC,
+        }),
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+        allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
+      },
+      comment: 'RSS Email Podcast Distribution - serves all files under /podcasts/ prefix',
+    });
+
     const RSSPodcastFunction = new lambda.Function(this, 'RSSPodcastFunction', {
       code: lambda.Code.fromAsset('src'),
       handler: 'rss_email.podcast_generator.generate_podcast',
@@ -262,6 +281,7 @@ export class RSSEmailStack extends cdk.Stack {
         KEY: KEY,
         PODCAST_LAST_RUN_PARAMETER: PODCAST_LAST_RUN_PARAMETER,
         PODCAST_CLOUDFRONT_DOMAIN_PARAMETER: PODCAST_CLOUDFRONT_DOMAIN_PARAMETER,
+        PODCAST_CLOUDFRONT_DISTRIBUTION_ID: podcastDistribution.distributionId,
         ANTHROPIC_API_KEY_PARAMETER: ANTHROPIC_API_KEY_PARAMETER,
         CLAUDE_MODEL: 'claude-3-5-haiku-20241022',
         CLAUDE_MAX_TOKENS: '4000',
@@ -297,6 +317,35 @@ export class RSSEmailStack extends cdk.Stack {
       actions: ['ssm:GetParameter'],
       resources: [`arn:aws:ssm:*:*:parameter/${PODCAST_CLOUDFRONT_DOMAIN_PARAMETER}`],
     }));
+
+    // Add CloudFront invalidation permissions
+    role.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['cloudfront:CreateInvalidation'],
+      resources: [`arn:aws:cloudfront::${this.account}:distribution/${podcastDistribution.distributionId}`]
+    }));
+
+    // Add bucket policy to restrict CloudFront access to only /podcasts/* prefix
+    bucket.addToResourcePolicy(new iam.PolicyStatement({
+      sid: 'AllowCloudFrontServicePrincipalReadOnly',
+      effect: iam.Effect.ALLOW,
+      principals: [new iam.ServicePrincipal('cloudfront.amazonaws.com')],
+      actions: ['s3:GetObject'],
+      resources: [bucket.arnForObjects('podcasts/*')],
+      conditions: {
+        'StringEquals': {
+          'AWS:SourceArn': `arn:aws:cloudfront::${this.account}:distribution/${podcastDistribution.distributionId}`
+        }
+      }
+    }));
+
+    // Store CloudFront domain in Parameter Store for Lambda to use
+    new ssm.StringParameter(this, 'PodcastCloudFrontDomainParameter', {
+      parameterName: PODCAST_CLOUDFRONT_DOMAIN_PARAMETER,
+      stringValue: podcastDistribution.distributionDomainName,
+      description: 'CloudFront distribution domain for podcast RSS feed',
+      tier: ssm.ParameterTier.STANDARD,
+    });
 
     const rssGenerationLogGroup = new logs.LogGroup(this, 'rssGenerationLogGroup', {
       logGroupName: `/aws/lambda/${RSSGenerationFunction.functionName}`,
@@ -407,46 +456,6 @@ export class RSSEmailStack extends cdk.Stack {
       logGroup: podcastLogGroup,
       destination: new destinations.LambdaDestination(logForwarderFunction),
       filterPattern: logs.FilterPattern.anyTerm('ERROR', 'WARNING', 'Error', 'Warning', 'error', 'warning'),
-    });
-
-    // Create CloudFront Origin Access Control for podcast bucket access
-    const podcastOAC = new cloudfront.S3OriginAccessControl(this, 'PodcastOAC', {
-      signing: cloudfront.Signing.SIGV4_ALWAYS,
-    });
-
-    // Create CloudFront distribution for public podcast access
-    const podcastDistribution = new cloudfront.Distribution(this, 'PodcastDistribution', {
-      defaultBehavior: {
-        origin: new origins.S3Origin(bucket, {
-          originAccessControl: podcastOAC,
-        }),
-        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-        cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
-        allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
-      },
-      comment: 'RSS Email Podcast Distribution - serves all files under /podcasts/ prefix',
-    });
-
-    // Add bucket policy to restrict CloudFront access to only /podcasts/* prefix
-    bucket.addToResourcePolicy(new iam.PolicyStatement({
-      sid: 'AllowCloudFrontServicePrincipalReadOnly',
-      effect: iam.Effect.ALLOW,
-      principals: [new iam.ServicePrincipal('cloudfront.amazonaws.com')],
-      actions: ['s3:GetObject'],
-      resources: [bucket.arnForObjects('podcasts/*')],
-      conditions: {
-        'StringEquals': {
-          'AWS:SourceArn': `arn:aws:cloudfront::${this.account}:distribution/${podcastDistribution.distributionId}`
-        }
-      }
-    }));
-
-    // Store CloudFront domain in Parameter Store for Lambda to use
-    new ssm.StringParameter(this, 'PodcastCloudFrontDomainParameter', {
-      parameterName: PODCAST_CLOUDFRONT_DOMAIN_PARAMETER,
-      stringValue: podcastDistribution.distributionDomainName,
-      description: 'CloudFront distribution domain for podcast RSS feed',
-      tier: ssm.ParameterTier.STANDARD,
     });
 
     // Output the CloudFront URL for the podcast feed

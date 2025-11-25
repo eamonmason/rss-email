@@ -605,6 +605,100 @@ logger.info("Synthesizing %d chunks for %s", len(text_chunks), speaker)
 logger.info("Audio synthesized successfully (%d bytes)", len(audio_data))
 ```
 
+### CloudFront Cache Invalidation
+
+The podcast feed is distributed via CloudFront for better performance and reliability. To ensure podcast apps receive updates immediately, the system automatically invalidates the CloudFront cache when feed.xml is updated.
+
+#### Implementation Pattern
+
+```python
+@pydantic.validate_call(validate_return=True)
+def invalidate_cloudfront_cache(distribution_id: str, paths: List[str]) -> bool:
+    """
+    Invalidate CloudFront cache for specified paths.
+
+    Args:
+        distribution_id: CloudFront distribution ID
+        paths: List of paths to invalidate (e.g., ['/podcasts/feed.xml'])
+
+    Returns:
+        True if invalidation was successful, False otherwise
+    """
+    cloudfront = boto3.client("cloudfront")
+    try:
+        response = cloudfront.create_invalidation(
+            DistributionId=distribution_id,
+            InvalidationBatch={
+                'Paths': {
+                    'Quantity': len(paths),
+                    'Items': paths
+                },
+                'CallerReference': str(datetime.now().timestamp())
+            }
+        )
+        invalidation_id = response['Invalidation']['Id']
+        logger.info(
+            "Created CloudFront invalidation %s for distribution %s, paths: %s",
+            invalidation_id,
+            distribution_id,
+            paths
+        )
+        return True
+    except ClientError as e:
+        logger.error(
+            "Failed to create CloudFront invalidation for distribution %s: %s",
+            distribution_id,
+            e
+        )
+        return False
+```
+
+#### Usage in update_podcast_feed()
+
+```python
+def update_podcast_feed(
+    bucket: str,
+    audio_url: str,
+    title: str,
+    description: str,
+    pub_date: str,
+    *,
+    cloudfront_domain: Optional[str] = None,
+    distribution_id: Optional[str] = None
+) -> bool:
+    # ... upload feed to S3 ...
+
+    # Invalidate CloudFront cache if distribution ID is provided
+    if distribution_id:
+        if invalidate_cloudfront_cache(distribution_id, ['/podcasts/feed.xml']):
+            logger.info("CloudFront cache invalidated successfully")
+        else:
+            logger.warning("Failed to invalidate CloudFront cache, feed may be stale")
+
+    return True
+```
+
+#### CDK Configuration
+
+The CDK stack must:
+1. Create CloudFront distribution before Lambda function
+2. Pass distribution ID as environment variable
+3. Grant `cloudfront:CreateInvalidation` permission to Lambda role
+
+```typescript
+// Pass distribution ID to Lambda
+environment: {
+  PODCAST_CLOUDFRONT_DISTRIBUTION_ID: podcastDistribution.distributionId,
+}
+
+// Grant CloudFront invalidation permissions
+role.addToPolicy(new iam.PolicyStatement({
+  effect: iam.Effect.ALLOW,
+  actions: ['cloudfront:CreateInvalidation'],
+  resources: [`arn:aws:cloudfront::${this.account}:distribution/${podcastDistribution.distributionId}`]
+}));
+```
+
 ### Common Pitfalls
 
 1. **Forgetting to chunk text**: Always chunk before calling Polly or you'll hit the 3000-char limit
@@ -612,6 +706,7 @@ logger.info("Audio synthesized successfully (%d bytes)", len(audio_data))
 3. **Missing newlines in test scripts**: Parser looks for line breaks between speakers
 4. **Catching too broad exceptions**: Use specific exception types (ClientError, APIError, etc.)
 5. **Not preserving sentence boundaries**: Split on sentence endings, not arbitrary character counts
+6. **CloudFront cache**: Always invalidate CloudFront cache after updating feed.xml to ensure immediate availability
 
 ### Integration with Existing System
 
@@ -644,6 +739,5 @@ Consider these patterns for future improvements:
 
 1. **SSML Support**: Use Speech Synthesis Markup Language for more natural pauses, emphasis
 2. **Audio Post-Processing**: Add intro/outro music, normalize volume levels
-3. **CDN Integration**: Use CloudFront for podcast audio delivery to reduce bandwidth costs
-4. **Compression**: Compress MP3 files to reduce storage and bandwidth costs
-5. **Local Testing CLI**: Create `cli_podcast_generator.py` similar to `cli_article_processor.py`
+3. **Compression**: Compress MP3 files to reduce storage and bandwidth costs
+4. **Local Testing CLI**: Create `cli_podcast_generator.py` similar to `cli_article_processor.py`
