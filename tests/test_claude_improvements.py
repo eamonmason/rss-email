@@ -72,7 +72,7 @@ def main():
 
     # Set default model if not specified
     if not os.environ.get("CLAUDE_MODEL"):
-        os.environ["CLAUDE_MODEL"] = "claude-3-5-haiku-20241022"
+        os.environ["CLAUDE_MODEL"] = "claude-haiku-4-5-20251001"
         print(f"Using default Claude model: {os.environ['CLAUDE_MODEL']}")
 
     try:

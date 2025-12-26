@@ -199,7 +199,7 @@ def test_claude_processing(provided_api_key: Optional[str] = None):
     # Set up environment
     os.environ["ANTHROPIC_API_KEY_PARAMETER"] = "rss-email-anthropic-api-key"
     os.environ["CLAUDE_ENABLED"] = "true"
-    os.environ["CLAUDE_MODEL"] = "claude-3-5-haiku-latest"
+    os.environ["CLAUDE_MODEL"] = "claude-haiku-4-5-20251001"
     os.environ["CLAUDE_MAX_TOKENS"] = "100000"
     os.environ["CLAUDE_MAX_REQUESTS"] = "5"
 

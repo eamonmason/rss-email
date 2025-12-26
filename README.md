@@ -227,7 +227,7 @@ The enhanced email template features:
 The following environment variables are configured in the CDK stack:
 
 - `ANTHROPIC_API_KEY_PARAMETER`: Name of the AWS Parameter Store parameter containing the API key (default: `rss-email-anthropic-api-key`)
-- `CLAUDE_MODEL`: The Claude model to use (default: `claude-3-5-haiku-latest`)
+- `CLAUDE_MODEL`: The Claude model to use (default: `claude-haiku-4-5-20251001`)
 - `CLAUDE_MAX_TOKENS`: Maximum tokens per request (default: `100000`)
 - `CLAUDE_MAX_REQUESTS`: Maximum API requests per Lambda execution (default: `5`)
 - `CLAUDE_ENABLED`: Feature flag to enable/disable Claude processing (default: `true`)
@@ -261,7 +261,7 @@ The integration logs the following metrics to CloudWatch:
 
 ### Cost Considerations
 
-- The system uses Claude 3 Haiku for cost efficiency
+- The system uses Claude Haiku 4.5 for cost efficiency
 - Token usage is limited per request and per Lambda execution
 - Only new articles since the last run are processed
 
@@ -347,7 +347,7 @@ The podcast function uses these environment variables (configured in CDK):
 - `KEY`: S3 key for the aggregated RSS feed file
 - `PODCAST_LAST_RUN_PARAMETER`: SSM parameter name for tracking last run (default: `rss-podcast-lastrun`)
 - `ANTHROPIC_API_KEY_PARAMETER`: SSM parameter containing the Anthropic API key
-- `CLAUDE_MODEL`: Claude model to use for script generation (default: `claude-3-5-haiku-latest`)
+- `CLAUDE_MODEL`: Claude model to use for script generation (default: `claude-haiku-4-5-20251001`)
 - `CLAUDE_MAX_TOKENS`: Maximum tokens for script generation (default: `4000`)
 
 #### IAM Permissions
@@ -627,7 +627,7 @@ cp .env.example .env
 ```bash
 export CLAUDE_ENABLED=true
 export ANTHROPIC_API_KEY=your-api-key-here
-export CLAUDE_MODEL=claude-3-5-haiku-20241022
+export CLAUDE_MODEL=claude-haiku-4-5-20251001
 ```
 
 **Method 3: AWS Parameter Store (Production)**

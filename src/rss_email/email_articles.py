@@ -388,7 +388,7 @@ def _generate_claude_enhanced_html(
                 total_articles=len(filtered_items),
                 total_categories=len(ordered_categories),
                 categorized_content=categorized_content,
-                ai_model=os.environ.get("CLAUDE_MODEL", "claude-3-5-haiku-latest"),
+                ai_model=os.environ.get("CLAUDE_MODEL", "claude-haiku-4-5-20251001"),
             )
 
         logger.warning(

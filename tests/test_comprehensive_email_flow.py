@@ -97,7 +97,7 @@ class TestComprehensiveEmailFlow(unittest.TestCase):
             "TO_EMAIL_ADDRESS": "recipient@example.com",
             "LAST_RUN_PARAMETER": "test-parameter",
             "CLAUDE_ENABLED": "true",
-            "CLAUDE_MODEL": "claude-3-5-haiku-latest",
+            "CLAUDE_MODEL": "claude-haiku-4-5-20251001",
             "ANTHROPIC_API_KEY": "test-key"
         },
     )
@@ -181,7 +181,7 @@ class TestComprehensiveEmailFlow(unittest.TestCase):
             "TO_EMAIL_ADDRESS": "recipient@example.com",
             "LAST_RUN_PARAMETER": "test-parameter",
             "CLAUDE_ENABLED": "true",
-            "CLAUDE_MODEL": "claude-3-5-haiku-latest",
+            "CLAUDE_MODEL": "claude-haiku-4-5-20251001",
             "ANTHROPIC_API_KEY": "test-key"
         },
     )
@@ -397,7 +397,7 @@ class TestComprehensiveEmailFlow(unittest.TestCase):
         # Test with environment variables set
         with patch.dict("os.environ", {
             "CLAUDE_ENABLED": "true",
-            "CLAUDE_MODEL": "claude-3-5-haiku-latest",
+            "CLAUDE_MODEL": "claude-haiku-4-5-20251001",
             "ANTHROPIC_API_KEY": "test-key"
         }):
             rate_limiter = ClaudeRateLimiter()
@@ -448,7 +448,7 @@ class TestComprehensiveEmailFlow(unittest.TestCase):
         # Test with environment variables set
         with patch.dict("os.environ", {
             "CLAUDE_ENABLED": "true",
-            "CLAUDE_MODEL": "claude-3-5-haiku-latest",
+            "CLAUDE_MODEL": "claude-haiku-4-5-20251001",
             "ANTHROPIC_API_KEY": "test-key"
         }):
             rate_limiter = ClaudeRateLimiter()
