@@ -104,7 +104,7 @@ class ApplicationSettings(BaseModel):
 
     # Claude Configuration
     claude_enabled: bool = True
-    claude_model: str = "claude-3-5-haiku-latest"
+    claude_model: str = "claude-haiku-4-5-20251001"
     claude_max_tokens: int = 100000
     claude_max_requests: int = 10
     anthropic_api_key_parameter: str = "rss-email-anthropic-api-key"

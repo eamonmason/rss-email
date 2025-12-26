@@ -301,7 +301,7 @@ def generate_script(articles: List[Dict[str, Any]]) -> Optional[str]:
 
     try:
         message = client.messages.create(
-            model=os.environ.get("CLAUDE_MODEL", "claude-3-5-haiku-latest"),
+            model=os.environ.get("CLAUDE_MODEL", "claude-haiku-4-5-20251001"),
             max_tokens=int(os.environ.get("CLAUDE_MAX_TOKENS", "4000")),
             messages=[
                 {"role": "user", "content": PODCAST_PROMPT + "\n" + articles_text}

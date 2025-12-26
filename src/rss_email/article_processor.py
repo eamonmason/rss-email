@@ -391,7 +391,7 @@ def _process_articles_in_batches(
         "total_batches": len(batches),
         "batches_failed": 0,
         "tokens_used": 0,
-        "model": os.environ.get("CLAUDE_MODEL", "claude-3-5-haiku-latest"),
+        "model": os.environ.get("CLAUDE_MODEL", "claude-haiku-4-5-20251001"),
         "processing_time_seconds": 0,
     }
 
@@ -648,6 +648,9 @@ def _get_max_tokens_for_model(model_name: str) -> int:
 
     if "claude-3-5-haiku" in model_name:
         return 4000  # Conservative limit for haiku models
+
+    if "claude-haiku-4" in model_name:
+        return 4000  # Conservative limit for haiku 4 models
 
     if "claude-2" in model_name:
         return 8000  # Conservative even for Claude 2

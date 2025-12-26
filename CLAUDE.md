@@ -373,7 +373,7 @@ The podcast generation feature (`podcast_generator.py`) creates audio podcasts f
 
 #### Script Generation with Claude
 
-- Use Claude 3.5 Haiku for cost-effective script generation
+- Use Claude Haiku 4.5 for cost-effective script generation
 - Token limits: 4,000 tokens (lower than email processing to control costs)
 - Prompt must specify clear speaker labels ("Marco:", "Joanna:")
 - Scripts should be 5-10 minutes in length
@@ -599,7 +599,7 @@ def test_update_podcast_feed_new(mock_boto3):
 
 #### Token Management
 
-- Use Claude 3.5 Haiku (most cost-effective model)
+- Use Claude Haiku 4.5 (most cost-effective model)
 - Set conservative token limits (4,000 for podcasts vs 100,000 for email)
 - Limit script length to 5-10 minutes to control Polly costs
 
