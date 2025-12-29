@@ -32,7 +32,7 @@ def test_create_podcast_script_prompt_empty():
     # Should still contain instruction text but no articles
     assert "Marco" in prompt
     assert "Joanna" in prompt
-    assert "Title:" not in prompt.split("\n\n")[-1]  # No article section
+    assert "Title:" not in prompt.rsplit("\n\n", maxsplit=1)[-1]  # No article section
 
 
 def test_create_podcast_script_prompt_single_article():

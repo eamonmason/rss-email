@@ -1,4 +1,5 @@
 """Tests for check_email_batch_status module."""
+# pylint: disable=redefined-outer-name,unused-argument
 
 import os
 from unittest.mock import MagicMock, patch

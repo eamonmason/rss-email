@@ -1,4 +1,5 @@
 """Tests for retrieve_and_send_email module."""
+# pylint: disable=redefined-outer-name,unused-argument,too-many-positional-arguments
 
 import json
 import os

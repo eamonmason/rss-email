@@ -526,9 +526,39 @@ def create_html(categories: Dict[str, List[Dict[str, Any]]]) -> str:
     Returns:
         HTML string for email body
     """
-    # Reuse the existing HTML generation function
-    # Convert categories dict to the format expected by generate_enhanced_html_content
-    return generate_enhanced_html_content(categories)
+    # Build article_map from all articles across categories
+    article_map = {}
+    article_counter = 0
+    for articles in categories.values():
+        for article in articles:
+            article_map[f"article_{article_counter}"] = article
+            article_counter += 1
+
+    # Convert categories dict to list of tuples for generate_enhanced_html_content
+    categorized_articles = list(categories.items())
+
+    # Generate enhanced HTML content
+    categorized_content = generate_enhanced_html_content(
+        categorized_articles, article_map
+    )
+
+    # Load enhanced template
+    try:
+        template_path = files("rss_email").joinpath("email_body_enhanced_simple.html")
+        html_template = template_path.read_text()
+    except FileNotFoundError:
+        template_path = files("rss_email").joinpath("email_body_enhanced.html")
+        html_template = template_path.read_text()
+
+    # Format the template
+    return html_template.format(
+        subject=EMAIL_SUBJECT,
+        generation_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        total_articles=article_counter,
+        total_categories=len(categories),
+        categorized_content=categorized_content,
+        ai_model=os.environ.get("CLAUDE_MODEL", "claude-haiku-4-5-20251001"),
+    )
 
 
 def send_email(event: Dict[str, Any], context: Optional[Any] = None) -> None:  # pylint: disable=W0613

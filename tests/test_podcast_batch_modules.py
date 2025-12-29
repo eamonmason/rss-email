@@ -1,4 +1,5 @@
 """Tests for podcast batch processing modules."""
+# pylint: disable=redefined-outer-name,unused-argument,too-many-positional-arguments
 
 from datetime import datetime
 from unittest.mock import MagicMock, patch

@@ -1,4 +1,5 @@
 """Tests for submit_email_batch module."""
+# pylint: disable=redefined-outer-name,unused-argument,too-many-positional-arguments
 
 import os
 from datetime import datetime
