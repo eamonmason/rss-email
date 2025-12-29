@@ -3,7 +3,11 @@
     "allow": [
       "Bash(grep:*)",
       "Bash(sed:*)",
-      "Bash(uv run:*)"
+      "Bash(uv run:*)",
+      "WebSearch",
+      "WebFetch(domain:docs.anthropic.com)",
+      "Bash(aws --profile personal s3 ls:*)",
+      "Bash(aws logs tail:*)"
     ],
     "deny": []
   }

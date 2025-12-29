@@ -305,6 +305,22 @@ export class RSSEmailStack extends cdk.Stack {
 
     // ===== Message Batches API Lambda Functions =====
 
+    // RSS Retrieval Function (runs first in Step Functions workflow)
+    const retrieveRSSArticlesFunction = new lambda.Function(this, 'RetrieveRSSArticlesFunction', {
+      code: lambda.Code.fromAsset('src'),
+      handler: 'rss_email.retrieve_rss_articles.lambda_handler',
+      runtime: lambda.Runtime.PYTHON_3_13,
+      environment: {
+        BUCKET: bucket.bucketName,
+        KEY: KEY,
+        FEED_URLS_BUCKET: bucket.bucketName,
+        FEED_URLS_KEY: 'feed_urls.json',
+      },
+      role: role,
+      layers: [layer],
+      timeout: cdk.Duration.seconds(300) // 5 minutes for RSS retrieval
+    });
+
     // Email Batch Processing Functions
     const submitEmailBatchFunction = new lambda.Function(this, 'SubmitEmailBatchFunction', {
       code: lambda.Code.fromAsset('src'),
@@ -397,6 +413,12 @@ export class RSSEmailStack extends cdk.Stack {
 
     // ===== Step Functions State Machine =====
 
+    // RSS Retrieval Task (first step)
+    const retrieveArticlesTask = new tasks.LambdaInvoke(this, 'Retrieve RSS Articles', {
+      lambdaFunction: retrieveRSSArticlesFunction,
+      outputPath: '$.Payload',
+    });
+
     // Email Branch Tasks
     const submitEmailBatchTask = new tasks.LambdaInvoke(this, 'Submit Email Batch', {
       lambdaFunction: submitEmailBatchFunction,
@@ -477,8 +499,10 @@ export class RSSEmailStack extends cdk.Stack {
     // Success State
     const successState = new sfn.Succeed(this, 'Workflow Complete');
 
-    // Define complete workflow
-    const definition = parallelState.next(successState);
+    // Define complete workflow: Retrieve Articles -> Parallel Processing -> Success
+    const definition = retrieveArticlesTask
+      .next(parallelState)
+      .next(successState);
 
     // Create State Machine
     const stateMachine = new sfn.StateMachine(this, 'DailyRSSNewsletterWorkflow', {
@@ -488,6 +512,7 @@ export class RSSEmailStack extends cdk.Stack {
     });
 
     // Grant Step Functions permission to invoke Lambda functions
+    retrieveRSSArticlesFunction.grantInvoke(stateMachine);
     submitEmailBatchFunction.grantInvoke(stateMachine);
     checkEmailBatchStatusFunction.grantInvoke(stateMachine);
     retrieveAndSendEmailFunction.grantInvoke(stateMachine);
