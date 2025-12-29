@@ -422,14 +422,12 @@ export class RSSEmailStack extends cdk.Stack {
     // Email Branch Tasks
     const submitEmailBatchTask = new tasks.LambdaInvoke(this, 'Submit Email Batch', {
       lambdaFunction: submitEmailBatchFunction,
-      outputPath: '$.Payload',
       resultPath: '$.emailBatch',
     });
 
     const checkEmailStatusTask = new tasks.LambdaInvoke(this, 'Check Email Status', {
       lambdaFunction: checkEmailBatchStatusFunction,
-      inputPath: '$.emailBatch',
-      outputPath: '$.Payload',
+      inputPath: '$.emailBatch.Payload',
       resultPath: '$.emailBatch',
     });
 
@@ -439,13 +437,13 @@ export class RSSEmailStack extends cdk.Stack {
 
     const retrieveAndSendEmailTask = new tasks.LambdaInvoke(this, 'Retrieve and Send Email', {
       lambdaFunction: retrieveAndSendEmailFunction,
-      inputPath: '$.emailBatch',
+      inputPath: '$.emailBatch.Payload',
       outputPath: '$.Payload',
     });
 
     const emailChoice = new sfn.Choice(this, 'Is Email Batch Complete?')
       .when(
-        sfn.Condition.stringEquals('$.emailBatch.processing_status', 'ended'),
+        sfn.Condition.stringEquals('$.emailBatch.Payload.processing_status', 'ended'),
         retrieveAndSendEmailTask
       )
       .otherwise(waitEmailState.next(checkEmailStatusTask));
@@ -457,14 +455,12 @@ export class RSSEmailStack extends cdk.Stack {
     // Podcast Branch Tasks
     const submitPodcastBatchTask = new tasks.LambdaInvoke(this, 'Submit Podcast Batch', {
       lambdaFunction: submitPodcastBatchFunction,
-      outputPath: '$.Payload',
       resultPath: '$.podcastBatch',
     });
 
     const checkPodcastStatusTask = new tasks.LambdaInvoke(this, 'Check Podcast Status', {
       lambdaFunction: checkPodcastBatchStatusFunction,
-      inputPath: '$.podcastBatch',
-      outputPath: '$.Payload',
+      inputPath: '$.podcastBatch.Payload',
       resultPath: '$.podcastBatch',
     });
 
@@ -474,13 +470,13 @@ export class RSSEmailStack extends cdk.Stack {
 
     const retrieveAndGeneratePodcastTask = new tasks.LambdaInvoke(this, 'Retrieve and Generate Podcast', {
       lambdaFunction: retrieveAndGeneratePodcastFunction,
-      inputPath: '$.podcastBatch',
+      inputPath: '$.podcastBatch.Payload',
       outputPath: '$.Payload',
     });
 
     const podcastChoice = new sfn.Choice(this, 'Is Podcast Batch Complete?')
       .when(
-        sfn.Condition.stringEquals('$.podcastBatch.processing_status', 'ended'),
+        sfn.Condition.stringEquals('$.podcastBatch.Payload.processing_status', 'ended'),
         retrieveAndGeneratePodcastTask
       )
       .otherwise(waitPodcastState.next(checkPodcastStatusTask));
