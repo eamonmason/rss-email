@@ -195,7 +195,7 @@ def optimize_articles_for_claude(
 
 
 def split_articles_into_batches(
-    articles: List[Dict[str, Any]], max_batch_size: int = 30
+    articles: List[Dict[str, Any]], max_batch_size: int = 25
 ) -> List[List[Dict[str, Any]]]:
     """Split articles into smaller batches for processing."""
     batches = []
@@ -381,7 +381,9 @@ def _process_articles_in_batches(
     articles: List[Dict[str, Any]], rate_limiter: ClaudeRateLimiter
 ) -> Optional[CategorizedArticles]:
     """Process articles in smaller batches to avoid token limits."""
-    batches = split_articles_into_batches(articles, max_batch_size=30)
+    # Get batch size from environment or use default
+    batch_size = int(os.environ.get("CLAUDE_BATCH_SIZE", "25"))
+    batches = split_articles_into_batches(articles, max_batch_size=batch_size)
 
     all_categories = {}
     combined_metadata = {
@@ -556,14 +558,36 @@ def _call_claude_api(
         # Parse response text
         response_text = response.content[0].text.strip()
 
+        # Check for empty response
+        if not response_text:
+            logger.error("Received empty response from Claude API")
+            return None, None
+
+        # Log response size for monitoring
+        response_size = len(response_text)
+        logger.info("Received response of %d characters", response_size)
+
+        # Warn if response seems suspiciously short
+        if response_size < 500:
+            logger.warning(
+                "Response is suspiciously short (%d chars) for %d articles",
+                response_size,
+                len(articles)
+            )
+
         # Try to extract valid JSON with error handling for truncation
         categorized_data = None
         try:
             # First attempt to parse the entire response as JSON
             categorized_data = json.loads(response_text)
         except json.JSONDecodeError as e:
-            # If parsing fails, use the json_repair module instead of manual repair
-            logger.warning("JSON parse error: %s. Attempting to repair response.", e)
+            # Enhanced logging for debugging
+            logger.warning(
+                "JSON parse error: %s. Response length: %d chars. Error position: char %s",
+                e,
+                len(response_text),
+                getattr(e, 'pos', 'unknown')
+            )
 
             # Log the problematic response for debugging
             logger.debug("Problematic JSON response: %s", response_text[:1000])
@@ -650,7 +674,7 @@ def _get_max_tokens_for_model(model_name: str) -> int:
         return 4000  # Conservative limit for haiku models
 
     if "claude-haiku-4" in model_name:
-        return 4000  # Conservative limit for haiku 4 models
+        return 8192  # Increased to prevent truncation - supports up to 30 articles
 
     if "claude-2" in model_name:
         return 8000  # Conservative even for Claude 2

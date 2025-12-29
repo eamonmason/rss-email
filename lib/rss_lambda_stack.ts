@@ -239,6 +239,7 @@ export class RSSEmailStack extends cdk.Stack {
         CLAUDE_MODEL: 'claude-haiku-4-5-20251001',
         CLAUDE_MAX_TOKENS: '100000',
         CLAUDE_MAX_REQUESTS: '5',
+        CLAUDE_BATCH_SIZE: '25',
         CLAUDE_ENABLED: 'true',
         CLAUDE_API_TIMEOUT: '120',  // 2 minutes (120 seconds) timeout for Anthropic API calls
       },

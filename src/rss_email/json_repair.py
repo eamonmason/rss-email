@@ -47,6 +47,52 @@ def _fix_comma_delimiters(json_str: str) -> str:
     return fixed
 
 
+def _handle_severe_truncation(json_str: str, truncation_point: int) -> Optional[Dict[str, Any]]:
+    """
+    Handle severe truncation at specific character positions.
+
+    Attempts to salvage partial results by:
+    1. Truncating to last complete article
+    2. Closing JSON structure properly
+    3. Preserving valid categories
+
+    Args:
+        json_str: Truncated JSON string
+        truncation_point: Character position where truncation likely occurred
+
+    Returns:
+        Dict with partial results or None
+    """
+    try:
+        # Find last complete article entry before truncation point
+        safe_point = json_str.rfind('},', 0, truncation_point)
+        if safe_point == -1:
+            logger.debug("No safe truncation point found")
+            return None
+
+        # Extract up to last complete article
+        truncated = json_str[:safe_point + 1]
+
+        # Count open braces and brackets to determine what needs closing
+        open_braces = truncated.count('{') - truncated.count('}')
+        open_brackets = truncated.count('[') - truncated.count(']')
+
+        # Close structures in reverse order
+        if open_brackets > 0:
+            truncated += ']' * open_brackets
+        if open_braces > 0:
+            truncated += '}' * open_braces
+
+        # Try to parse salvaged result
+        result = json.loads(truncated)
+        logger.info("Successfully salvaged partial results from severe truncation")
+        return result
+
+    except (json.JSONDecodeError, ValueError) as e:
+        logger.debug("Severe truncation handling failed: %s", e)
+        return None
+
+
 # pylint: disable=too-many-branches
 def repair_truncated_json(json_str: str) -> Optional[Dict[str, Any]]:
     """
@@ -66,6 +112,14 @@ def repair_truncated_json(json_str: str) -> Optional[Dict[str, Any]]:
         return json.loads(json_str)
     except json.JSONDecodeError as e:
         logger.info("Attempting to repair truncated JSON: %s", e)
+
+        # Check for 14K boundary truncation (common failure point)
+        if "char 14" in str(e) and len(json_str) > 10000:
+            logger.info("Detected truncation near 14K boundary, attempting salvage")
+            result = _handle_severe_truncation(json_str, 14025)
+            if result is not None:
+                return result
+
         # Handle specific comma delimiter errors
         if "Expecting ',' delimiter" in str(e):
             logger.info("Attempting to fix comma delimiter issue")
