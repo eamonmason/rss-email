@@ -14,6 +14,8 @@ import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
+import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
+import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import { Construct } from 'constructs';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -248,10 +250,13 @@ export class RSSEmailStack extends cdk.Stack {
       timeout: cdk.Duration.seconds(300)  // Increased from 30s to accommodate Claude API calls
     });
 
-    const emailerEventRule = new events.Rule(this, 'emailerEventRule', {
-      schedule: events.Schedule.cron({ minute: '30', hour: '7', weekDay: '2-6' }),
-    });
-    emailerEventRule.addTarget(new targets.LambdaFunction(RSSEMailerFunction))
+    // NOTE: Old direct Lambda trigger - replaced by Step Functions workflow below
+    // const emailerEventRule = new events.Rule(this, 'emailerEventRule', {
+    //   schedule: events.Schedule.cron({ minute: '30', hour: '7', weekDay: '2-6' }),
+    // });
+    // emailerEventRule.addTarget(new targets.LambdaFunction(RSSEMailerFunction))
+
+    // Keep SNS event source for manual email forwarding
     RSSEMailerFunction.addEventSource(new SnsEventSource(receive_topic));
 
     // Create CloudFront distribution first (moved up from line 418)
@@ -297,6 +302,214 @@ export class RSSEmailStack extends cdk.Stack {
       schedule: events.Schedule.cron({ minute: '0', hour: '8', weekDay: '2-6' }),
     });
     podcastEventRule.addTarget(new targets.LambdaFunction(RSSPodcastFunction));
+
+    // ===== Message Batches API Lambda Functions =====
+
+    // Email Batch Processing Functions
+    const submitEmailBatchFunction = new lambda.Function(this, 'SubmitEmailBatchFunction', {
+      code: lambda.Code.fromAsset('src'),
+      handler: 'rss_email.submit_email_batch.lambda_handler',
+      runtime: lambda.Runtime.PYTHON_3_13,
+      environment: {
+        RSS_BUCKET: bucket.bucketName,
+        RSS_KEY: KEY,
+        ANTHROPIC_API_KEY_PARAMETER: ANTHROPIC_API_KEY_PARAMETER,
+        CLAUDE_MODEL: 'claude-haiku-4-5-20251001',
+        LAST_RUN_PARAMETER: LAST_RUN_PARAMETER,
+        CLAUDE_BATCH_SIZE: '25',
+      },
+      role: role,
+      layers: [layer],
+      timeout: cdk.Duration.seconds(120)
+    });
+
+    const checkEmailBatchStatusFunction = new lambda.Function(this, 'CheckEmailBatchStatusFunction', {
+      code: lambda.Code.fromAsset('src'),
+      handler: 'rss_email.check_email_batch_status.lambda_handler',
+      runtime: lambda.Runtime.PYTHON_3_13,
+      environment: {
+        ANTHROPIC_API_KEY_PARAMETER: ANTHROPIC_API_KEY_PARAMETER,
+      },
+      role: role,
+      layers: [layer],
+      timeout: cdk.Duration.seconds(30)
+    });
+
+    const retrieveAndSendEmailFunction = new lambda.Function(this, 'RetrieveAndSendEmailFunction', {
+      code: lambda.Code.fromAsset('src'),
+      handler: 'rss_email.retrieve_and_send_email.lambda_handler',
+      runtime: lambda.Runtime.PYTHON_3_13,
+      environment: {
+        ANTHROPIC_API_KEY_PARAMETER: ANTHROPIC_API_KEY_PARAMETER,
+        SOURCE_EMAIL_ADDRESS: SOURCE_EMAIL_ADDRESS,
+        TO_EMAIL_ADDRESS: TO_EMAIL_ADDRESS,
+        LAST_RUN_PARAMETER: LAST_RUN_PARAMETER,
+      },
+      role: role,
+      layers: [layer],
+      timeout: cdk.Duration.seconds(300)
+    });
+
+    // Podcast Batch Processing Functions
+    const submitPodcastBatchFunction = new lambda.Function(this, 'SubmitPodcastBatchFunction', {
+      code: lambda.Code.fromAsset('src'),
+      handler: 'rss_email.submit_podcast_batch.lambda_handler',
+      runtime: lambda.Runtime.PYTHON_3_13,
+      environment: {
+        RSS_BUCKET: bucket.bucketName,
+        RSS_KEY: KEY,
+        PODCAST_LAST_RUN_PARAMETER: PODCAST_LAST_RUN_PARAMETER,
+        ANTHROPIC_API_KEY_PARAMETER: ANTHROPIC_API_KEY_PARAMETER,
+        CLAUDE_MODEL: 'claude-haiku-4-5-20251001',
+      },
+      role: role,
+      layers: [layer],
+      timeout: cdk.Duration.seconds(120)
+    });
+
+    const checkPodcastBatchStatusFunction = new lambda.Function(this, 'CheckPodcastBatchStatusFunction', {
+      code: lambda.Code.fromAsset('src'),
+      handler: 'rss_email.check_podcast_batch_status.lambda_handler',
+      runtime: lambda.Runtime.PYTHON_3_13,
+      environment: {
+        ANTHROPIC_API_KEY_PARAMETER: ANTHROPIC_API_KEY_PARAMETER,
+      },
+      role: role,
+      layers: [layer],
+      timeout: cdk.Duration.seconds(30)
+    });
+
+    const retrieveAndGeneratePodcastFunction = new lambda.Function(this, 'RetrieveAndGeneratePodcastFunction', {
+      code: lambda.Code.fromAsset('src'),
+      handler: 'rss_email.retrieve_and_generate_podcast.lambda_handler',
+      runtime: lambda.Runtime.PYTHON_3_13,
+      environment: {
+        ANTHROPIC_API_KEY_PARAMETER: ANTHROPIC_API_KEY_PARAMETER,
+        BUCKET: bucket.bucketName,
+        PODCAST_CLOUDFRONT_DISTRIBUTION_ID: podcastDistribution.distributionId,
+        PODCAST_CLOUDFRONT_DOMAIN_PARAMETER: PODCAST_CLOUDFRONT_DOMAIN_PARAMETER,
+        PODCAST_LAST_RUN_PARAMETER: PODCAST_LAST_RUN_PARAMETER,
+      },
+      role: role,
+      layers: [layer],
+      timeout: cdk.Duration.seconds(300)
+    });
+
+    // ===== Step Functions State Machine =====
+
+    // Email Branch Tasks
+    const submitEmailBatchTask = new tasks.LambdaInvoke(this, 'Submit Email Batch', {
+      lambdaFunction: submitEmailBatchFunction,
+      outputPath: '$.Payload',
+      resultPath: '$.emailBatch',
+    });
+
+    const checkEmailStatusTask = new tasks.LambdaInvoke(this, 'Check Email Status', {
+      lambdaFunction: checkEmailBatchStatusFunction,
+      inputPath: '$.emailBatch',
+      outputPath: '$.Payload',
+      resultPath: '$.emailBatch',
+    });
+
+    const waitEmailState = new sfn.Wait(this, 'Wait Email 60s', {
+      time: sfn.WaitTime.duration(cdk.Duration.seconds(60)),
+    });
+
+    const retrieveAndSendEmailTask = new tasks.LambdaInvoke(this, 'Retrieve and Send Email', {
+      lambdaFunction: retrieveAndSendEmailFunction,
+      inputPath: '$.emailBatch',
+      outputPath: '$.Payload',
+    });
+
+    const emailChoice = new sfn.Choice(this, 'Is Email Batch Complete?')
+      .when(
+        sfn.Condition.stringEquals('$.emailBatch.processing_status', 'ended'),
+        retrieveAndSendEmailTask
+      )
+      .otherwise(waitEmailState.next(checkEmailStatusTask));
+
+    const emailBranch = submitEmailBatchTask
+      .next(checkEmailStatusTask)
+      .next(emailChoice);
+
+    // Podcast Branch Tasks
+    const submitPodcastBatchTask = new tasks.LambdaInvoke(this, 'Submit Podcast Batch', {
+      lambdaFunction: submitPodcastBatchFunction,
+      outputPath: '$.Payload',
+      resultPath: '$.podcastBatch',
+    });
+
+    const checkPodcastStatusTask = new tasks.LambdaInvoke(this, 'Check Podcast Status', {
+      lambdaFunction: checkPodcastBatchStatusFunction,
+      inputPath: '$.podcastBatch',
+      outputPath: '$.Payload',
+      resultPath: '$.podcastBatch',
+    });
+
+    const waitPodcastState = new sfn.Wait(this, 'Wait Podcast 60s', {
+      time: sfn.WaitTime.duration(cdk.Duration.seconds(60)),
+    });
+
+    const retrieveAndGeneratePodcastTask = new tasks.LambdaInvoke(this, 'Retrieve and Generate Podcast', {
+      lambdaFunction: retrieveAndGeneratePodcastFunction,
+      inputPath: '$.podcastBatch',
+      outputPath: '$.Payload',
+    });
+
+    const podcastChoice = new sfn.Choice(this, 'Is Podcast Batch Complete?')
+      .when(
+        sfn.Condition.stringEquals('$.podcastBatch.processing_status', 'ended'),
+        retrieveAndGeneratePodcastTask
+      )
+      .otherwise(waitPodcastState.next(checkPodcastStatusTask));
+
+    const podcastBranch = submitPodcastBatchTask
+      .next(checkPodcastStatusTask)
+      .next(podcastChoice);
+
+    // Parallel Processing
+    const parallelState = new sfn.Parallel(this, 'Process Email and Podcast', {
+      resultPath: '$.results',
+    })
+      .branch(emailBranch)
+      .branch(podcastBranch);
+
+    // Success State
+    const successState = new sfn.Succeed(this, 'Workflow Complete');
+
+    // Define complete workflow
+    const definition = parallelState.next(successState);
+
+    // Create State Machine
+    const stateMachine = new sfn.StateMachine(this, 'DailyRSSNewsletterWorkflow', {
+      definitionBody: sfn.DefinitionBody.fromChainable(definition),
+      timeout: cdk.Duration.hours(25), // 24 hours max + 1 hour buffer
+      comment: 'Orchestrates daily RSS newsletter: process email & podcast in parallel using Message Batches API',
+    });
+
+    // Grant Step Functions permission to invoke Lambda functions
+    submitEmailBatchFunction.grantInvoke(stateMachine);
+    checkEmailBatchStatusFunction.grantInvoke(stateMachine);
+    retrieveAndSendEmailFunction.grantInvoke(stateMachine);
+    submitPodcastBatchFunction.grantInvoke(stateMachine);
+    checkPodcastBatchStatusFunction.grantInvoke(stateMachine);
+    retrieveAndGeneratePodcastFunction.grantInvoke(stateMachine);
+
+    // Update EventBridge rule to trigger Step Function instead of Lambda
+    // Replace the emailerEventRule to trigger the state machine
+    const dailyNewsletterRule = new events.Rule(this, 'dailyNewsletterRule', {
+      schedule: events.Schedule.cron({ minute: '30', hour: '7', weekDay: '2-6' }),
+      description: 'Trigger daily RSS newsletter workflow with Message Batches API',
+    });
+
+    dailyNewsletterRule.addTarget(
+      new targets.SfnStateMachine(stateMachine, {
+        input: events.RuleTargetInput.fromObject({
+          trigger: 'scheduled',
+          timestamp: events.EventField.time,
+        }),
+      })
+    );
 
     // Add Polly permissions to the role
     role.addToPolicy(new iam.PolicyStatement({
@@ -455,6 +668,79 @@ export class RSSEmailStack extends cdk.Stack {
 
     const podcastLogSubscription = new logs.SubscriptionFilter(this, 'PodcastLogSubscription', {
       logGroup: podcastLogGroup,
+      destination: new destinations.LambdaDestination(logForwarderFunction),
+      filterPattern: logs.FilterPattern.anyTerm('ERROR', 'WARNING', 'Error', 'Warning', 'error', 'warning'),
+    });
+
+    // Log groups for batch processing Lambda functions
+    const submitEmailBatchLogGroup = new logs.LogGroup(this, 'submitEmailBatchLogGroup', {
+      logGroupName: `/aws/lambda/${submitEmailBatchFunction.functionName}`,
+      retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy: cdk.RemovalPolicy.DESTROY
+    });
+
+    new logs.SubscriptionFilter(this, 'SubmitEmailBatchLogSubscription', {
+      logGroup: submitEmailBatchLogGroup,
+      destination: new destinations.LambdaDestination(logForwarderFunction),
+      filterPattern: logs.FilterPattern.anyTerm('ERROR', 'WARNING', 'Error', 'Warning', 'error', 'warning'),
+    });
+
+    const checkEmailBatchStatusLogGroup = new logs.LogGroup(this, 'checkEmailBatchStatusLogGroup', {
+      logGroupName: `/aws/lambda/${checkEmailBatchStatusFunction.functionName}`,
+      retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy: cdk.RemovalPolicy.DESTROY
+    });
+
+    new logs.SubscriptionFilter(this, 'CheckEmailBatchStatusLogSubscription', {
+      logGroup: checkEmailBatchStatusLogGroup,
+      destination: new destinations.LambdaDestination(logForwarderFunction),
+      filterPattern: logs.FilterPattern.anyTerm('ERROR', 'WARNING', 'Error', 'Warning', 'error', 'warning'),
+    });
+
+    const retrieveAndSendEmailLogGroup = new logs.LogGroup(this, 'retrieveAndSendEmailLogGroup', {
+      logGroupName: `/aws/lambda/${retrieveAndSendEmailFunction.functionName}`,
+      retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy: cdk.RemovalPolicy.DESTROY
+    });
+
+    new logs.SubscriptionFilter(this, 'RetrieveAndSendEmailLogSubscription', {
+      logGroup: retrieveAndSendEmailLogGroup,
+      destination: new destinations.LambdaDestination(logForwarderFunction),
+      filterPattern: logs.FilterPattern.anyTerm('ERROR', 'WARNING', 'Error', 'Warning', 'error', 'warning'),
+    });
+
+    const submitPodcastBatchLogGroup = new logs.LogGroup(this, 'submitPodcastBatchLogGroup', {
+      logGroupName: `/aws/lambda/${submitPodcastBatchFunction.functionName}`,
+      retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy: cdk.RemovalPolicy.DESTROY
+    });
+
+    new logs.SubscriptionFilter(this, 'SubmitPodcastBatchLogSubscription', {
+      logGroup: submitPodcastBatchLogGroup,
+      destination: new destinations.LambdaDestination(logForwarderFunction),
+      filterPattern: logs.FilterPattern.anyTerm('ERROR', 'WARNING', 'Error', 'Warning', 'error', 'warning'),
+    });
+
+    const checkPodcastBatchStatusLogGroup = new logs.LogGroup(this, 'checkPodcastBatchStatusLogGroup', {
+      logGroupName: `/aws/lambda/${checkPodcastBatchStatusFunction.functionName}`,
+      retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy: cdk.RemovalPolicy.DESTROY
+    });
+
+    new logs.SubscriptionFilter(this, 'CheckPodcastBatchStatusLogSubscription', {
+      logGroup: checkPodcastBatchStatusLogGroup,
+      destination: new destinations.LambdaDestination(logForwarderFunction),
+      filterPattern: logs.FilterPattern.anyTerm('ERROR', 'WARNING', 'Error', 'Warning', 'error', 'warning'),
+    });
+
+    const retrieveAndGeneratePodcastLogGroup = new logs.LogGroup(this, 'retrieveAndGeneratePodcastLogGroup', {
+      logGroupName: `/aws/lambda/${retrieveAndGeneratePodcastFunction.functionName}`,
+      retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy: cdk.RemovalPolicy.DESTROY
+    });
+
+    new logs.SubscriptionFilter(this, 'RetrieveAndGeneratePodcastLogSubscription', {
+      logGroup: retrieveAndGeneratePodcastLogGroup,
       destination: new destinations.LambdaDestination(logForwarderFunction),
       filterPattern: logs.FilterPattern.anyTerm('ERROR', 'WARNING', 'Error', 'Warning', 'error', 'warning'),
     });

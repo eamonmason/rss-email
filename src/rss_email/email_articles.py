@@ -481,6 +481,56 @@ def is_valid_email(event_dict: Dict[str, Any], valid_emails: List[str]) -> bool:
 
 
 @pydantic.validate_call
+def send_via_ses(
+    to_address: str,
+    from_address: str,
+    subject: str,
+    html_body: str,
+) -> None:
+    """
+    Send an email via AWS SES.
+
+    Args:
+        to_address: Recipient email address
+        from_address: Sender email address
+        subject: Email subject line
+        html_body: HTML body content
+    """
+    client = boto3.client("ses")
+
+    try:
+        response = client.send_email(
+            Destination={"ToAddresses": [to_address]},
+            Message={
+                "Body": {
+                    "Html": {"Charset": CHARSET, "Data": html_body},
+                    "Text": {"Charset": CHARSET, "Data": html_body},
+                },
+                "Subject": {"Charset": CHARSET, "Data": subject},
+            },
+            Source=from_address,
+        )
+        logger.debug("Email sent! Message ID: %s", response["MessageId"])
+    except ClientError as e:
+        logger.warning("Failed to send email via SES: %s", e.response)
+        raise
+
+
+def create_html(categories: Dict[str, List[Dict[str, Any]]]) -> str:
+    """
+    Create HTML email from categorized articles.
+
+    Args:
+        categories: Dictionary of category names to lists of articles
+
+    Returns:
+        HTML string for email body
+    """
+    # Reuse the existing HTML generation function
+    # Convert categories dict to the format expected by generate_enhanced_html_content
+    return generate_enhanced_html_content(categories)
+
+
 def send_email(event: Dict[str, Any], context: Optional[Any] = None) -> None:  # pylint: disable=W0613
     """Send the email."""
     logger.debug("Event body: %s", event)
@@ -496,41 +546,8 @@ def send_email(event: Dict[str, Any], context: Optional[Any] = None) -> None:  #
 
     body = generate_html(run_date, bucket, key)
 
-    # Create a new SES resource
-    client = boto3.client("ses")
-
-    # Try to send the email.
-    try:
-        # Provide the contents of the email.
-        response = client.send_email(
-            Destination={
-                "ToAddresses": [
-                    to_email_address,
-                ],
-            },
-            Message={
-                "Body": {
-                    "Html": {
-                        "Charset": CHARSET,
-                        "Data": body,
-                    },
-                    "Text": {
-                        "Charset": CHARSET,
-                        "Data": body,
-                    },
-                },
-                "Subject": {
-                    "Charset": CHARSET,
-                    "Data": EMAIL_SUBJECT,
-                },
-            },
-            Source=source_email_address,
-        )
-    except ClientError as e:
-        logger.warning("got an error: %s", e.response)
-    else:
-        logger.debug("Email sent! Message ID: %s", response["MessageId"])
-        set_last_run(parameter_name)
+    send_via_ses(to_email_address, source_email_address, EMAIL_SUBJECT, body)
+    set_last_run(parameter_name)
 
 
 @pydantic.validate_call(validate_return=True)

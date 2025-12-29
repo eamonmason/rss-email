@@ -267,6 +267,25 @@ def chunk_ssml_text(ssml_text: str, speaker: str, max_chars: int = POLLY_NEURAL_
     return chunks
 
 
+def create_podcast_script_prompt(articles: List[Dict[str, Any]]) -> str:
+    """
+    Create the full prompt for podcast script generation.
+
+    Args:
+        articles: List of article dictionaries with title and description
+
+    Returns:
+        Complete prompt string for Claude API
+    """
+    articles_text = ""
+    for article in articles:
+        articles_text += f"Title: {article.get('title')}\n"
+        articles_text += f"Description: {article.get('description')}\n"
+        articles_text += "---\n"
+
+    return PODCAST_PROMPT + "\n" + articles_text
+
+
 @pydantic.validate_call(validate_return=True)
 def generate_script(articles: List[Dict[str, Any]]) -> Optional[str]:
     """Generate a podcast script using Claude."""
@@ -293,18 +312,14 @@ def generate_script(articles: List[Dict[str, Any]]) -> Optional[str]:
 
     client = anthropic.Anthropic(api_key=api_key)
 
-    articles_text = ""
-    for article in articles:
-        articles_text += f"Title: {article.get('title')}\n"
-        articles_text += f"Description: {article.get('description')}\n"
-        articles_text += "---\n"
+    prompt = create_podcast_script_prompt(articles)
 
     try:
         message = client.messages.create(
             model=os.environ.get("CLAUDE_MODEL", "claude-haiku-4-5-20251001"),
             max_tokens=int(os.environ.get("CLAUDE_MAX_TOKENS", "4000")),
             messages=[
-                {"role": "user", "content": PODCAST_PROMPT + "\n" + articles_text}
+                {"role": "user", "content": prompt}
             ]
         )
         return message.content[0].text
