@@ -1,11 +1,11 @@
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as events from 'aws-cdk-lib/aws-events';
-import { SnsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as sns from 'aws-cdk-lib/aws-sns';
+import * as sns_subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as ses from 'aws-cdk-lib/aws-ses';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as destinations from 'aws-cdk-lib/aws-logs-destinations';
@@ -227,37 +227,8 @@ export class RSSEmailStack extends cdk.Stack {
     });
     generationEventRule.addTarget(new targets.LambdaFunction(RSSGenerationFunction))
 
-    const RSSEMailerFunction = new lambda.Function(this, 'RSSEmailerFunction', {
-      code: lambda.Code.fromAsset('src'), // directory of your lambda function code
-      handler: 'rss_email.email_articles.send_email', // filename.methodname
-      runtime: lambda.Runtime.PYTHON_3_13,
-      environment: {
-        BUCKET: bucket.bucketName,
-        KEY: KEY,
-        SOURCE_EMAIL_ADDRESS: SOURCE_EMAIL_ADDRESS,
-        TO_EMAIL_ADDRESS: TO_EMAIL_ADDRESS,
-        LAST_RUN_PARAMETER: LAST_RUN_PARAMETER,
-        ANTHROPIC_API_KEY_PARAMETER: ANTHROPIC_API_KEY_PARAMETER,
-        CLAUDE_MODEL: 'claude-haiku-4-5-20251001',
-        CLAUDE_MAX_TOKENS: '100000',
-        CLAUDE_MAX_REQUESTS: '5',
-        CLAUDE_BATCH_SIZE: '25',
-        CLAUDE_ENABLED: 'true',
-        CLAUDE_API_TIMEOUT: '120',  // 2 minutes (120 seconds) timeout for Anthropic API calls
-      },
-      role: role,
-      layers: [layer],
-      timeout: cdk.Duration.seconds(300)  // Increased from 30s to accommodate Claude API calls
-    });
-
-    // NOTE: Old direct Lambda trigger - replaced by Step Functions workflow below
-    // const emailerEventRule = new events.Rule(this, 'emailerEventRule', {
-    //   schedule: events.Schedule.cron({ minute: '30', hour: '7', weekDay: '2-6' }),
-    // });
-    // emailerEventRule.addTarget(new targets.LambdaFunction(RSSEMailerFunction))
-
-    // Keep SNS event source for manual email forwarding
-    RSSEMailerFunction.addEventSource(new SnsEventSource(receive_topic));
+    // Old RSSEmailerFunction removed - replaced by Step Functions workflow
+    // Manual email triggering now handled by SNS -> EventBridge -> Step Functions (configured below)
 
     // Create CloudFront distribution first (moved up from line 418)
     // Create CloudFront Origin Access Control for podcast bucket access
@@ -278,30 +249,8 @@ export class RSSEmailStack extends cdk.Stack {
       comment: 'RSS Email Podcast Distribution - serves all files under /podcasts/ prefix',
     });
 
-    const RSSPodcastFunction = new lambda.Function(this, 'RSSPodcastFunction', {
-      code: lambda.Code.fromAsset('src'),
-      handler: 'rss_email.podcast_generator.generate_podcast',
-      runtime: lambda.Runtime.PYTHON_3_13,
-      environment: {
-        BUCKET: bucket.bucketName,
-        KEY: KEY,
-        PODCAST_LAST_RUN_PARAMETER: PODCAST_LAST_RUN_PARAMETER,
-        PODCAST_CLOUDFRONT_DOMAIN_PARAMETER: PODCAST_CLOUDFRONT_DOMAIN_PARAMETER,
-        PODCAST_CLOUDFRONT_DISTRIBUTION_ID: podcastDistribution.distributionId,
-        ANTHROPIC_API_KEY_PARAMETER: ANTHROPIC_API_KEY_PARAMETER,
-        CLAUDE_MODEL: 'claude-haiku-4-5-20251001',
-        CLAUDE_MAX_TOKENS: '4000',
-      },
-      role: role,
-      layers: [layer],
-      timeout: cdk.Duration.minutes(10) // Longer timeout for TTS and generation
-    });
-
-    // Schedule podcast generation to run after email is sent (8:00 AM weekdays)
-    const podcastEventRule = new events.Rule(this, 'podcastEventRule', {
-      schedule: events.Schedule.cron({ minute: '0', hour: '8', weekDay: '2-6' }),
-    });
-    podcastEventRule.addTarget(new targets.LambdaFunction(RSSPodcastFunction));
+    // Old RSSPodcastFunction removed - replaced by Step Functions workflow
+    // with SubmitPodcastBatch, CheckPodcastBatchStatus, and RetrieveAndGeneratePodcast
 
     // ===== Message Batches API Lambda Functions =====
 
@@ -532,6 +481,46 @@ export class RSSEmailStack extends cdk.Stack {
       })
     );
 
+    // Manual trigger via email: SNS topic -> Lambda trigger -> Step Functions
+    // When someone sends an email to the configured address, SES publishes to receive_topic
+    // A small Lambda function listens to the topic and starts the Step Functions workflow
+    const manualTriggerFunction = new lambda.Function(this, 'ManualTriggerFunction', {
+      code: lambda.Code.fromInline(`
+import boto3
+import json
+import os
+
+def lambda_handler(event, context):
+    """Trigger Step Functions workflow when email is received."""
+    sfn = boto3.client('stepfunctions')
+    state_machine_arn = os.environ['STATE_MACHINE_ARN']
+
+    # Start execution
+    response = sfn.start_execution(
+        stateMachineArn=state_machine_arn,
+        input=json.dumps({
+            'trigger': 'manual',
+            'timestamp': event['Records'][0]['Sns']['Timestamp']
+        })
+    )
+
+    print(f"Started execution: {response['executionArn']}")
+    return {'statusCode': 200}
+      `),
+      handler: 'index.lambda_handler',
+      runtime: lambda.Runtime.PYTHON_3_13,
+      timeout: cdk.Duration.seconds(30),
+      environment: {
+        STATE_MACHINE_ARN: stateMachine.stateMachineArn
+      }
+    });
+
+    // Grant permission to start Step Functions execution
+    stateMachine.grantStartExecution(manualTriggerFunction);
+
+    // Subscribe Lambda to SNS topic
+    receive_topic.addSubscription(new sns_subscriptions.LambdaSubscription(manualTriggerFunction));
+
     // Add Polly permissions to the role
     role.addToPolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
@@ -588,35 +577,8 @@ export class RSSEmailStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY
     });
 
-    const rssEmailLogGroup = new logs.LogGroup(this, 'rssEmailLogGroup', {
-      logGroupName: `/aws/lambda/${RSSEMailerFunction.functionName}`,
-      retention: logs.RetentionDays.ONE_MONTH,
-      removalPolicy: cdk.RemovalPolicy.DESTROY
-    });
-
-    // Add CloudWatch metric filter to extract ERROR and WARNING logs
-    const emailerErrorMetricFilter = new logs.MetricFilter(this, 'EmailErrorMetricFilter', {
-      logGroup: rssEmailLogGroup,
-      filterPattern: logs.FilterPattern.anyTerm('ERROR', 'WARNING', 'Error', 'Warning', 'error', 'warning'),
-      metricNamespace: 'RSS/EmailLambda',
-      metricName: 'ErrorWarningCount',
-      defaultValue: 0,
-      metricValue: '1',
-    });
-
-    // Create an alarm based on the metric that triggers when there's at least one ERROR or WARNING message
-    const errorAlarm = new cdk.aws_cloudwatch.Alarm(this, 'EmailLambdaErrorAlarm', {
-      metric: emailerErrorMetricFilter.metric(),
-      threshold: 1,
-      evaluationPeriods: 1,
-      comparisonOperator: cdk.aws_cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-      treatMissingData: cdk.aws_cloudwatch.TreatMissingData.NOT_BREACHING,
-      alarmDescription: 'Alarm for ERROR or WARNING log messages in RSS Email Lambda',
-      actionsEnabled: true,
-    });
-
-    // Add the SNS topic as an action for the alarm
-    errorAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(error_alerts_topic));
+    // Old rssEmailLogGroup, emailerErrorMetricFilter, and errorAlarm removed
+    // RSSEmailerFunction replaced by Step Functions workflow
 
     // Apply the same for the RSS generation function
     const rssGenerationErrorMetricFilter = new logs.MetricFilter(this, 'GenerationErrorMetricFilter', {
@@ -669,11 +631,7 @@ export class RSSEmailStack extends cdk.Stack {
 
     // Create log subscription filters to send the actual log messages to the SNS topic via Lambda
     // This ensures the actual log message content is included in the notification
-    const emailerLogSubscription = new logs.SubscriptionFilter(this, 'EmailerLogSubscription', {
-      logGroup: rssEmailLogGroup,
-      destination: new destinations.LambdaDestination(logForwarderFunction),
-      filterPattern: logs.FilterPattern.anyTerm('ERROR', 'WARNING', 'Error', 'Warning', 'error', 'warning'),
-    });
+    // Old emailerLogSubscription removed - RSSEmailerFunction replaced by Step Functions workflow
 
     const generationLogSubscription = new logs.SubscriptionFilter(this, 'GenerationLogSubscription', {
       logGroup: rssGenerationLogGroup,
@@ -681,17 +639,7 @@ export class RSSEmailStack extends cdk.Stack {
       filterPattern: logs.FilterPattern.anyTerm('ERROR', 'WARNING', 'Error', 'Warning', 'error', 'warning'),
     });
 
-    const podcastLogGroup = new logs.LogGroup(this, 'podcastLogGroup', {
-      logGroupName: `/aws/lambda/${RSSPodcastFunction.functionName}`,
-      retention: logs.RetentionDays.ONE_MONTH,
-      removalPolicy: cdk.RemovalPolicy.DESTROY
-    });
-
-    const podcastLogSubscription = new logs.SubscriptionFilter(this, 'PodcastLogSubscription', {
-      logGroup: podcastLogGroup,
-      destination: new destinations.LambdaDestination(logForwarderFunction),
-      filterPattern: logs.FilterPattern.anyTerm('ERROR', 'WARNING', 'Error', 'Warning', 'error', 'warning'),
-    });
+    // Old podcastLogGroup removed - replaced by batch processing log groups below
 
     // Log groups for batch processing Lambda functions
     const submitEmailBatchLogGroup = new logs.LogGroup(this, 'submitEmailBatchLogGroup', {

@@ -19,7 +19,8 @@ try:
 except ImportError:
     anthropic = None
 
-from .email_articles import get_feed_file, filter_items, get_last_run, set_last_run
+# Imports removed: get_feed_file, filter_items, get_last_run, set_last_run
+# These are now used in the Message Batches workflow functions instead
 
 # Constants
 PODCAST_PROMPT = """
@@ -349,7 +350,7 @@ def synthesize_speech(script: str) -> Optional[bytes]:
     """
     Convert script to speech using AWS Polly with two-host voice switching.
 
-    Parses script to identify Marco and John segments, chunks text to stay
+    Parses script to identify Marco and Joanna segments, chunks text to stay
     under Polly's 3000 character limit, and synthesizes each chunk with the
     appropriate voice.
 
@@ -613,111 +614,10 @@ def update_podcast_feed(
         return False
 
 
-@pydantic.validate_call
-def generate_podcast(_event: Dict[str, Any], _context: Optional[Any] = None) -> None:
-    """
-    Lambda handler for podcast generation.
-
-    Args:
-        _event: Lambda event data (unused)
-        _context: Lambda context (unused)
-    """
-    logger.info("Starting podcast generation")
-
-    bucket = os.environ["BUCKET"]
-    rss_key = os.environ["KEY"]
-    podcast_prefix = "podcasts/episodes/"
-    last_run_param = os.environ.get(
-        "PODCAST_LAST_RUN_PARAMETER",
-        "rss-podcast-lastrun"
-    )
-    cloudfront_domain_param = os.environ.get(
-        "PODCAST_CLOUDFRONT_DOMAIN_PARAMETER",
-        "rss-podcast-cloudfront-domain"
-    )
-    distribution_id = os.environ.get("PODCAST_CLOUDFRONT_DISTRIBUTION_ID")
-
-    # Get CloudFront domain for public URLs
-    cloudfront_domain = get_cloudfront_domain(cloudfront_domain_param)
-    if not cloudfront_domain:
-        logger.warning(
-            "CloudFront domain not found in parameter store, using S3 URLs as fallback"
-        )
-
-    if not distribution_id:
-        logger.warning(
-            "CloudFront distribution ID not found, cache invalidation will be skipped"
-        )
-
-    # 1. Get Articles
-    run_date = get_last_run(last_run_param)
-    rss_file = get_feed_file(bucket, rss_key)
-    filtered_items = filter_items(rss_file, run_date)
-
-    if not filtered_items:
-        logger.info("No new articles to process.")
-        return
-
-    logger.info("Found %d new articles.", len(filtered_items))
-
-    # 2. Generate Script
-    script = generate_script(filtered_items)
-    if not script:
-        logger.error("Failed to generate script.")
-        return
-
-    logger.info("Script generated successfully (length: %d chars)", len(script))
-
-    # 3. Synthesize Audio with voice switching and chunking
-    audio_data = synthesize_speech(script)
-    if not audio_data:
-        logger.error("Failed to synthesize audio.")
-        return
-
-    logger.info("Audio synthesized successfully (%d bytes)", len(audio_data))
-
-    # 4. Upload Audio
-    filename = f"podcast_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3"
-    s3_key = f"{podcast_prefix}{filename}"
-    if not upload_to_s3(bucket, s3_key, audio_data, "audio/mpeg"):
-        logger.error("Failed to upload podcast.")
-        return
-
-    logger.info("Podcast uploaded to s3://%s/%s", bucket, s3_key)
-
-    # 5. Update Feed
-    # Use CloudFront domain if available, otherwise fall back to S3
-    if cloudfront_domain:
-        audio_url = f"https://{cloudfront_domain}/{s3_key}"
-        logger.info("Using CloudFront URL: %s", audio_url)
-    else:
-        audio_url = f"https://{bucket}.s3.amazonaws.com/{s3_key}"
-        logger.info("Using S3 URL: %s", audio_url)
-
-    episode_title = f"Daily Tech News - {datetime.now().strftime('%Y-%m-%d')}"
-    episode_description = (
-        f"Tech news roundup for {datetime.now().strftime('%B %d, %Y')} "
-        f"covering {len(filtered_items)} stories"
-    )
-
-    if not update_podcast_feed(
-        bucket,
-        audio_url,
-        episode_title,
-        episode_description,
-        datetime.now().isoformat(),
-        audio_size=len(audio_data),
-        cloudfront_domain=cloudfront_domain,
-        distribution_id=distribution_id
-    ):
-        logger.error("Failed to update podcast feed.")
-        return
-
-    logger.info("Podcast feed updated successfully")
-
-    # 6. Update Last Run
-    set_last_run(last_run_param)
-    logger.info("Podcast generation completed successfully")
+# Old generate_podcast Lambda handler removed - replaced by Message Batches workflow:
+# - submit_podcast_batch.py: Submit batch to Anthropic API
+# - check_podcast_batch_status.py: Poll for batch completion
+# - retrieve_and_generate_podcast.py: Generate audio and update feed
 
 
 if __name__ == "__main__":

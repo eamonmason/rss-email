@@ -86,52 +86,64 @@ uv run python src/cli_article_processor.py
 ## Architecture
 
 ### Core Components
-- **retrieve_articles.py**: Key orchestrating Lambda function that fetches RSS feeds and stores aggregated data in S3
-- **email_articles.py**: Key orchestrating Lambda function that processes stored articles and sends formatted emails via SES
-- **podcast_generator.py**: Lambda function that generates audio podcast versions of the daily news
+- **retrieve_articles.py**: Lambda function that fetches RSS feeds and stores aggregated data in S3
+- **email_articles.py**: Lambda function that processes stored articles and sends formatted emails via SES (triggered by Step Functions)
+- **podcast_generator.py**: Audio podcast generation utilities using Claude AI and AWS Polly (used by Step Functions workflow)
 - **article_processor.py**: Claude AI integration for intelligent article categorization and summarization
-- **lib/rss_lambda_stack.ts**: Main CDK infrastructure stack defining all AWS resources
+- **lib/rss_lambda_stack.ts**: Main CDK infrastructure stack defining all AWS resources including Step Functions workflow
 - **cli_article_processor.py**: CLI tool for testing article processing with Claude API locally
 - **compression_utils.py**: Utilities for compressing/decompressing article data for S3 storage
 - **json_repair.py**: JSON repair utilities for handling malformed API responses
 
 ### Data Flow
-1. **retrieve_articles.py** orchestrates RSS feed processing: fetches articles from feeds configured in `feed_urls.json`, creates aggregated file of recent articles, and stores in S3
-2. **email_articles.py** orchestrates email delivery: retrieves aggregated articles from S3, processes them through Claude API for categorization (Technology, AI/ML, Cybersecurity, etc.), formats into HTML email, and sends via SES
-3. **podcast_generator.py** (optional) creates audio podcast: generates conversational script using Claude, synthesizes speech with two distinct voices using AWS Polly, and publishes to podcast RSS feed
-4. Error handling and logging via SNS and CloudWatch with automated alerts
+
+**Every 3 hours:**
+1. **RSSGenerationFunction** fetches articles from configured RSS feeds and stores aggregated data in S3
+
+**Daily at 7:30 AM (weekdays):**
+1. **Step Functions workflow** orchestrates the daily newsletter process:
+   - **Step 1**: Retrieve articles from S3
+   - **Step 2 (Parallel)**: Process email and podcast simultaneously using Message Batches API
+     - **Email Branch**: Submit batch → Poll for completion → Generate and send email
+     - **Podcast Branch**: Submit batch → Poll for completion → Generate audio and update podcast feed
+2. **Message Batches API** provides 50% cost savings through asynchronous batch processing
+3. Error handling and logging via SNS and CloudWatch with automated alerts
 
 ### AWS Services Used
-- **Lambda**: Serverless execution
+- **Step Functions**: Orchestrates daily newsletter workflow with parallel email and podcast processing
+- **Lambda**: Serverless execution for individual workflow steps
 - **S3**: Storage for RSS data, configuration, and podcast audio files
 - **SES**: Email sending and receiving
 - **SNS**: Error notifications
 - **CloudWatch**: Logging and monitoring
-- **EventBridge**: Scheduled triggers for Lambda functions
+- **EventBridge**: Scheduled triggers for workflows
 - **Polly**: Text-to-speech for podcast generation
 - **Parameter Store**: Environment configuration
+- **CloudFront**: Content delivery for podcast RSS feed
 
 ### Scheduling
 
 The system runs on the following schedule (all times in UTC):
 
-- **RSS Retrieval**: Every 3 hours (`0 */3 * * *`) - Fetches latest articles from configured RSS feeds
-- **Email Delivery**: 7:30 AM, Monday-Friday (`30 7 * * 2-6`) - Sends daily digest email
-- **Podcast Generation**: 8:00 AM, Monday-Friday (`0 8 * * 2-6`) - Creates audio podcast (runs 30 minutes after email)
+- **RSS Retrieval**: Every 3 hours (`0 */3 * * *`) - Fetches latest articles from configured RSS feeds and stores in S3
+- **Daily Newsletter Workflow**: 7:30 AM, Monday-Friday (`30 7 * * 2-6`) - Triggers Step Functions workflow that:
+  - Retrieves aggregated articles from S3
+  - Processes email and podcast in parallel using Message Batches API
+  - Sends email and publishes podcast episode
 
 **Manual Triggering:**
 
-You can manually trigger any Lambda function using the AWS CLI:
+You can manually trigger workflows using the AWS CLI:
 
 ```bash
 # Trigger RSS retrieval
 aws lambda invoke --function-name <RSSGenerationFunction-name> output.json
 
-# Trigger email sending
-aws lambda invoke --function-name <RSSEmailerFunction-name> output.json
-
-# Trigger podcast generation
-aws lambda invoke --function-name <RSSPodcastFunction-name> output.json
+# Trigger the daily newsletter workflow (Step Functions)
+aws stepfunctions start-execution \
+  --state-machine-arn <DailyRSSNewsletterWorkflow-arn> \
+  --input '{"trigger":"manual"}' \
+  output.json
 ```
 
 ## Configuration
@@ -281,7 +293,7 @@ The RSS Email system includes an optional podcast generation feature that create
 
 #### Two-Host Conversational Format
 
-- Podcast features two distinct AI hosts: **Marco** (enthusiastic, detail-oriented) and **John** (analytical, asks clarifying questions)
+- Podcast features two distinct AI hosts: **Marco** (enthusiastic, detail-oriented) and **Joanna** (analytical, asks clarifying questions)
 - Natural dialogue format makes technical news more engaging and accessible
 - Hosts discuss stories, provide context, and offer insights
 
@@ -296,7 +308,7 @@ The RSS Email system includes an optional podcast generation feature that create
 
 - AWS Polly Neural voices provide natural-sounding speech
 - Marco uses "Matthew" voice (US English, conversational)
-- John uses "Joey" voice (US English, analytical)
+- Joanna uses "Joanna" voice (US English, analytical)
 - Automatic text chunking handles scripts of any length (bypasses Polly's 3000-char limit)
 
 #### Podcast RSS Feed
@@ -308,33 +320,41 @@ The RSS Email system includes an optional podcast generation feature that create
 
 ### Architecture
 
+The podcast generation is integrated into the Step Functions workflow:
+
 ```
-┌─────────────────┐
-│  Retrieve RSS   │
-│    Articles     │
-└────────┬────────┘
-         │
-         ├──────────────┐
-         │              │
-         v              v
-┌─────────────────┐  ┌─────────────────┐
-│  Email          │  │  Podcast        │
-│  Generator      │  │  Generator      │
-└─────────────────┘  └────────┬────────┘
-                              │
-                     ┌────────┴────────┐
-                     │                 │
-                     v                 v
-              ┌─────────────┐   ┌──────────────┐
-              │   Claude    │   │  AWS Polly   │
-              │   Script    │   │  Synthesis   │
-              └─────────────┘   └──────┬───────┘
-                                       │
-                                       v
-                                ┌──────────────┐
-                                │  S3 Storage  │
-                                │  + RSS Feed  │
-                                └──────────────┘
+EventBridge (7:30 AM weekdays)
+  ↓
+┌─────────────────────────────────────────────────┐
+│ Step Functions: DailyRSSNewsletterWorkflow      │
+│                                                  │
+│  Step 1: Retrieve Articles from S3              │
+│                                                  │
+│  Step 2: Parallel Processing                    │
+│    ┌──────────────────┐  ┌──────────────────┐  │
+│    │ Email Branch     │  │ Podcast Branch   │  │
+│    │ (Message Batch)  │  │ (Message Batch)  │  │
+│    └────────┬─────────┘  └────────┬─────────┘  │
+│             │                     │             │
+│             v                     v             │
+│      ┌──────────────┐      ┌──────────────┐    │
+│      │ Claude API   │      │ Claude API   │    │
+│      │ Script Gen   │      │ Script Gen   │    │
+│      └──────────────┘      └──────┬───────┘    │
+│                                    │            │
+│                                    v            │
+│                             ┌──────────────┐   │
+│                             │  AWS Polly   │   │
+│                             │  Synthesis   │   │
+│                             └──────┬───────┘   │
+│                                    │            │
+│                                    v            │
+│                             ┌──────────────┐   │
+│                             │  S3 Storage  │   │
+│                             │  RSS Feed    │   │
+│                             │  CloudFront  │   │
+│                             └──────────────┘   │
+└─────────────────────────────────────────────────┘
 ```
 
 ### Configuration
@@ -396,7 +416,7 @@ Add this URL to your podcast app:
 
 #### Trigger
 
-The podcast generation Lambda is triggered by the same SNS topic as the email function, so podcasts are generated automatically when new articles are retrieved.
+Podcast generation is triggered automatically as part of the Step Functions workflow that runs at 7:30 AM (weekdays). The podcast branch processes in parallel with email generation using the Message Batches API, providing 50% cost savings.
 
 ### Monitoring
 
@@ -431,12 +451,12 @@ CloudWatch logs include:
 
 ### Disabling Podcast Generation
 
-To disable podcast generation:
+To disable podcast generation while keeping email functionality:
 
-1. Remove the SNS subscription for the podcast Lambda function
-2. Or delete the `RSSPodcastFunction` from the CDK stack
+1. Modify the Step Functions workflow definition in `lib/rss_lambda_stack.ts` to remove the podcast branch from the parallel state
+2. Redeploy with `cdk deploy`
 
-The email functionality will continue to work independently.
+The email functionality will continue to work independently in the Step Functions workflow.
 
 ## Deployment
 

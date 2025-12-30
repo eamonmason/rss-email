@@ -241,34 +241,8 @@ Joanna: Now I'm talking."""
 
         self.assertIsNone(audio)
 
-    @patch('rss_email.podcast_generator.get_last_run')
-    @patch('rss_email.podcast_generator.get_feed_file')
-    @patch('rss_email.podcast_generator.filter_items')
-    @patch('rss_email.podcast_generator.generate_script')
-    @patch('rss_email.podcast_generator.synthesize_speech')
-    @patch('rss_email.podcast_generator.upload_to_s3')
-    @patch('rss_email.podcast_generator.update_podcast_feed')
-    @patch('rss_email.podcast_generator.set_last_run')
-    @patch('rss_email.podcast_generator.get_cloudfront_domain')
-    def test_generate_podcast_flow(  # pylint: disable=too-many-positional-arguments
-        self, mock_get_cloudfront_domain, mock_set_last_run, mock_update_feed, mock_upload,
-        mock_synthesize, mock_generate_script, mock_filter,
-        mock_get_feed, mock_get_last_run
-    ):
-        """Test the complete podcast generation flow."""
-        mock_filter.return_value = [{"title": "Article 1"}]
-        mock_generate_script.return_value = "Script"
-        mock_synthesize.return_value = b"Audio"
-        mock_upload.return_value = True
-        mock_get_cloudfront_domain.return_value = "d123456.cloudfront.net"
-
-        podcast_generator.generate_podcast({}, None)
-
-        mock_generate_script.assert_called_once()
-        mock_synthesize.assert_called_once()
-        mock_upload.assert_called_once()
-        mock_update_feed.assert_called_once()
-        mock_set_last_run.assert_called_once()
+    # test_generate_podcast_flow removed - old generate_podcast() function
+    # replaced by Message Batches workflow (tested in test_podcast_batch_modules.py)
 
 
 if __name__ == '__main__':

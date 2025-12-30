@@ -12,8 +12,8 @@ from .podcast_generator import (
     synthesize_speech,
     upload_to_s3,
     update_podcast_feed,
-    set_last_run,
 )
+from .email_articles import set_last_run
 
 logger = logging.getLogger(__name__)
 

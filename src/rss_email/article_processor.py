@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-# Add these imports at the top
-import base64
-import gzip
 import json
 import logging
 import os
@@ -203,21 +200,6 @@ def split_articles_into_batches(
         batch = articles[i:i + max_batch_size]
         batches.append(batch)
     return batches
-
-
-# Add these utility functions
-def compress_json(data: Dict[str, Any]) -> str:
-    """Compress JSON data to base64-encoded gzipped string."""
-    json_str = json.dumps(data)
-    compressed = gzip.compress(json_str.encode("utf-8"))
-    return base64.b64encode(compressed).decode("ascii")
-
-
-def decompress_json(compressed_str: str) -> Dict[str, Any]:
-    """Decompress base64-encoded gzipped JSON string."""
-    decoded = base64.b64decode(compressed_str)
-    decompressed = gzip.decompress(decoded)
-    return json.loads(decompressed.decode("utf-8"))
 
 
 def create_categorization_prompt(articles: List[Dict[str, Any]]) -> str:
