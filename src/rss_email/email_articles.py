@@ -273,7 +273,12 @@ def generate_enhanced_html_content(
 
             # Build related articles text
             related_titles = []
-            for related_id in article.related_articles:
+            # Handle both dict and object attribute access
+            related_articles = (
+                article.get('related_articles', []) if isinstance(article, dict)
+                else getattr(article, 'related_articles', [])
+            )
+            for related_id in related_articles:
                 idx = int(related_id.split("_")[1])
                 if idx < len(article_map):
                     related_title = list(article_map.values())[idx].get(
@@ -294,9 +299,25 @@ def generate_enhanced_html_content(
                     </tr>"""
 
             # Ensure the link is properly formatted with protocol
-            article_link = article.link
+            # Handle both dict and object attribute access
+            article_link = article.get('link') if isinstance(article, dict) else article.link
             if not article_link.startswith(("http://", "https://")):
                 article_link = "https://" + article_link
+
+            # Get article attributes (compatible with both dict and object)
+            article_title = (
+                article.get('title') if isinstance(article, dict) else article.title
+            )
+            article_pubdate = (
+                article.get('pubdate') if isinstance(article, dict) else article.pubdate
+            )
+            article_summary = (
+                article.get('summary') if isinstance(article, dict) else article.summary
+            )
+            article_comments = (
+                article.get('comments') if isinstance(article, dict)
+                else getattr(article, "comments", None)
+            )
 
             content_parts.append(f'''
             <tr>
@@ -309,18 +330,18 @@ def generate_enhanced_html_content(
                                 <h3 style="margin: 0 0 10px 0; line-height: 1.4;">
                                     <a href="{article_link}" target="_blank"
                                     style="color: #0066cc; text-decoration: underline; font-size: 18px;">
-                                    {article.title}</a>
+                                    {article_title}</a>
                                 </h3>
                                 <p style="margin: 0 0 12px 0; font-size: 14px; color: #666;">
-                                    {article.pubdate}
+                                    {article_pubdate}
                                     {
-                                        f' | <a href="{getattr(article, "comments", None)}" target="_blank" '
+                                        f' | <a href="{article_comments}" target="_blank" '
                                         'style="color: #666; text-decoration: underline;">Comments</a>'
-                                        if getattr(article, "comments", None) else ''
+                                        if article_comments else ''
                                     }
                                 </p>
                                 <p style="margin: 0 0 12px 0; font-size: 16px; color: #555; line-height: 1.6;">
-                                {article.summary}</p>
+                                {article_summary}</p>
                             </td>
                         </tr>
                         {related_html}
