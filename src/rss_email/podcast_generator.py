@@ -48,7 +48,13 @@ EMPHASIS:
 - Skip minor or redundant updates unless they add unique value
 - Stick to the facts, use information in the article text provided, or that is historically accurate and verified
 - Conclude with one or two lighter articles that are fun or nerdy
-- DO NOT mention this is a draft or include any meta-commentary about the script itself
+
+CRITICAL OUTPUT REQUIREMENTS:
+- DO NOT include any announcer intro or outro (no "Coming up on today's show..." or "That's all for today...")
+- DO NOT include any editor notes, stage directions, or meta-commentary in brackets like [pause], [enthusiastic], etc.
+- DO NOT mention this is a draft, script, or recording
+- Output ONLY the direct dialogue between Marco and Joanna - pure conversation that will be read aloud
+- The script should start immediately with Marco or Joanna speaking to each other
 
 FORMAT REQUIREMENTS (CRITICAL):
 - Mark each speaker change with "Marco:" or "Joanna:" at the start of their dialogue
@@ -188,11 +194,21 @@ def enhance_text_with_ssml(text: str, speaker: str) -> str:
     if not SSML_ENABLED:
         return text
 
+    # Import XML escape function for SSML safety
+    from xml.sax.saxutils import escape  # pylint: disable=C0415
+
+    # Escape XML special characters to prevent SSML errors
+    # This handles: &, <, >, ', "
+    escaped_text = escape(text, entities={
+        "'": "&apos;",
+        '"': "&quot;"
+    })
+
     # Choose speaking rate based on speaker
     rate = MARCO_SPEAKING_RATE if speaker == "Marco" else JOANNA_SPEAKING_RATE
 
     # Add minimal pauses for natural phrasing without slowing down
-    enhanced = text
+    enhanced = escaped_text
     enhanced = re.sub(r'([.!])\s+', r'\1<break time="250ms"/> ', enhanced)
     enhanced = re.sub(r'([?])\s+', r'\1<break time="200ms"/> ', enhanced)
 
