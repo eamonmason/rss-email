@@ -547,12 +547,22 @@ def create_html(categories: Dict[str, List[Dict[str, Any]]]) -> str:
     Returns:
         HTML string for email body
     """
+    # Import ProcessedArticle for type checking
+    try:
+        from .article_processor import ProcessedArticle
+    except ImportError:
+        ProcessedArticle = None
+
     # Build article_map from all articles across categories
     article_map = {}
     article_counter = 0
     for articles in categories.values():
         for article in articles:
-            article_map[f"article_{article_counter}"] = article
+            # Convert ProcessedArticle objects to dictionaries
+            if ProcessedArticle and isinstance(article, ProcessedArticle):
+                article_map[f"article_{article_counter}"] = article.model_dump()
+            else:
+                article_map[f"article_{article_counter}"] = article
             article_counter += 1
 
     # Convert categories dict to list of tuples for generate_enhanced_html_content
