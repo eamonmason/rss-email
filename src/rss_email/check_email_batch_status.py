@@ -17,7 +17,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
     Input (from event):
         {
             "batch_id": str,
-            "request_count": int
+            "request_count": int,
+            "metadata_key": str (optional)
         }
 
     Returns:
@@ -30,15 +31,17 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
                 "errored": int,
                 "canceled": int,
                 "expired": int
-            }
+            },
+            "metadata_key": str (optional, preserved from input)
         }
     """
     try:
         batch_id = event["batch_id"]
+        metadata_key = event.get("metadata_key")
 
         if batch_id is None:
             logger.info("No batch to check (no articles to process)")
-            return {
+            result = {
                 "batch_id": None,
                 "processing_status": "ended",
                 "request_counts": {
@@ -49,6 +52,9 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
                     "expired": 0,
                 },
             }
+            if metadata_key:
+                result["metadata_key"] = metadata_key
+            return result
 
         # Get API key from Parameter Store
         api_key_param = os.environ["ANTHROPIC_API_KEY_PARAMETER"]
@@ -69,7 +75,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
         )
 
         # Return status to Step Functions
-        return {
+        result = {
             "batch_id": message_batch.id,
             "processing_status": message_batch.processing_status,
             "request_counts": {
@@ -80,6 +86,10 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
                 "expired": message_batch.request_counts.expired,
             },
         }
+        # Preserve metadata_key for downstream tasks
+        if metadata_key:
+            result["metadata_key"] = metadata_key
+        return result
 
     except Exception as e:
         logger.error("Error checking batch status: %s", e, exc_info=True)

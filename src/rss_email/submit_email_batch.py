@@ -1,8 +1,9 @@
 """Lambda function to submit email batch to Anthropic Message Batches API."""
 
+import json
 import logging
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Dict
 
 import anthropic
@@ -52,11 +53,30 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
             return {
                 "batch_id": None,
                 "request_count": 0,
-                "submitted_at": datetime.utcnow().isoformat(),
+                "submitted_at": datetime.now(UTC).isoformat(),
                 "articles_count": 0,
             }
 
         logger.info("Found %d articles to process", len(filtered_items))
+
+        # Store original articles metadata in S3 for later retrieval
+        # This preserves fields like comments that aren't sent to Claude
+        timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+        metadata_key = f"batch-metadata/batch-{timestamp}.json"
+
+        metadata = {
+            "articles": filtered_items,
+            "submitted_at": datetime.now(UTC).isoformat(),
+        }
+
+        s3_client = boto3.client("s3")
+        s3_client.put_object(
+            Bucket=bucket,
+            Key=metadata_key,
+            Body=json.dumps(metadata, default=str),
+            ContentType="application/json"
+        )
+        logger.info("Stored article metadata to S3: %s", metadata_key)
 
         # Split into batches
         article_batches = split_articles_into_batches(
@@ -94,8 +114,9 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
         # Return batch info to Step Functions
         return {
             "batch_id": message_batch.id,
+            "metadata_key": metadata_key,
             "request_count": len(requests),
-            "submitted_at": datetime.utcnow().isoformat(),
+            "submitted_at": datetime.now(UTC).isoformat(),
             "articles_count": len(filtered_items),
         }
 

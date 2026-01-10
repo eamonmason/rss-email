@@ -47,6 +47,7 @@ def mock_env(monkeypatch):
     monkeypatch.setenv("LAST_RUN_PARAMETER", "test-lastrun")
     monkeypatch.setenv("SOURCE_EMAIL_ADDRESS", "source@example.com")
     monkeypatch.setenv("TO_EMAIL_ADDRESS", "to@example.com")
+    monkeypatch.setenv("RSS_BUCKET", "test-bucket")
 
 
 @pytest.fixture

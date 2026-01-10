@@ -2,7 +2,7 @@
 
 import logging
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Dict
 
 import anthropic
@@ -51,7 +51,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
             return {
                 "batch_id": None,
                 "request_count": 0,
-                "submitted_at": datetime.utcnow().isoformat(),
+                "submitted_at": datetime.now(UTC).isoformat(),
                 "articles_count": 0,
             }
 
@@ -85,7 +85,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
         return {
             "batch_id": message_batch.id,
             "request_count": len(requests),
-            "submitted_at": datetime.utcnow().isoformat(),
+            "submitted_at": datetime.now(UTC).isoformat(),
             "articles_count": len(filtered_items),
         }
 

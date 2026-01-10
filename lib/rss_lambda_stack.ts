@@ -50,6 +50,12 @@ export class RSSEmailStack extends cdk.Stack {
           enabled: true,
           prefix: 'podcasts/episodes/',
           expiration: cdk.Duration.days(14),
+        },
+        {
+          id: 'DeleteOldBatchMetadata',
+          enabled: true,
+          prefix: 'batch-metadata/',
+          expiration: cdk.Duration.days(7),
         }
       ]
     });
@@ -305,6 +311,7 @@ export class RSSEmailStack extends cdk.Stack {
       handler: 'rss_email.retrieve_and_send_email.lambda_handler',
       runtime: lambda.Runtime.PYTHON_3_13,
       environment: {
+        RSS_BUCKET: bucket.bucketName,
         ANTHROPIC_API_KEY_PARAMETER: ANTHROPIC_API_KEY_PARAMETER,
         SOURCE_EMAIL_ADDRESS: SOURCE_EMAIL_ADDRESS,
         TO_EMAIL_ADDRESS: TO_EMAIL_ADDRESS,
