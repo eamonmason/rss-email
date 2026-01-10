@@ -78,7 +78,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
         )
         logger.info("Stored article metadata to S3: %s", metadata_key)
 
-        # Split into batches
+        # Split into batches (returns list of (batch, offset) tuples)
         article_batches = split_articles_into_batches(
             filtered_items, max_batch_size=batch_size
         )
@@ -88,8 +88,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
         client = anthropic.Anthropic(api_key=api_key)
         requests = []
 
-        for idx, batch in enumerate(article_batches):
-            prompt = create_categorization_prompt(batch)
+        for idx, (batch, offset) in enumerate(article_batches):
+            prompt = create_categorization_prompt(batch, batch_offset=offset)
             requests.append(
                 Request(
                     custom_id=f"email-batch-{idx}",

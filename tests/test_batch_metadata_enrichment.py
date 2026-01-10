@@ -250,6 +250,94 @@ class TestBatchMetadataEnrichment(unittest.TestCase):
 
         self.assertEqual(articles, [])
 
+    def test_enrich_batch_results_multi_batch_scenario(self):
+        """Test that metadata enrichment works correctly with multiple batches."""
+        # Create 50 original articles with comments (simulating 2 batches of 25)
+        original_articles = []
+        for i in range(50):
+            original_articles.append({
+                "title": f"Article {i}",
+                "link": f"https://example.com/{i}",
+                "comments": f"https://example.com/{i}/comments",
+                "description": f"Description {i}",
+                "pubDate": f"Mon, {10 + i} Jan 2026 08:00:00 GMT",
+            })
+
+        # Create categorized data simulating what Claude returns from 2 batches
+        # Batch 0: articles 0-24 with IDs article_0 to article_24
+        # Batch 1: articles 25-49 with IDs article_25 to article_49 (now with offset!)
+        categorized_data = {
+            "Technology": [
+                {
+                    "id": "article_5",  # Should map to original article 5
+                    "title": "Article 5",
+                    "link": "https://example.com/5",
+                    "summary": "AI-generated summary 5",
+                    "pubdate": "Mon, 15 Jan 2026 08:00:00 GMT",
+                },
+                {
+                    "id": "article_30",  # Should map to original article 30 (NOT article 5!)
+                    "title": "Article 30",
+                    "link": "https://example.com/30",
+                    "summary": "AI-generated summary 30",
+                    "pubdate": "Mon, 40 Jan 2026 08:00:00 GMT",
+                },
+            ],
+            "AI/ML": [
+                {
+                    "id": "article_0",  # Should map to original article 0
+                    "title": "Article 0",
+                    "link": "https://example.com/0",
+                    "summary": "AI-generated summary 0",
+                    "pubdate": "Mon, 10 Jan 2026 08:00:00 GMT",
+                },
+                {
+                    "id": "article_49",  # Should map to original article 49
+                    "title": "Article 49",
+                    "link": "https://example.com/49",
+                    "summary": "AI-generated summary 49",
+                    "pubdate": "Mon, 59 Jan 2026 08:00:00 GMT",
+                },
+            ],
+        }
+
+        # Enrich with metadata
+        enriched_categories = enrich_batch_results_with_metadata(
+            categorized_data, original_articles
+        )
+
+        # Verify Technology category
+        self.assertIn("Technology", enriched_categories)
+        self.assertEqual(len(enriched_categories["Technology"]), 2)
+
+        # Check article 5 from batch 0
+        article5 = enriched_categories["Technology"][0]
+        self.assertEqual(article5.title, "Article 5")
+        self.assertEqual(article5.comments, "https://example.com/5/comments")
+        self.assertEqual(article5.original_description, "Description 5")
+
+        # Check article 30 from batch 1 - THIS IS THE CRITICAL TEST
+        article30 = enriched_categories["Technology"][1]
+        self.assertEqual(article30.title, "Article 30")
+        self.assertEqual(article30.comments, "https://example.com/30/comments")
+        self.assertEqual(article30.original_description, "Description 30")
+
+        # Verify AI/ML category
+        self.assertIn("AI/ML", enriched_categories)
+        self.assertEqual(len(enriched_categories["AI/ML"]), 2)
+
+        # Check article 0
+        article0 = enriched_categories["AI/ML"][0]
+        self.assertEqual(article0.title, "Article 0")
+        self.assertEqual(article0.comments, "https://example.com/0/comments")
+        self.assertEqual(article0.original_description, "Description 0")
+
+        # Check article 49 from batch 1
+        article49 = enriched_categories["AI/ML"][1]
+        self.assertEqual(article49.title, "Article 49")
+        self.assertEqual(article49.comments, "https://example.com/49/comments")
+        self.assertEqual(article49.original_description, "Description 49")
+
 
 if __name__ == "__main__":
     unittest.main()

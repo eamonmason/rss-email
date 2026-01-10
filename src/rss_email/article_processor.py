@@ -193,24 +193,37 @@ def optimize_articles_for_claude(
 
 def split_articles_into_batches(
     articles: List[Dict[str, Any]], max_batch_size: int = 25
-) -> List[List[Dict[str, Any]]]:
-    """Split articles into smaller batches for processing."""
+) -> List[Tuple[List[Dict[str, Any]], int]]:
+    """
+    Split articles into smaller batches for processing.
+
+    Returns:
+        List of tuples (batch, offset) where offset is the starting index in original list
+    """
     batches = []
     for i in range(0, len(articles), max_batch_size):
         batch = articles[i:i + max_batch_size]
-        batches.append(batch)
+        batches.append((batch, i))
     return batches
 
 
-def create_categorization_prompt(articles: List[Dict[str, Any]]) -> str:
-    """Create the prompt for Claude to categorize and summarize articles."""
+def create_categorization_prompt(
+    articles: List[Dict[str, Any]], batch_offset: int = 0
+) -> str:
+    """
+    Create the prompt for Claude to categorize and summarize articles.
+
+    Args:
+        articles: List of articles to process
+        batch_offset: Starting index of this batch in the global article list
+    """
     # Optimize articles for processing
     optimized_articles = optimize_articles_for_claude(articles)
     articles_json = []
     for idx, article in enumerate(optimized_articles):
         articles_json.append(
             {
-                "id": f"article_{idx}",
+                "id": f"article_{batch_offset + idx}",
                 "title": article.get("title", ""),
                 "description": article.get("description", ""),
                 "link": article.get("link", ""),
