@@ -30,6 +30,7 @@ except ImportError:
 try:
     from .article_processor import (
         ClaudeRateLimiter,
+        ProcessedArticle,
         group_articles_by_priority,
         process_articles_with_claude,
     )
@@ -39,6 +40,7 @@ except ImportError:
     # For local testing or when article_processor is not available
     CLAUDE_AVAILABLE = False
     ClaudeRateLimiter = None
+    ProcessedArticle = None
     group_articles_by_priority = None
     process_articles_with_claude = None
 
@@ -547,12 +549,6 @@ def create_html(categories: Dict[str, List[Dict[str, Any]]]) -> str:
     Returns:
         HTML string for email body
     """
-    # Import ProcessedArticle for type checking
-    try:
-        from .article_processor import ProcessedArticle
-    except ImportError:
-        ProcessedArticle = None
-
     # Build article_map from all articles across categories
     article_map = {}
     article_counter = 0

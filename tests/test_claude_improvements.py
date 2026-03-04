@@ -22,6 +22,7 @@ import sys
 import xml.etree.ElementTree as ET  # noqa: N817
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Optional
 
 # Load environment variables from .env file
 try:
@@ -56,9 +57,68 @@ from rss_email.article_processor import (  # noqa: E402
 from rss_email.email_articles import filter_items  # noqa: E402
 
 
+def _extract_articles_from_rss_fallback(rss_content: str) -> Optional[list]:
+    """
+    Extract articles from old RSS file using manual parsing.
+
+    Args:
+        rss_content: Raw RSS XML content
+
+    Returns:
+        List of article dictionaries or None on error
+    """
+    try:
+        root = ET.fromstring(rss_content)
+        items = root.findall(".//item")[:10]
+        filtered_items = []
+        for item in items:
+            article = {}
+            for field in ["title", "link", "description"]:
+                elem = item.find(field)
+                if elem is not None and elem.text:
+                    article[field] = elem.text
+                else:
+                    article[field] = f"Sample {field}"
+
+            pubdate_elem = item.find("pubDate")
+            if pubdate_elem is not None and pubdate_elem.text:
+                article["pubDate"] = pubdate_elem.text
+            else:
+                article["pubDate"] = "Wed, 16 Oct 2024 05:25:08 GMT"
+
+            article["sortDate"] = datetime.now().timestamp()
+            filtered_items.append(article)
+
+        return filtered_items if filtered_items else None
+    except (ET.ParseError, AttributeError) as exc:
+        print(f"❌ Error parsing RSS file: {exc}")
+        return None
+
+
+def _load_articles_from_rss(rss_content: str) -> Optional[list]:
+    """
+    Load articles from RSS content with fallback strategies.
+
+    Args:
+        rss_content: Raw RSS XML content
+
+    Returns:
+        List of article dictionaries or None on error
+    """
+    # Try different time windows
+    for days in [7, 30, 365]:
+        run_date = datetime.now() - timedelta(days=days)
+        filtered_items = filter_items(rss_content, run_date)
+        if filtered_items:
+            return filtered_items
+
+    # Last resort: extract old articles manually
+    print("⚠️  RSS file appears to be very old, using first 10 articles for testing...")
+    return _extract_articles_from_rss_fallback(rss_content)
+
+
 def main():
     """Test Claude processing with real RSS data."""
-
     # Check for API key
     if not os.environ.get("ANTHROPIC_API_KEY"):
         print("❌ ANTHROPIC_API_KEY not found")
@@ -84,54 +144,11 @@ def main():
         with open("rss.xml", "r", encoding="utf-8") as f:
             rss_content = f.read()
 
-        # Get articles from last few days, with fallbacks for older RSS files
-        run_date = datetime.now() - timedelta(days=7)  # Try 7 days first
-        filtered_items = filter_items(rss_content, run_date)
-
+        # Get articles from RSS
+        filtered_items = _load_articles_from_rss(rss_content)
         if not filtered_items:
-            print("⚠️  No recent articles found, trying last 30 days...")
-            run_date = datetime.now() - timedelta(days=30)
-            filtered_items = filter_items(rss_content, run_date)
-
-        if not filtered_items:
-            print("⚠️  No articles from last 30 days, trying last 365 days...")
-            run_date = datetime.now() - timedelta(days=365)
-            filtered_items = filter_items(rss_content, run_date)
-
-        if not filtered_items:
-            print(
-                "⚠️  RSS file appears to be very old, using first 10 articles for testing..."
-            )
-            # Parse RSS manually to get some articles for testing
-            try:
-                root = ET.fromstring(rss_content)
-                items = root.findall(".//item")[:10]
-                filtered_items = []
-                for item in items:
-                    article = {}
-                    for field in ["title", "link", "description"]:
-                        elem = item.find(field)
-                        if elem is not None and elem.text:
-                            article[field] = elem.text
-                        else:
-                            article[field] = f"Sample {field}"
-
-                    pubdate_elem = item.find("pubDate")
-                    if pubdate_elem is not None and pubdate_elem.text:
-                        article["pubDate"] = pubdate_elem.text
-                    else:
-                        article["pubDate"] = "Wed, 16 Oct 2024 05:25:08 GMT"
-
-                    article["sortDate"] = datetime.now().timestamp()
-                    filtered_items.append(article)
-
-                if not filtered_items:
-                    print("❌ Could not extract any articles from RSS file.")
-                    return False
-
-            except Exception as exc:
-                print(f"❌ Error parsing RSS file: {exc}")
-                return False
+            print("❌ Could not extract any articles from RSS file.")
+            return False
 
         print(f"📰 Found {len(filtered_items)} articles to process")
 
@@ -195,7 +212,7 @@ def main():
         print("❌ rss.xml file not found")
         print("Please run this script from the project root directory.")
         return False
-    except Exception as exc:
+    except (OSError, RuntimeError, ValueError) as exc:
         print(f"❌ Error: {exc}")
         return False
 

@@ -4,7 +4,7 @@ import json
 import logging
 import os
 from datetime import UTC, datetime
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 import anthropic
 import boto3
@@ -15,6 +15,36 @@ from .email_articles import get_feed_file, filter_items, get_last_run
 from .article_processor import split_articles_into_batches, create_categorization_prompt
 
 logger = logging.getLogger(__name__)
+
+
+def create_batch_requests(
+    article_batches: List[tuple],
+    model: str
+) -> List[Request]:
+    """
+    Create batch requests for Claude API.
+
+    Args:
+        article_batches: List of (batch, offset) tuples
+        model: Claude model ID
+
+    Returns:
+        List of batch request objects
+    """
+    requests = []
+    for idx, (batch, offset) in enumerate(article_batches):
+        prompt = create_categorization_prompt(batch, batch_offset=offset)
+        requests.append(
+            Request(
+                custom_id=f"email-batch-{idx}",
+                params=MessageCreateParamsNonStreaming(
+                    model=model,
+                    max_tokens=8192,
+                    messages=[{"role": "user", "content": prompt}],
+                ),
+            )
+        )
+    return requests
 
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # pylint: disable=W0613
@@ -86,20 +116,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
 
         # Create batch requests
         client = anthropic.Anthropic(api_key=api_key)
-        requests = []
-
-        for idx, (batch, offset) in enumerate(article_batches):
-            prompt = create_categorization_prompt(batch, batch_offset=offset)
-            requests.append(
-                Request(
-                    custom_id=f"email-batch-{idx}",
-                    params=MessageCreateParamsNonStreaming(
-                        model=model,
-                        max_tokens=8192,
-                        messages=[{"role": "user", "content": prompt}],
-                    ),
-                )
-            )
+        requests = create_batch_requests(article_batches, model)
 
         # Submit batch
         message_batch = client.messages.batches.create(requests=requests)

@@ -1,16 +1,21 @@
+"""Tests for podcast_generator module."""
+
 import os
 import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
-# Add src to path
-sys.path.append(os.path.join(os.path.dirname(__file__), '../src'))
+# Add src to path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../src'))
 
-from rss_email import podcast_generator  # noqa: E402
+from rss_email import podcast_generator  # pylint: disable=C0413,E402
 
 
 class TestPodcastGenerator(unittest.TestCase):
+    """Test podcast generator functionality."""
+
     def setUp(self):
+        """Set up test fixtures."""
         self.mock_env = {
             "BUCKET": "test-bucket",
             "KEY": "rss.xml",
@@ -23,11 +28,13 @@ class TestPodcastGenerator(unittest.TestCase):
         self.env_patcher.start()
 
     def tearDown(self):
+        """Tear down test fixtures."""
         self.env_patcher.stop()
 
     @patch('rss_email.podcast_generator.boto3.client')
     @patch('rss_email.podcast_generator.anthropic.Anthropic')
     def test_generate_script(self, mock_anthropic, mock_boto3):
+        """Test script generation from articles."""
         # Mock SSM
         mock_ssm = MagicMock()
         mock_boto3.return_value = mock_ssm
@@ -47,6 +54,7 @@ class TestPodcastGenerator(unittest.TestCase):
         mock_client.messages.create.assert_called_once()
 
     def test_parse_speaker_segments(self):
+        """Test parsing speaker segments from script."""
         script = """Marco: Welcome to the show!
 Joanna: Thanks Marco. Let's dive into today's news.
 Marco: First up, we have a story about AI developments.
@@ -61,6 +69,7 @@ Joanna: That's really interesting."""
         self.assertEqual(segments[3], ("Joanna", "That's really interesting."))
 
     def test_parse_speaker_segments_multiline(self):
+        """Test parsing multi-line speaker segments."""
         script = """Marco: This is a longer segment
 that spans multiple lines
 without a speaker label.
@@ -73,6 +82,7 @@ Joanna: Now I'm talking."""
         self.assertEqual(segments[1][0], "Joanna")
 
     def test_chunk_text_short(self):
+        """Test chunking short text returns single chunk."""
         short_text = "This is a short text."
         chunks = podcast_generator.chunk_text(short_text, max_chars=100)
 
@@ -80,6 +90,7 @@ Joanna: Now I'm talking."""
         self.assertEqual(chunks[0], short_text)
 
     def test_chunk_text_long(self):
+        """Test chunking long text splits into multiple chunks."""
         # Create text longer than 3000 chars
         long_text = "This is sentence one. " * 200  # ~4400 chars
 
@@ -91,6 +102,7 @@ Joanna: Now I'm talking."""
 
     @patch('rss_email.podcast_generator.boto3.client')
     def test_synthesize_speech_with_voice_switching(self, mock_boto3):
+        """Test speech synthesis uses correct voices for speakers."""
         mock_polly = MagicMock()
         mock_boto3.return_value = mock_polly
         mock_polly.synthesize_speech.return_value = {
@@ -133,6 +145,7 @@ Joanna: Now I'm talking."""
 
     @patch('rss_email.podcast_generator.boto3.client')
     def test_upload_to_s3(self, mock_boto3):
+        """Test uploading audio to S3."""
         mock_s3 = MagicMock()
         mock_boto3.return_value = mock_s3
 
@@ -148,7 +161,7 @@ Joanna: Now I'm talking."""
 
         # Create a proper exception class
         class NoSuchKey(Exception):
-            pass
+            """Mock S3 NoSuchKey exception."""
 
         mock_s3.exceptions.NoSuchKey = NoSuchKey
 
@@ -234,8 +247,7 @@ Joanna: Now I'm talking."""
 
         self.assertIsNone(script)
 
-    @patch('rss_email.podcast_generator.boto3.client')
-    def test_synthesize_speech_no_segments(self, mock_boto3):
+    def test_synthesize_speech_no_segments(self):
         """Test handling of empty or malformed scripts."""
         audio = podcast_generator.synthesize_speech("")
 
