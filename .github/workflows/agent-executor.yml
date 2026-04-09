@@ -8,19 +8,31 @@ jobs:
   execute:
     runs-on: ubuntu-latest
     environment: production
-    if: ${{ !github.event.issue.pull_request && contains(github.event.comment.body, '@agent execute') }}
+    # Trigger if comment contains @agent
+    if: ${{ contains(github.event.comment.body, '@agent') }}
     permissions:
       issues: write
       contents: write
       pull-requests: write
       workflows: write
     steps:
+      - name: Check for command
+        id: check
+        run: |
+          if echo "${{ github.event.comment.body }}" | grep -qiE "@agent\s+execute"; then
+            echo "match=true" >> $GITHUB_OUTPUT
+          else
+            echo "match=false" >> $GITHUB_OUTPUT
+          fi
       - uses: actions/checkout@v4
+        if: steps.check.outputs.match == 'true'
       - name: Setup Node
+        if: steps.check.outputs.match == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
       - name: Agent Execution
+        if: steps.check.outputs.match == 'true'
         run: |
           echo "Executing plan for issue #${{ github.event.issue.number }}"
           git config user.name "github-actions[bot]"
