@@ -7,6 +7,7 @@ on:
 jobs:
   execute:
     runs-on: ubuntu-latest
+    environment: production
     if: ${{ !github.event.issue.pull_request && contains(github.event.comment.body, '@agent execute') }}
     permissions:
       issues: write

@@ -9,6 +9,7 @@ on:
 jobs:
   plan:
     runs-on: ubuntu-latest
+    environment: production
     if: ${{ !github.event.issue.pull_request && github.actor != 'github-actions[bot]' && !contains(github.event.comment.body, '@agent execute') }}
     permissions:
       issues: write
@@ -16,11 +17,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Agentic Planning
-        # This step uses Claude Code to analyze the issue and propose a plan.
-        run: |
-          PLAN=$(npx @anthropic-ai/claude-code --bare -p "Analyze this issue: '${{ github.event.issue.title }}'. Content: '${{ github.event.issue.body }}'. Propose a concise implementation plan. Mention that the user should reply with '@agent execute' to start." --allowedTools "Read")
-          gh issue comment ${{ github.event.issue.number }} --body "🤖 **Agent Planner:** $PLAN"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
           CLAUDE_CODE_NO_FLICKER: 1
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "Error: ANTHROPIC_API_KEY is empty."
+            exit 1
+          fi
+          PLAN=$(npx @anthropic-ai/claude-code --bare -p "Analyze this issue: '$ISSUE_TITLE'. Content: '$ISSUE_BODY'. Propose a concise implementation plan. Mention that the user should reply with '@agent execute' to start." --allowedTools "Read")
+          gh issue comment ${{ github.event.issue.number }} --body "🤖 **Agent Planner:** $PLAN"
