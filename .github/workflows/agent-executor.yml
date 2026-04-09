@@ -24,11 +24,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout -b feature/issue-${{ github.event.issue.number }}
-          # The agent (e.g., Claude Code) runs here to generate code.
-          # npx @anthropic-ai/claude-code --print 'Implement the plan for issue #${{ github.event.issue.number }}'
           
-          # Fallback simulation
-          echo "/* Implemented by AI Agent */" >> ai_implemented_${{ github.event.issue.number }}.txt
+          npx @anthropic-ai/claude-code --bare -p "Implement the approved plan for issue #${{ github.event.issue.number }}: '${{ github.event.issue.title }}'. Use available tools to write code and tests. Verify your changes." --allowedTools "Bash,Edit,Read"
           
           git add .
           git commit -m "feat: Implement issue #${{ github.event.issue.number }}"
@@ -37,3 +34,4 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_NO_FLICKER: 1

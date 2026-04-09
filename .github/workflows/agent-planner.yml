@@ -16,13 +16,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Agentic Planning
-        # This step uses Claude Code or Gemini CLI to analyze the issue and propose a plan.
-        # In a real setup, you would pass the context to the CLI.
+        # This step uses Claude Code to analyze the issue and propose a plan.
         run: |
-          echo "Agent received issue context."
-          echo "You can use Claude Code here via: npx @anthropic-ai/claude-code --print 'Analyze this issue: ${{ github.event.issue.title }} and create a plan.'"
-          # For now, we simulate the agent interaction in the workflow.
-          gh issue comment ${{ github.event.issue.number }} --body "🤖 **Agent Planner:** I have analyzed this issue. Please review my proposed plan. If it looks good, reply with \`@agent execute\` to begin implementation."
+          PLAN=$(npx @anthropic-ai/claude-code --bare -p "Analyze this issue: '${{ github.event.issue.title }}'. Content: '${{ github.event.issue.body }}'. Propose a concise implementation plan. Mention that the user should reply with '@agent execute' to start." --allowedTools "Read")
+          gh issue comment ${{ github.event.issue.number }} --body "🤖 **Agent Planner:** $PLAN"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_NO_FLICKER: 1

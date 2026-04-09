@@ -18,9 +18,13 @@ jobs:
       - name: Agent Re-evaluate
         run: |
           echo "Agent addressing review comments..."
-          # The agent (e.g., Claude Code) reads the PR comments and fixes the code.
-          # npx @anthropic-ai/claude-code --print 'Fix the issues mentioned in the PR comments: ${{ github.event.comment.body }}'
+          npx @anthropic-ai/claude-code --bare -p "Address the feedback in this PR review comment: '${{ github.event.comment.body }}'. The comment is on a PR that implements '${{ github.event.pull_request.title }}'. Use available tools to fix the code and tests." --allowedTools "Bash,Edit,Read"
+          
+          git add .
+          git commit -m "fix: Address agent review feedback"
+          git push origin ${{ github.event.pull_request.head.ref }}
           gh pr comment ${{ github.event.pull_request.number }} --body "🤖 **Agent Reviewer:** I have pushed a new commit to address your feedback."
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_NO_FLICKER: 1
