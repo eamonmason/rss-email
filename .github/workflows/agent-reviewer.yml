@@ -5,27 +5,13 @@ on:
     types: [created]
 
 jobs:
-  review:
-    runs-on: ubuntu-latest
-    environment: production
+  call-reviewer:
     if: ${{ contains(github.event.comment.body, '@agent') }}
-    permissions:
-      contents: write
-      pull-requests: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.ref }}
-      - name: Agent Re-evaluate
-        run: |
-          echo "Agent addressing review comments..."
-          npx @anthropic-ai/claude-code --bare -p "Address the feedback in this PR review comment: '${{ github.event.comment.body }}'. The comment is on a PR that implements '${{ github.event.pull_request.title }}'. Use available tools to fix the code and tests." --allowedTools "Bash,Edit,Read"
-          
-          git add .
-          git commit -m "fix: Address agent review feedback"
-          git push origin ${{ github.event.pull_request.head.ref }}
-          gh pr comment ${{ github.event.pull_request.number }} --body "🤖 **Agent Reviewer:** I have pushed a new commit to address your feedback."
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          CLAUDE_CODE_NO_FLICKER: 1
+    uses: eamonmason/ai-workflows/.github/workflows/reusable-reviewer.yml@master
+    with:
+      pull_request_number: ${{ github.event.pull_request.number }}
+      pull_request_title: ${{ github.event.pull_request.title }}
+      comment_body: ${{ github.event.comment.body }}
+      head_ref: ${{ github.event.pull_request.head.ref }}
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

@@ -5,47 +5,11 @@ on:
     types: [created]
 
 jobs:
-  execute:
-    runs-on: ubuntu-latest
-    environment: production
-    # Trigger if comment contains @agent
-    if: ${{ contains(github.event.comment.body, '@agent') }}
-    permissions:
-      issues: write
-      contents: write
-      pull-requests: write
-      actions: write
-    steps:
-      - name: Check for command
-        id: check
-        run: |
-          if echo "${{ github.event.comment.body }}" | grep -qiE "@agent\s+execute"; then
-            echo "match=true" >> $GITHUB_OUTPUT
-          else
-            echo "match=false" >> $GITHUB_OUTPUT
-          fi
-      - uses: actions/checkout@v4
-        if: steps.check.outputs.match == 'true'
-      - name: Setup Node
-        if: steps.check.outputs.match == 'true'
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - name: Agent Execution
-        if: steps.check.outputs.match == 'true'
-        run: |
-          echo "Executing plan for issue #${{ github.event.issue.number }}"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -b feature/issue-${{ github.event.issue.number }}
-          
-          npx @anthropic-ai/claude-code --bare -p "Implement the approved plan for issue #${{ github.event.issue.number }}: '${{ github.event.issue.title }}'. Use available tools to write code and tests. Verify your changes." --allowedTools "Bash,Edit,Read"
-          
-          git add .
-          git commit -m "feat: Implement issue #${{ github.event.issue.number }}"
-          git push origin feature/issue-${{ github.event.issue.number }}
-          gh pr create --title "feat: Implement issue #${{ github.event.issue.number }}" --body "This PR was generated automatically by the Agent Executor based on the approved plan." --base main --head feature/issue-${{ github.event.issue.number }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          CLAUDE_CODE_NO_FLICKER: 1
+  call-executor:
+    if: ${{ !github.event.issue.pull_request && contains(github.event.comment.body, '@agent') && contains(github.event.comment.body, 'execute') }}
+    uses: eamonmason/ai-workflows/.github/workflows/reusable-executor.yml@master
+    with:
+      issue_number: ${{ github.event.issue.number }}
+      issue_title: ${{ github.event.issue.title }}
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
