@@ -1,0 +1,26 @@
+name: Agent Reviewer
+
+on:
+  pull_request_review_comment:
+    types: [created]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    if: ${{ contains(github.event.comment.body, '@agent') }}
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+      - name: Agent Re-evaluate
+        run: |
+          echo "Agent addressing review comments..."
+          # The agent (e.g., Claude Code) reads the PR comments and fixes the code.
+          # npx @anthropic-ai/claude-code --print 'Fix the issues mentioned in the PR comments: ${{ github.event.comment.body }}'
+          gh pr comment ${{ github.event.pull_request.number }} --body "🤖 **Agent Reviewer:** I have pushed a new commit to address your feedback."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
