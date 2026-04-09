@@ -7,7 +7,7 @@ on:
 jobs:
   call-executor:
     if: ${{ !github.event.issue.pull_request && contains(github.event.comment.body, '@agent') && contains(github.event.comment.body, 'execute') }}
-    uses: eamonmason/ai-workflows/.github/workflows/reusable-executor.yml@master
+    uses: eamonmason/ai-workflows/.github/workflows/reusable-executor.yml@main
     with:
       issue_number: ${{ github.event.issue.number }}
       issue_title: ${{ github.event.issue.title }}
