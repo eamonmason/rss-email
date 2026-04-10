@@ -8,12 +8,12 @@ on:
 
 jobs:
   call-planner:
-    if: ${{ !github.event.issue.pull_request && github.actor != 'github-actions[bot]' && !contains(github.event.comment.body, '@agent execute') }}
+    if: ${{ !github.event.issue.pull_request && github.actor != 'github-actions[bot]' && (github.event_name == 'issues' || (github.event_name == 'issue_comment' && !contains(github.event.comment.body, '@agent execute'))) }}
     uses: eamonmason/ai-workflows/.github/workflows/reusable-planner.yml@main
     with:
       issue_number: ${{ github.event.issue.number }}
       issue_title: ${{ github.event.issue.title }}
-      issue_body: ${{ github.event.issue.body }}
-      latest_comment: ${{ github.event.comment.body }}
+      issue_body: ${{ github.event.issue.body || '' }}
+      latest_comment: ${{ github.event.comment.body || '' }}
     secrets:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
