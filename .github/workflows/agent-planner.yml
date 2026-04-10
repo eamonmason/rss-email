@@ -13,7 +13,5 @@ jobs:
     with:
       issue_number: ${{ toJSON(github.event.issue.number) }}
       issue_title: ${{ github.event.issue.title }}
-      issue_body: ${{ toJSON(github.event.issue.body) }}
-      latest_comment: ${{ toJSON(github.event.comment.body) }}
     secrets:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
