@@ -1,14 +1,10 @@
 """Tests for podcast_generator module."""
 
 import os
-import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
-# Add src to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../src'))
-
-from rss_email import podcast_generator  # pylint: disable=C0413,E402
+from rss_email import podcast_generator
 
 
 class TestPodcastGenerator(unittest.TestCase):

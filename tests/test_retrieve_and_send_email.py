@@ -213,12 +213,10 @@ def test_lambda_handler_failed_request(
             "batch_id": "batch-123",
             "request_counts": {"succeeded": 0, "errored": 1},
         }
-        result = lambda_handler(event, None)
-
-        # Verify
-        assert result["status"] == "success"
-        assert result["categories_count"] == 0
-        assert result["failed_requests"] == 1
+        # All requests failed — handler should raise so Step Functions surfaces
+        # the failure and last_run is not advanced (allowing a clean retry).
+        with pytest.raises(RuntimeError, match="batch requests failed"):
+            lambda_handler(event, None)
 
 
 def test_lambda_handler_null_batch_id(mock_env):
@@ -290,12 +288,10 @@ def test_lambda_handler_invalid_json(
             "batch_id": "batch-123",
             "request_counts": {"succeeded": 1, "errored": 0},
         }
-        result = lambda_handler(event, None)
-
-        # Verify - should treat as failed request
-        assert result["status"] == "success"
-        assert result["categories_count"] == 0
-        assert result["failed_requests"] == 1
+        # Invalid JSON means no categories were produced — handler should raise
+        # so Step Functions surfaces the failure and last_run is not advanced.
+        with pytest.raises(RuntimeError, match="batch requests failed"):
+            lambda_handler(event, None)
 
 
 @patch("rss_email.retrieve_and_send_email.set_last_run")
