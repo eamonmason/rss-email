@@ -459,7 +459,7 @@ export class RSSEmailStack extends cdk.Stack {
     // Create State Machine
     const stateMachine = new sfn.StateMachine(this, 'DailyRSSNewsletterWorkflow', {
       definitionBody: sfn.DefinitionBody.fromChainable(definition),
-      timeout: cdk.Duration.hours(25), // 24 hours max + 1 hour buffer
+      timeout: cdk.Duration.hours(2),
       comment: 'Orchestrates daily RSS newsletter: process email & podcast in parallel using Message Batches API',
     });
 
