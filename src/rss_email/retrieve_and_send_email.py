@@ -225,6 +225,15 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
             len(failed_requests),
         )
 
+        # If every request failed (e.g. all canceled due to API outage), do not send
+        # an empty email and do not advance last_run — let the caller retry.
+        if not all_categories and failed_requests:
+            raise RuntimeError(
+                f"All {len(failed_requests)} batch requests failed "
+                f"(types: {set(r.result.type for r in failed_requests)}); "
+                "not sending email or updating last_run"
+            )
+
         # Format and send email (reuse existing email formatting logic)
         html_content = create_html(all_categories)
         send_via_ses(to_email, source_email, "Your Daily RSS Digest", html_content)
