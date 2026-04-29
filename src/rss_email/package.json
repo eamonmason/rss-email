@@ -5,7 +5,7 @@
   "main": "log_forwarder.js",
   "dependencies": {
     "@aws-sdk/client-sns": "^3.1026.0",
-    "fast-xml-parser": "^5.5.10"
+    "fast-xml-parser": "^5.7.2"
   },
   "directories": {
     "test": "tests"
