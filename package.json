@@ -21,7 +21,7 @@
     "aws-cdk-lib": "^2.248.0",
     "constructs": "^10.x",
     "dotenv": "^16.x",
-    "fast-xml-parser": "^5.5.10",
+    "fast-xml-parser": "^5.7.2",
     "source-map-support": "^0.x",
     "ts-node": "^10.x"
   },
