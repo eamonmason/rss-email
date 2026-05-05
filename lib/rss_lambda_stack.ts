@@ -293,7 +293,8 @@ export class RSSEmailStack extends cdk.Stack {
       },
       role: role,
       layers: [layer],
-      timeout: cdk.Duration.seconds(120)
+      memorySize: 512,
+      timeout: cdk.Duration.seconds(300)
     });
 
     const checkEmailBatchStatusFunction = new lambda.Function(this, 'CheckEmailBatchStatusFunction', {
@@ -339,7 +340,8 @@ export class RSSEmailStack extends cdk.Stack {
       },
       role: role,
       layers: [layer],
-      timeout: cdk.Duration.seconds(120)
+      memorySize: 512,
+      timeout: cdk.Duration.seconds(300)
     });
 
     const checkPodcastBatchStatusFunction = new lambda.Function(this, 'CheckPodcastBatchStatusFunction', {
