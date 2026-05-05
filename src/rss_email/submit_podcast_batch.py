@@ -57,9 +57,17 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
 
         logger.info("Found %d articles to process for podcast", len(filtered_items))
 
+        # Sort by date (newest first) and limit to 100 articles to avoid token limits
+        # and ensure a manageable script length.
+        filtered_items.sort(key=lambda x: x.get("sortDate", 0), reverse=True)
+        processing_items = filtered_items[:100]
+
+        if len(filtered_items) > 100:
+            logger.info("Limited processing to 100 newest articles (from %d total)", len(filtered_items))
+
         # Create batch request (single podcast script for all articles)
         client = anthropic.Anthropic(api_key=api_key)
-        prompt = create_podcast_script_prompt(filtered_items)
+        prompt = create_podcast_script_prompt(processing_items)
 
         requests = [
             Request(
