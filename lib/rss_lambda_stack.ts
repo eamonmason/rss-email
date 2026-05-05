@@ -225,6 +225,7 @@ export class RSSEmailStack extends cdk.Stack {
       },
       role: role,
       layers: [layer],
+      memorySize: 512,
       timeout: cdk.Duration.seconds(130)
     });
 
@@ -273,6 +274,7 @@ export class RSSEmailStack extends cdk.Stack {
       },
       role: role,
       layers: [layer],
+      memorySize: 512,
       timeout: cdk.Duration.seconds(300) // 5 minutes for RSS retrieval
     });
 
@@ -319,6 +321,7 @@ export class RSSEmailStack extends cdk.Stack {
       },
       role: role,
       layers: [layer],
+      memorySize: 512,
       timeout: cdk.Duration.seconds(300)
     });
 
@@ -364,6 +367,7 @@ export class RSSEmailStack extends cdk.Stack {
       },
       role: role,
       layers: [layer],
+      memorySize: 512,
       timeout: cdk.Duration.seconds(300)
     });
 
