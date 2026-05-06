@@ -14,6 +14,7 @@ from .email_articles import get_feed_file, filter_items, get_last_run
 from .podcast_generator import create_podcast_script_prompt
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # pylint: disable=W0613

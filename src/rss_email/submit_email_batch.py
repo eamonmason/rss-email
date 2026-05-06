@@ -15,6 +15,7 @@ from .email_articles import get_feed_file, filter_items, get_last_run
 from .article_processor import split_articles_into_batches, create_categorization_prompt
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 def create_batch_requests(
