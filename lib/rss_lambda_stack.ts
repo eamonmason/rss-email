@@ -40,8 +40,6 @@ export class RSSEmailStack extends cdk.Stack {
     const SOURCE_EMAIL_ADDRESS = process.env.SOURCE_EMAIL_ADDRESS || "";
     const TO_EMAIL_ADDRESS = process.env.TO_EMAIL_ADDRESS || "";
     const EMAIL_RECIPIENTS = process.env.EMAIL_RECIPIENTS?.split(',') || [];
-    const FEED_DEFINITIONS_FILE = process.env.FEED_DEFINITIONS_FILE || "";
-
     const bucket = new s3.Bucket(this, BUCKET_NAME, {
       versioned: false,
       lifecycleRules: [
@@ -213,26 +211,6 @@ export class RSSEmailStack extends cdk.Stack {
       }
       )
     })
-
-    const RSSGenerationFunction = new lambda.Function(this, 'RSSGenerationFunction', {
-      code: lambda.Code.fromAsset('src'),
-      handler: 'rss_email.retrieve_articles.create_rss',
-      runtime: lambda.Runtime.PYTHON_3_13,
-      environment: {
-        BUCKET: bucket.bucketName,
-        KEY: KEY,
-        FEED_DEFINITIONS_FILE: FEED_DEFINITIONS_FILE
-      },
-      role: role,
-      layers: [layer],
-      memorySize: 512,
-      timeout: cdk.Duration.seconds(130)
-    });
-
-    const generationEventRule = new events.Rule(this, 'generationEventRule', {
-      schedule: events.Schedule.cron({ minute: '0', hour: '*/3' }),
-    });
-    generationEventRule.addTarget(new targets.LambdaFunction(RSSGenerationFunction))
 
     // Old RSSEmailerFunction removed - replaced by Step Functions workflow
     // Manual email triggering now handled by SNS -> EventBridge -> Step Functions (configured below)
@@ -584,36 +562,35 @@ def lambda_handler(event, context):
       tier: ssm.ParameterTier.STANDARD,
     });
 
-    const rssGenerationLogGroup = new logs.LogGroup(this, 'rssGenerationLogGroup', {
-      logGroupName: `/aws/lambda/${RSSGenerationFunction.functionName}`,
+    // Old rssEmailLogGroup, emailerErrorMetricFilter, and errorAlarm removed
+    // RSSEmailerFunction replaced by Step Functions workflow
+
+    const retrieveRSSArticlesLogGroup = new logs.LogGroup(this, 'retrieveRSSArticlesLogGroup', {
+      logGroupName: `/aws/lambda/${retrieveRSSArticlesFunction.functionName}`,
       retention: logs.RetentionDays.ONE_MONTH,
       removalPolicy: cdk.RemovalPolicy.DESTROY
     });
 
-    // Old rssEmailLogGroup, emailerErrorMetricFilter, and errorAlarm removed
-    // RSSEmailerFunction replaced by Step Functions workflow
-
-    // Apply the same for the RSS generation function
-    const rssGenerationErrorMetricFilter = new logs.MetricFilter(this, 'GenerationErrorMetricFilter', {
-      logGroup: rssGenerationLogGroup,
+    const retrieveRSSArticlesErrorMetricFilter = new logs.MetricFilter(this, 'RetrieveRSSArticlesErrorMetricFilter', {
+      logGroup: retrieveRSSArticlesLogGroup,
       filterPattern: logs.FilterPattern.anyTerm('ERROR', 'WARNING', 'Error', 'Warning', 'error', 'warning'),
-      metricNamespace: 'RSS/GenerationLambda',
+      metricNamespace: 'RSS/RetrieveRSSArticlesLambda',
       metricName: 'ErrorWarningCount',
       defaultValue: 0,
       metricValue: '1',
     });
 
-    const generationErrorAlarm = new cdk.aws_cloudwatch.Alarm(this, 'GenerationLambdaErrorAlarm', {
-      metric: rssGenerationErrorMetricFilter.metric(),
+    const retrieveRSSArticlesErrorAlarm = new cdk.aws_cloudwatch.Alarm(this, 'RetrieveRSSArticlesLambdaErrorAlarm', {
+      metric: retrieveRSSArticlesErrorMetricFilter.metric(),
       threshold: 1,
       evaluationPeriods: 1,
       comparisonOperator: cdk.aws_cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
       treatMissingData: cdk.aws_cloudwatch.TreatMissingData.NOT_BREACHING,
-      alarmDescription: 'Alarm for ERROR or WARNING log messages in RSS Generation Lambda',
+      alarmDescription: 'Alarm for ERROR or WARNING log messages in RetrieveRSSArticles Lambda',
       actionsEnabled: true,
     });
 
-    generationErrorAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(error_alerts_topic));
+    retrieveRSSArticlesErrorAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(error_alerts_topic));
 
     // Create a Lambda function that will forward log events to the SNS topic
     const logForwarderFunction = new lambda.Function(this, 'LogForwarderFunction', {
@@ -646,8 +623,8 @@ def lambda_handler(event, context):
     // This ensures the actual log message content is included in the notification
     // Old emailerLogSubscription removed - RSSEmailerFunction replaced by Step Functions workflow
 
-    const generationLogSubscription = new logs.SubscriptionFilter(this, 'GenerationLogSubscription', {
-      logGroup: rssGenerationLogGroup,
+    new logs.SubscriptionFilter(this, 'RetrieveRSSArticlesLogSubscription', {
+      logGroup: retrieveRSSArticlesLogGroup,
       destination: new destinations.LambdaDestination(logForwarderFunction),
       filterPattern: logs.FilterPattern.anyTerm('ERROR', 'WARNING', 'Error', 'Warning', 'error', 'warning'),
     });
