@@ -234,8 +234,17 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
                 "not sending email or updating last_run"
             )
 
+        # Load per-feed article counts for summary (optional, best-effort)
+        feed_stats: Dict[str, int] = {}
+        try:
+            stats_response = boto3.client("s3").get_object(Bucket=bucket, Key="feed_stats.json")
+            feed_stats = json.loads(stats_response["Body"].read().decode("utf-8"))
+            logger.info("Loaded feed stats for %d feeds", len(feed_stats))
+        except Exception:  # pylint: disable=broad-except
+            logger.info("No feed stats available, skipping feed summary")
+
         # Format and send email (reuse existing email formatting logic)
-        html_content = create_html(all_categories)
+        html_content = create_html(all_categories, feed_stats=feed_stats)
         send_via_ses(to_email, source_email, "Your Daily RSS Digest", html_content)
 
         # Update last_run parameter

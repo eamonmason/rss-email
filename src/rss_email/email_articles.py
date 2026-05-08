@@ -539,12 +539,44 @@ def send_via_ses(
         raise
 
 
-def create_html(categories: Dict[str, List[Dict[str, Any]]]) -> str:
+def _generate_feed_summary_html(feed_stats: Dict[str, int]) -> str:
+    """Generate an HTML table of article counts per feed, sorted descending."""
+    total = sum(feed_stats.values())
+    rows = "".join(
+        f'<tr>'
+        f'<td style="padding: 4px 8px; border-bottom: 1px solid #dee2e6;">{name}</td>'
+        f'<td style="padding: 4px 8px; border-bottom: 1px solid #dee2e6; text-align: right;">{count}</td>'
+        f'</tr>'
+        for name, count in feed_stats.items()
+        if count > 0
+    )
+    return (
+        f'<table width="100%" cellpadding="0" cellspacing="0" border="0"'
+        f' style="margin-top: 30px; border-top: 2px solid #dee2e6;">'
+        f'<tr><td style="padding-top: 16px;">'
+        f'<p style="margin: 0 0 8px 0; font-size: 13px; font-weight: bold; color: #2c3e50;">'
+        f'Feed breakdown &mdash; {total} articles retrieved</p>'
+        f'<table width="100%" cellpadding="0" cellspacing="0" border="1"'
+        f' style="border-collapse: collapse; font-size: 12px; color: #444;">'
+        f'<tr style="background-color: #f8f9fa;">'
+        f'<th style="padding: 5px 8px; text-align: left; border: 1px solid #dee2e6;">Feed</th>'
+        f'<th style="padding: 5px 8px; text-align: right; border: 1px solid #dee2e6;">Articles</th>'
+        f'</tr>'
+        f'{rows}'
+        f'</table></td></tr></table>'
+    )
+
+
+def create_html(
+    categories: Dict[str, List[Dict[str, Any]]],
+    feed_stats: Optional[Dict[str, int]] = None,
+) -> str:
     """
     Create HTML email from categorized articles.
 
     Args:
         categories: Dictionary of category names to lists of articles
+        feed_stats: Optional mapping of feed name to article count for summary section
 
     Returns:
         HTML string for email body
@@ -577,8 +609,7 @@ def create_html(categories: Dict[str, List[Dict[str, Any]]]) -> str:
         template_path = files("rss_email").joinpath("email_body_enhanced.html")
         html_template = template_path.read_text()
 
-    # Format the template
-    return html_template.format(
+    html = html_template.format(
         subject=EMAIL_SUBJECT,
         generation_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         total_articles=article_counter,
@@ -586,6 +617,12 @@ def create_html(categories: Dict[str, List[Dict[str, Any]]]) -> str:
         categorized_content=categorized_content,
         ai_model=os.environ.get("CLAUDE_MODEL", "claude-haiku-4-5-20251001"),
     )
+
+    if feed_stats:
+        summary_html = _generate_feed_summary_html(feed_stats)
+        html = html.replace("</body>", f"{summary_html}\n  </body>")
+
+    return html
 
 
 def send_email(event: Dict[str, Any], context: Optional[Any] = None) -> None:  # pylint: disable=W0613

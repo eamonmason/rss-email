@@ -118,10 +118,11 @@ class TestRetrieveArticles(unittest.TestCase):
         mock_get_feed_items.return_value = "feed data"
         mock_generate_rss.return_value = "<rss>RSS content</rss>"
 
-        result = retrieve_rss_feeds(
+        content, counts = retrieve_rss_feeds(
             "feed_file.json", datetime.now() - timedelta(days=3)
         )
-        self.assertIn("<rss>RSS content</rss>", result)
+        self.assertIn("<rss>RSS content</rss>", content)
+        self.assertIsInstance(counts, dict)
 
     @mock_aws
     def test_create_rss(self):
@@ -136,7 +137,7 @@ class TestRetrieveArticles(unittest.TestCase):
         s3.create_bucket(Bucket="test-bucket")
         test_content = "<rss><title>Test RSS</title></rss>"
         rss_email.retrieve_articles.retrieve_rss_feeds = MagicMock(
-            return_value=test_content
+            return_value=(test_content, {})
         )
 
         try:
@@ -236,7 +237,7 @@ class TestRetrieveArticles(unittest.TestCase):
         content = "test"
         s3 = boto3.client("s3", region_name="us-east-1")
         s3.create_bucket(Bucket=bucket_name)
-        rss_email.retrieve_articles.retrieve_rss_feeds = MagicMock(return_value=content)
+        rss_email.retrieve_articles.retrieve_rss_feeds = MagicMock(return_value=(content, {}))
 
         try:
             # Call create_rss function, with appropriate env variables

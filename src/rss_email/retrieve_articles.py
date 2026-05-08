@@ -32,7 +32,7 @@ from datetime import datetime, timedelta
 from importlib.resources import files
 from socket import timeout
 from time import mktime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.error import HTTPError, URLError
 
 import boto3
@@ -739,8 +739,8 @@ def is_connected() -> bool:
 
 
 @pydantic.validate_call(validate_return=True)
-def retrieve_rss_feeds(feed_file: str, update_date: datetime) -> str:
-    """Run main orchestration function."""
+def retrieve_rss_feeds(feed_file: str, update_date: datetime) -> Tuple[str, Dict[str, int]]:
+    """Run main orchestration function. Returns (rss_xml, per_url_article_counts)."""
     # Check there is an intenet connection, otherwise bail
 
     if not is_connected():
@@ -763,11 +763,13 @@ def retrieve_rss_feeds(feed_file: str, update_date: datetime) -> str:
             except Exception as exc:  # pylint: disable=W0718
                 logger.warning("%r generated an exception: %s", url, exc)
 
+    per_url_counts: Dict[str, int] = {}
     filtered_entries = []
     for item_url, item in rss_items.items():
-        for f_item in get_feed(item_url, item, update_date):
-            filtered_entries.append(f_item)
-    return generate_rss(sorted(filtered_entries, reverse=True))
+        feed_articles = get_feed(item_url, item, update_date)
+        per_url_counts[item_url] = len(feed_articles)
+        filtered_entries.extend(feed_articles)
+    return generate_rss(sorted(filtered_entries, reverse=True)), per_url_counts
 
 
 @pydantic.validate_call(validate_return=True)
@@ -784,7 +786,7 @@ def create_rss(event: Dict[str, Any], context: Optional[Any] = None) -> None:  #
     bucket = os.environ["BUCKET"]
     key = os.environ["KEY"]
     feeds_file = os.environ["FEED_DEFINITIONS_FILE"]
-    content = retrieve_rss_feeds(feeds_file, update_date)
+    content, _ = retrieve_rss_feeds(feeds_file, update_date)
     try:
         boto3.client("s3").put_object(
             Key=key,

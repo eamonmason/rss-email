@@ -1,5 +1,6 @@
 """Lambda function to retrieve and aggregate RSS feeds, storing results in S3."""
 
+import json
 import logging
 import os
 import tempfile
@@ -59,10 +60,26 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
 
         # Get update date and retrieve RSS feeds
         update_date = get_update_date(DAYS_OF_NEWS)
-        rss_content = retrieve_rss_feeds(temp_feeds_path, update_date)
+        rss_content, per_url_counts = retrieve_rss_feeds(temp_feeds_path, update_date)
 
         # Clean up temp file
         os.unlink(temp_feeds_path)
+
+        # Build feed name → article count mapping and store as sidecar
+        feed_data = json.loads(feed_urls_content)
+        url_to_name = {feed["url"]: feed["name"] for feed in feed_data.get("feeds", [])}
+        feed_stats = {
+            url_to_name.get(url, url): count
+            for url, count in per_url_counts.items()
+        }
+        feed_stats_sorted = dict(sorted(feed_stats.items(), key=lambda x: -x[1]))
+        s3.put_object(
+            Bucket=bucket,
+            Key="feed_stats.json",
+            Body=json.dumps(feed_stats_sorted),
+            ContentType="application/json",
+        )
+        logger.info("Stored feed stats for %d feeds", len(feed_stats_sorted))
 
         # Count articles in RSS feed
         import xml.etree.ElementTree as ET  # pylint: disable=C0415  # noqa: N817
