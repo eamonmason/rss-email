@@ -253,7 +253,8 @@ export class RSSEmailStack extends cdk.Stack {
       role: role,
       layers: [layer],
       memorySize: 512,
-      timeout: cdk.Duration.seconds(300) // 5 minutes for RSS retrieval
+      timeout: cdk.Duration.seconds(300), // 5 minutes for RSS retrieval
+      logRetention: logs.RetentionDays.ONE_MONTH,
     });
 
     // Email Batch Processing Functions
@@ -565,11 +566,8 @@ def lambda_handler(event, context):
     // Old rssEmailLogGroup, emailerErrorMetricFilter, and errorAlarm removed
     // RSSEmailerFunction replaced by Step Functions workflow
 
-    const retrieveRSSArticlesLogGroup = new logs.LogGroup(this, 'retrieveRSSArticlesLogGroup', {
-      logGroupName: `/aws/lambda/${retrieveRSSArticlesFunction.functionName}`,
-      retention: logs.RetentionDays.ONE_MONTH,
-      removalPolicy: cdk.RemovalPolicy.DESTROY
-    });
+    // Reference the function's log group directly (Lambda auto-creates it; logRetention Custom Resource manages retention)
+    const retrieveRSSArticlesLogGroup = retrieveRSSArticlesFunction.logGroup;
 
     const retrieveRSSArticlesErrorMetricFilter = new logs.MetricFilter(this, 'RetrieveRSSArticlesErrorMetricFilter', {
       logGroup: retrieveRSSArticlesLogGroup,
