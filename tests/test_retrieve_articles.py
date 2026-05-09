@@ -17,12 +17,14 @@ from moto import mock_aws
 from pydantic import HttpUrl
 
 import rss_email.retrieve_articles
+from rss_email.models import FeedConfig
 from rss_email.retrieve_articles import (
     Article,
     create_rss,
     generate_rss,
     get_feed,
     get_feed_items,
+    get_feed_limits,
     get_feed_urls,
     get_update_date,
     is_connected,
@@ -254,6 +256,89 @@ class TestRetrieveArticles(unittest.TestCase):
             os.environ.pop("BUCKET", None)
             os.environ.pop("KEY", None)
             os.environ.pop("FEED_DEFINITIONS_FILE", None)
+
+
+class TestFeedLimits(unittest.TestCase):
+    """Tests for per-feed max_articles and lookback_days config."""
+
+    def test_feed_config_parses_limits(self):
+        """FeedConfig.from_dict() correctly parses max_articles and lookback_days."""
+        cfg = FeedConfig.from_dict(
+            {"name": "Test", "url": "https://example.com/feed/", "max_articles": 20, "lookback_days": 1}
+        )
+        self.assertEqual(cfg.max_articles, 20)
+        self.assertEqual(cfg.lookback_days, 1)
+
+    def test_feed_config_limits_default_to_none(self):
+        """max_articles and lookback_days default to None when omitted."""
+        cfg = FeedConfig.from_dict({"name": "Test", "url": "https://example.com/feed/"})
+        self.assertIsNone(cfg.max_articles)
+        self.assertIsNone(cfg.lookback_days)
+
+    @patch("rss_email.retrieve_articles.files")
+    def test_get_feed_limits_returns_per_url_dict(self, mock_files):
+        """get_feed_limits() returns correct per-URL dict from feed JSON."""
+        mock_files.return_value.joinpath.return_value.read_text.return_value = (
+            '{"feeds": [{"name": "A", "url": "https://a.com/feed/", "max_articles": 10, "lookback_days": 2},'
+            ' {"name": "B", "url": "https://b.com/feed/"}]}'
+        )
+        limits = get_feed_limits("local.json")
+        self.assertEqual(limits["https://a.com/feed/"]["max_articles"], 10)
+        self.assertEqual(limits["https://a.com/feed/"]["lookback_days"], 2)
+        self.assertIsNone(limits["https://b.com/feed/"]["max_articles"])
+        self.assertIsNone(limits["https://b.com/feed/"]["lookback_days"])
+
+    @patch("rss_email.retrieve_articles.get_feed")
+    @patch("rss_email.retrieve_articles.get_feed_items")
+    @patch("rss_email.retrieve_articles.get_feed_urls")
+    @patch("rss_email.retrieve_articles.is_connected")
+    def test_retrieve_applies_max_articles_cap(
+        self, mock_connected, mock_urls, mock_items, mock_get_feed
+    ):
+        """retrieve_rss_feeds() caps per-feed articles when max_articles is set."""
+        mock_connected.return_value = True
+        url = "https://example.com/feed/"
+        mock_urls.return_value = [url]
+        mock_items.return_value = b"<rss/>"
+        articles = [
+            Article(
+                title=f"Article {i}",
+                link=f"https://example.com/{i}",
+                pubdate=datetime.now() - timedelta(hours=i),
+                description="",
+            )
+            for i in range(30)
+        ]
+        mock_get_feed.return_value = articles
+
+        limits = {url: {"max_articles": 5, "lookback_days": None}}
+        with patch("rss_email.retrieve_articles.get_feed_limits", return_value=limits):
+            _, counts = retrieve_rss_feeds("feed.json", datetime.now() - timedelta(days=3))
+        self.assertEqual(counts[url], 5)
+
+    @patch("rss_email.retrieve_articles.get_feed")
+    @patch("rss_email.retrieve_articles.get_feed_items")
+    @patch("rss_email.retrieve_articles.get_feed_urls")
+    @patch("rss_email.retrieve_articles.is_connected")
+    def test_retrieve_uses_per_feed_lookback(
+        self, mock_connected, mock_urls, mock_items, mock_get_feed
+    ):
+        """retrieve_rss_feeds() passes a feed-specific update_date when lookback_days is set."""
+        mock_connected.return_value = True
+        url = "https://example.com/feed/"
+        mock_urls.return_value = [url]
+        mock_items.return_value = b"<rss/>"
+        mock_get_feed.return_value = []
+
+        limits = {url: {"max_articles": None, "lookback_days": 1}}
+        global_update = datetime.now() - timedelta(days=3)
+        with patch("rss_email.retrieve_articles.get_feed_limits", return_value=limits):
+            retrieve_rss_feeds("feed.json", global_update)
+
+        call_update_date = mock_get_feed.call_args[0][2]
+        # Feed-specific date should be ~1 day ago, not 3 days ago
+        expected_floor = datetime.now() - timedelta(days=2)
+        self.assertGreater(call_update_date, expected_floor)
 
 
 if __name__ == "__main__":

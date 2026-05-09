@@ -41,6 +41,8 @@ class FeedConfig(BaseModel):
     name: str = Field(min_length=1)
     url: HttpUrl
     enabled: bool = True
+    max_articles: Optional[int] = None
+    lookback_days: Optional[int] = None
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> FeedConfig:
@@ -61,7 +63,13 @@ class FeedConfig(BaseModel):
             name = name[:-4]  # Remove "_url" suffix
             enabled = False
 
-        return cls(name=name, url=url, enabled=enabled)
+        return cls(
+            name=name,
+            url=url,
+            enabled=enabled,
+            max_articles=data.get("max_articles"),
+            lookback_days=data.get("lookback_days"),
+        )
 
 
 class FeedList(BaseModel):

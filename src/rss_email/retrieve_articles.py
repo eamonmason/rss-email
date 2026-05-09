@@ -565,6 +565,22 @@ def detect_and_decompress(content: bytes, url: str) -> bytes:
     return content
 
 
+def _load_feed_json(feed_file: str) -> dict:
+    """Load feed configuration JSON from a local path or S3 URI."""
+    if feed_file.startswith("s3://"):
+        bucket, key = feed_file[5:].split("/", 1)
+        text_data = (
+            boto3.client("s3")
+            .get_object(Bucket=bucket, Key=key)
+            .get("Body")
+            .read()
+            .decode("utf-8")
+        )
+    else:
+        text_data = files("rss_email").joinpath(feed_file).read_text()
+    return json.loads(text_data)
+
+
 @pydantic.validate_call(validate_return=True)
 def get_feed_urls(feed_file: str) -> List[str]:
     """
@@ -573,20 +589,7 @@ def get_feed_urls(feed_file: str) -> List[str]:
     Uses FeedList model for validation when available.
     """
     url_list = []
-    text_data = ""
-    if feed_file.startswith("s3://"):
-        bucket, feed_file = feed_file[5:].split("/", 1)
-        text_data = (
-            boto3.client("s3")
-            .get_object(Bucket=bucket, Key=feed_file)
-            .get("Body")
-            .read()
-            .decode("utf-8")
-        )
-    else:
-        text_data = files("rss_email").joinpath(feed_file).read_text()
-
-    data = json.loads(text_data)
+    data = _load_feed_json(feed_file)
 
     # Use FeedList model if available for validation
     if FeedList is not None:
@@ -609,6 +612,26 @@ def get_feed_urls(feed_file: str) -> List[str]:
                 url_list.append(i["url"])
 
     return url_list
+
+
+@pydantic.validate_call(validate_return=True)
+def get_feed_limits(feed_file: str) -> Dict[str, Dict]:
+    """Return per-URL limits {url: {max_articles, lookback_days}} for enabled feeds."""
+    limits: Dict[str, Dict] = {}
+    if FeedList is None:
+        return limits
+    try:
+        data = _load_feed_json(feed_file)
+        feed_list = FeedList.from_json_data(data)
+        for feed in feed_list.feeds:
+            if feed.enabled:
+                limits[str(feed.url)] = {
+                    "max_articles": feed.max_articles,
+                    "lookback_days": feed.lookback_days,
+                }
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        logger.warning("Failed to load feed limits: %s", str(e))
+    return limits
 
 
 # Use shared RSSItem model if available, otherwise fallback to local Article class
@@ -748,6 +771,7 @@ def retrieve_rss_feeds(feed_file: str, update_date: datetime) -> Tuple[str, Dict
         sys.exit(0)
 
     rss_urls = get_feed_urls(feed_file)
+    feed_limits = get_feed_limits(feed_file)
 
     rss_items = {}
     with ThreadPoolExecutor(max_workers=5) as executor:
@@ -766,7 +790,13 @@ def retrieve_rss_feeds(feed_file: str, update_date: datetime) -> Tuple[str, Dict
     per_url_counts: Dict[str, int] = {}
     filtered_entries = []
     for item_url, item in rss_items.items():
-        feed_articles = get_feed(item_url, item, update_date)
+        limits = feed_limits.get(item_url, {})
+        lookback = limits.get("lookback_days")
+        feed_update_date = get_update_date(lookback) if lookback else update_date
+        feed_articles = get_feed(item_url, item, feed_update_date)
+        max_articles = limits.get("max_articles")
+        if max_articles is not None:
+            feed_articles = sorted(feed_articles, reverse=True)[:max_articles]
         per_url_counts[item_url] = len(feed_articles)
         filtered_entries.extend(feed_articles)
     return generate_rss(sorted(filtered_entries, reverse=True)), per_url_counts
