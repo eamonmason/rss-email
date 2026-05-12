@@ -22,7 +22,7 @@ from .article_processor import (
     get_anthropic_api_key,
     optimize_articles_for_claude,
 )
-from .json_repair import repair_truncated_json
+from .json_utils import extract_json_from_text
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -88,11 +88,12 @@ def parse_grouping_response(
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
-        repaired = repair_truncated_json(text)
-        if repaired is None:
+        # Claude sometimes wraps JSON in markdown fences; extract_json_from_text
+        # strips them and applies multiple repair strategies.
+        data = extract_json_from_text(text, required_fields=["groups"])
+        if data is None:
             logger.error("Failed to parse grouping response as JSON")
             return [[i] for i in range(article_count)]
-        data = repaired
 
     raw_groups = data.get("groups") if isinstance(data, dict) else None
     if not isinstance(raw_groups, list):
