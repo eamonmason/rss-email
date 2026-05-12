@@ -3,14 +3,19 @@
 import json
 import logging
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 import anthropic
 import boto3
 from botocore.exceptions import ClientError
 
 from .email_articles import send_via_ses, create_html, set_last_run
-from .article_processor import ProcessedArticle
+from .article_processor import (
+    ProcessedArticle,
+    _article_to_source,
+    _iter_category_entries,
+)
+from .models import ArticleSource
 
 logger = logging.getLogger(__name__)
 
@@ -31,86 +36,80 @@ def merge_categories(
         target[category].extend(articles)
 
 
-def retrieve_original_articles(bucket: str, metadata_key: str) -> List[Dict[str, Any]]:
-    """
-    Retrieve original article metadata from S3.
-
-    Args:
-        bucket: S3 bucket name
-        metadata_key: S3 key for the metadata file
-
-    Returns:
-        List of original article dictionaries with complete metadata
-    """
+def retrieve_batch_metadata(
+    bucket: str, metadata_key: str
+) -> Tuple[List[Dict[str, Any]], List[List[int]]]:
+    """Retrieve original articles + group assignments from S3."""
     s3_client = boto3.client("s3")
     try:
         response = s3_client.get_object(Bucket=bucket, Key=metadata_key)
         metadata = json.loads(response["Body"].read().decode("utf-8"))
-        logger.info("Retrieved %d articles from S3 metadata", len(metadata.get("articles", [])))
-        return metadata.get("articles", [])
+        articles = metadata.get("articles", [])
+        groups = metadata.get("groups") or [[i] for i in range(len(articles))]
+        logger.info(
+            "Retrieved %d articles and %d groups from S3 metadata",
+            len(articles),
+            len(groups),
+        )
+        return articles, groups
     except ClientError as e:
-        logger.error("Failed to retrieve article metadata from S3: %s", e)
-        return []
+        logger.error("Failed to retrieve batch metadata from S3: %s", e)
+        return [], []
     except (json.JSONDecodeError, KeyError) as e:
-        logger.error("Failed to parse article metadata from S3: %s", e)
-        return []
+        logger.error("Failed to parse batch metadata from S3: %s", e)
+        return [], []
 
 
-def enrich_batch_results_with_metadata(
-    categorized_data: Dict[str, List[Dict[str, Any]]],
-    original_articles: List[Dict[str, Any]]
+def _sources_for_indices(
+    indices: List[int], articles: List[Dict[str, Any]]
+) -> List[ArticleSource]:
+    """Build ArticleSource objects for every article index in a group."""
+    return [_article_to_source(articles[i]) for i in indices if 0 <= i < len(articles)]
+
+
+def build_processed_articles_from_groups(
+    categorized_data: Dict[str, Any],
+    original_articles: List[Dict[str, Any]],
+    groups: List[List[int]],
 ) -> Dict[str, List[ProcessedArticle]]:
-    """
-    Enrich batch results with metadata from original articles.
+    """Convert Claude's group-summary response into ProcessedArticle objects."""
+    enriched: Dict[str, List[ProcessedArticle]] = {}
+    pairs = _iter_category_entries(categorized_data)
 
-    Maps article IDs back to original data to restore comments and other fields
-    that were not sent to Claude.
+    seen_gids: set[str] = set()
+    for category, entry in pairs:
+        gid = entry.get("group_id") or entry.get("id")
+        if not gid or gid in seen_gids:
+            continue
+        try:
+            group_idx = int(gid.split("_", 1)[1])
+        except (IndexError, ValueError):
+            logger.warning("Invalid group_id %r in response", gid)
+            continue
+        if not 0 <= group_idx < len(groups):
+            logger.warning("Group index %d out of range", group_idx)
+            continue
+        seen_gids.add(gid)
+        indices = groups[group_idx]
+        if not indices:
+            continue
+        primary = original_articles[indices[0]] if indices[0] < len(original_articles) else {}
+        sources = _sources_for_indices(indices, original_articles)
+        enriched.setdefault(category, []).append(ProcessedArticle(
+            title=entry.get("title") or primary.get("title", "Untitled"),
+            link=primary.get("link", ""),
+            summary=entry.get("summary", ""),
+            category=entry.get("category", category),
+            pubdate=primary.get("pubDate", ""),
+            sources=sources,
+            original_description=primary.get("description"),
+            comments=primary.get("comments"),
+        ))
 
-    Args:
-        categorized_data: Categories dictionary from Claude API response
-        original_articles: Original articles with complete metadata
-
-    Returns:
-        Dictionary of category names to lists of ProcessedArticle objects
-    """
-    enriched_categories = {}
-
-    for category, articles in categorized_data.items():
-        enriched_articles = []
-        for article in articles:
-            # Extract index from article ID (e.g., "article_5" -> 5)
-            article_id = article.get("id", "")
-            try:
-                idx = int(article_id.split("_")[1])
-                if idx < len(original_articles):
-                    comments = original_articles[idx].get("comments", None)
-                    original_desc = original_articles[idx].get("description", "")
-                else:
-                    logger.warning("Article index %d out of range", idx)
-                    comments = None
-                    original_desc = ""
-            except (IndexError, ValueError):
-                logger.warning("Invalid article ID: %s", article_id)
-                comments = None
-                original_desc = ""
-
-            enriched_articles.append(ProcessedArticle(
-                title=article.get("title", ""),
-                link=article.get("link", ""),
-                summary=article.get("summary", ""),
-                category=category,
-                pubdate=article.get("pubdate", ""),
-                related_articles=article.get("related_articles", []),
-                original_description=original_desc,
-                comments=comments,
-            ))
-
-        enriched_categories[category] = enriched_articles
-
-    return enriched_categories
+    return enriched
 
 
-def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # pylint: disable=W0613
+def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # pylint: disable=W0613,too-many-locals
     """
     Retrieve batch results, format email, and send via SES.
 
@@ -135,13 +134,18 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
         to_email = os.environ["TO_EMAIL_ADDRESS"]
         bucket = os.environ["RSS_BUCKET"]
 
-        # Retrieve original articles from S3 if metadata_key is provided
-        original_articles = []
+        # Retrieve original articles + groups from S3 if metadata_key is provided
+        original_articles: List[Dict[str, Any]] = []
+        groups: List[List[int]] = []
         if metadata_key:
-            original_articles = retrieve_original_articles(bucket, metadata_key)
-            logger.info("Retrieved %d original articles from metadata", len(original_articles))
+            original_articles, groups = retrieve_batch_metadata(bucket, metadata_key)
+            logger.info(
+                "Retrieved %d original articles and %d groups from metadata",
+                len(original_articles),
+                len(groups),
+            )
         else:
-            logger.warning("No metadata_key provided, comments will not be available")
+            logger.warning("No metadata_key provided, source attribution will be empty")
 
         # Get API key from Parameter Store
         ssm = boto3.client("ssm")
@@ -189,15 +193,15 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
 
                     # Enrich and merge categories
                     if "categories" in categorized_data:
-                        if original_articles:
-                            # Enrich with metadata (adds comments and other fields)
-                            enriched_categories = enrich_batch_results_with_metadata(
-                                categorized_data["categories"],
-                                original_articles
+                        if original_articles and groups:
+                            enriched_categories = build_processed_articles_from_groups(
+                                categorized_data,
+                                original_articles,
+                                groups,
                             )
                             merge_categories(all_categories, enriched_categories)
                         else:
-                            # Fallback: merge without enrichment
+                            # Fallback: merge without enrichment (no source attribution)
                             merge_categories(all_categories, categorized_data["categories"])
                     else:
                         logger.warning(

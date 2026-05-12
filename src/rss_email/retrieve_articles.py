@@ -615,6 +615,23 @@ def get_feed_urls(feed_file: str) -> List[str]:
 
 
 @pydantic.validate_call(validate_return=True)
+def get_feed_url_to_name(feed_file: str) -> Dict[str, str]:
+    """Return a mapping of enabled feed URL -> feed name from the feed JSON."""
+    url_to_name: Dict[str, str] = {}
+    if FeedList is None:
+        return url_to_name
+    try:
+        data = _load_feed_json(feed_file)
+        feed_list = FeedList.from_json_data(data)
+        for feed in feed_list.feeds:
+            if feed.enabled:
+                url_to_name[str(feed.url)] = feed.name
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        logger.warning("Failed to load feed name map: %s", str(e))
+    return url_to_name
+
+
+@pydantic.validate_call(validate_return=True)
 def get_feed_limits(feed_file: str) -> Dict[str, Dict]:
     """Return per-URL limits {url: {max_articles, lookback_days}} for enabled feeds."""
     limits: Dict[str, Dict] = {}
@@ -653,7 +670,12 @@ else:
 
 
 @pydantic.validate_call(validate_return=True)
-def get_feed(url: str, item: bytes, update_date: datetime) -> List[Article]:
+def get_feed(
+    url: str,
+    item: bytes,
+    update_date: datetime,
+    feed_name: Optional[str] = None,
+) -> List[Article]:
     """Get items from defined feed for a given period of time."""
     feed_list = feedparser.parse(item)
     articles = []
@@ -680,6 +702,9 @@ def get_feed(url: str, item: bytes, update_date: datetime) -> List[Article]:
             # Add sort_date if using RSSItem
             if RSSItem is not None:
                 article_kwargs["sort_date"] = mktime(feed_date)
+                if feed_name:
+                    article_kwargs["source_name"] = feed_name
+                    article_kwargs["source_url"] = url
 
             # Add comments link if available
             if hasattr(article, "comments"):
@@ -722,6 +747,11 @@ def generate_rss(articles: List[Article]) -> str:
         if source_article not in output_list:
             output_list.append(source_article)
     for article in output_list:
+        source = None
+        source_name = getattr(article, "source_name", None)
+        source_url = getattr(article, "source_url", None)
+        if source_name and source_url:
+            source = PyRSS2Gen.Source(name=source_name, url=str(source_url))
         output.append(
             PyRSS2Gen.RSSItem(
                 title=article.title,
@@ -730,6 +760,7 @@ def generate_rss(articles: List[Article]) -> str:
                 guid=PyRSS2Gen.Guid(str(article.link)),
                 pubDate=article.pubdate,
                 comments=str(article.comments) if article.comments else None,
+                source=source,
             )
         )
 
@@ -772,6 +803,7 @@ def retrieve_rss_feeds(feed_file: str, update_date: datetime) -> Tuple[str, Dict
 
     rss_urls = get_feed_urls(feed_file)
     feed_limits = get_feed_limits(feed_file)
+    feed_names = get_feed_url_to_name(feed_file)
 
     rss_items = {}
     with ThreadPoolExecutor(max_workers=5) as executor:
@@ -793,7 +825,9 @@ def retrieve_rss_feeds(feed_file: str, update_date: datetime) -> Tuple[str, Dict
         limits = feed_limits.get(item_url, {})
         lookback = limits.get("lookback_days")
         feed_update_date = get_update_date(lookback) if lookback else update_date
-        feed_articles = get_feed(item_url, item, feed_update_date)
+        feed_articles = get_feed(
+            item_url, item, feed_update_date, feed_name=feed_names.get(item_url)
+        )
         max_articles = limits.get("max_articles")
         if max_articles is not None:
             feed_articles = sorted(feed_articles, reverse=True)[:max_articles]

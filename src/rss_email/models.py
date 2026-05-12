@@ -20,6 +20,8 @@ class RSSItem(BaseModel):
     comments: Optional[HttpUrl] = None
     pubdate: datetime = Field(alias="pubDate")
     sort_date: Optional[float] = Field(default=None, alias="sortDate")
+    source_name: Optional[str] = Field(default=None, alias="sourceName")
+    source_url: Optional[HttpUrl] = Field(default=None, alias="sourceUrl")
 
     model_config = {
         "populate_by_name": True,  # Allow both field names and aliases
@@ -124,6 +126,19 @@ class ApplicationSettings(BaseModel):
     model_config = {
         "arbitrary_types_allowed": True,
     }
+
+
+class ArticleSource(BaseModel):
+    """A single feed's coverage of a logical article."""
+
+    feed_name: Optional[str] = None
+    feed_url: Optional[str] = None
+    title: str
+    link: str
+    pubdate: str
+    comments: Optional[str] = None
+
+    model_config = {"arbitrary_types_allowed": True}
 
 
 class ClaudeResponse(BaseModel):

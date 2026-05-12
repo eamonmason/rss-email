@@ -40,6 +40,7 @@ def sample_articles():
     ]
 
 
+@patch("rss_email.submit_email_batch.build_groups_for_articles")
 @patch("rss_email.submit_email_batch.anthropic.Anthropic")
 @patch("rss_email.submit_email_batch.boto3.client")
 @patch("rss_email.submit_email_batch.filter_items")
@@ -51,6 +52,7 @@ def test_lambda_handler_success(
     mock_filter_items,
     mock_boto3_client,
     mock_anthropic,
+    mock_build_groups,
     mock_env,
     sample_articles,
 ):
@@ -59,6 +61,7 @@ def test_lambda_handler_success(
     mock_get_last_run.return_value = datetime(2025, 12, 26, 0, 0, 0)
     mock_get_feed_file.return_value = "<rss>...</rss>"
     mock_filter_items.return_value = sample_articles
+    mock_build_groups.return_value = [[0], [1]]
 
     mock_ssm = MagicMock()
     mock_ssm.get_parameter.return_value = {
@@ -119,6 +122,7 @@ def test_lambda_handler_no_articles(
     assert "submitted_at" in result
 
 
+@patch("rss_email.submit_email_batch.build_groups_for_articles")
 @patch("rss_email.submit_email_batch.anthropic.Anthropic")
 @patch("rss_email.submit_email_batch.boto3.client")
 @patch("rss_email.submit_email_batch.filter_items")
@@ -130,10 +134,11 @@ def test_lambda_handler_large_batch(
     mock_filter_items,
     mock_boto3_client,
     mock_anthropic,
+    mock_build_groups,
     mock_env,
 ):
-    """Test handler with articles requiring multiple batches."""
-    # Create 50 articles to test batch splitting (25 per batch)
+    """Test handler with groups requiring multiple batch requests."""
+    # Create 50 articles - each gets its own singleton group, so 50 groups -> 2 batches of 25
     articles = [
         {
             "title": f"Article {i}",
@@ -148,6 +153,7 @@ def test_lambda_handler_large_batch(
     mock_get_last_run.return_value = datetime(2025, 12, 26, 0, 0, 0)
     mock_get_feed_file.return_value = "<rss>...</rss>"
     mock_filter_items.return_value = articles
+    mock_build_groups.return_value = [[i] for i in range(50)]
 
     mock_ssm = MagicMock()
     mock_ssm.get_parameter.return_value = {
@@ -164,7 +170,7 @@ def test_lambda_handler_large_batch(
 
     # Verify
     assert result["batch_id"] == "batch-456"
-    assert result["request_count"] == 2  # 50 articles split into 2 batches of 25
+    assert result["request_count"] == 2  # 50 groups split into 2 batches of 25
     assert result["articles_count"] == 50
 
     # Verify correct number of requests created
@@ -191,6 +197,7 @@ def test_lambda_handler_ssm_error(
         lambda_handler({}, None)
 
 
+@patch("rss_email.submit_email_batch.build_groups_for_articles")
 @patch("rss_email.submit_email_batch.anthropic.Anthropic")
 @patch("rss_email.submit_email_batch.boto3.client")
 @patch("rss_email.submit_email_batch.filter_items")
@@ -202,6 +209,7 @@ def test_lambda_handler_anthropic_api_error(
     mock_filter_items,
     mock_boto3_client,
     mock_anthropic,
+    mock_build_groups,
     mock_env,
     sample_articles,
 ):
@@ -210,6 +218,7 @@ def test_lambda_handler_anthropic_api_error(
     mock_get_last_run.return_value = datetime(2025, 12, 26, 0, 0, 0)
     mock_get_feed_file.return_value = "<rss>...</rss>"
     mock_filter_items.return_value = sample_articles
+    mock_build_groups.return_value = [[0], [1]]
 
     mock_ssm = MagicMock()
     mock_ssm.get_parameter.return_value = {

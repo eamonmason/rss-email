@@ -30,7 +30,6 @@ except ImportError:
 try:
     from .article_processor import (
         ClaudeRateLimiter,
-        ProcessedArticle,
         group_articles_by_priority,
         process_articles_with_claude,
     )
@@ -40,7 +39,6 @@ except ImportError:
     # For local testing or when article_processor is not available
     CLAUDE_AVAILABLE = False
     ClaudeRateLimiter = None
-    ProcessedArticle = None
     group_articles_by_priority = None
     process_articles_with_claude = None
 
@@ -119,6 +117,13 @@ def add_attribute_to_dict(
     if tmp_attribute is not None:
         if name == "description":
             target_dict[name] = get_description_body(tmp_attribute.text)
+        elif name == "source":
+            # Standard RSS 2.0 <source url="feed_url">Feed Name</source>
+            url_attr = tmp_attribute.get("url")
+            if url_attr:
+                target_dict["sourceUrl"] = url_attr
+            if tmp_attribute.text:
+                target_dict["sourceName"] = tmp_attribute.text
         else:
             if tmp_attribute.text is not None:
                 target_dict[name] = tmp_attribute.text
@@ -158,7 +163,7 @@ def filter_items(rss_file: str, last_run_date: datetime):
     logger.debug("Retrieved RSS file. Last run date: %s", last_run_date)
     for item in ElementTree.fromstring(rss_file).findall(".//item"):
         item_dict = {}
-        for name in ["title", "link", "description", "pubDate", "comments"]:
+        for name in ["title", "link", "description", "pubDate", "comments", "source"]:
             add_attribute_to_dict(item, name, item_dict)
 
         # Skip items without pubDate
@@ -226,11 +231,49 @@ def filter_items(rss_file: str, last_run_date: datetime):
     return all_items
 
 
+def _render_sources_html(sources: List[Any]) -> str:
+    """Render the per-article sources line (Source / Also covered by)."""
+    if not sources:
+        return ""
+
+    def _source_link(source: Any) -> str:
+        link = source.get("link") if isinstance(source, dict) else getattr(source, "link", "")
+        name = (
+            source.get("feed_name") if isinstance(source, dict)
+            else getattr(source, "feed_name", None)
+        )
+        if not link:
+            return ""
+        if not link.startswith(("http://", "https://")):
+            link = "https://" + link
+        label = name or link
+        return f'<a href="{link}" style="color: #0066cc;">{label}</a>'
+
+    links = [link_html for link_html in (_source_link(s) for s in sources) if link_html]
+    if not links:
+        return ""
+
+    if len(links) == 1:
+        prefix = "Source"
+        body = links[0]
+    else:
+        prefix = "Also covered by"
+        body = " · ".join(links)
+
+    return (
+        '<p style="margin: 6px 0 0 0; font-size: 13px; color: #666; line-height: 1.5;">'
+        f'<strong>{prefix}:</strong> {body}'
+        '</p>'
+    )
+
+
 @pydantic.validate_call(validate_return=True)
 def generate_enhanced_html_content(
-    categorized_articles, article_map: Dict[str, Dict[str, Any]]
+    categorized_articles,
+    article_map: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> str:
     """Generate the categorized HTML content for the enhanced email template."""
+    _ = article_map  # legacy parameter retained for backward compatibility
     content_parts = []
     article_counter = 0
 
@@ -273,33 +316,6 @@ def generate_enhanced_html_content(
         for article in articles:
             article_counter += 1
 
-            # Build related articles text
-            related_titles = []
-            # Handle both dict and object attribute access
-            related_articles = (
-                article.get('related_articles', []) if isinstance(article, dict)
-                else getattr(article, 'related_articles', [])
-            )
-            for related_id in related_articles:
-                idx = int(related_id.split("_")[1])
-                if idx < len(article_map):
-                    related_title = list(article_map.values())[idx].get(
-                        "title", "Related Article"
-                    )
-                    related_titles.append(related_title)
-
-            # Initialize related_html as empty string
-            related_html = ""
-            if related_titles:
-                related_html = f"""
-                    <tr>
-                        <td style="padding: 12px 15px; background-color: #e9ecef; border-radius: 4px;">
-                            <p style="margin: 0; font-size: 14px; color: #666; line-height: 1.5;">
-                                <strong>Related:</strong> {", ".join(related_titles)}
-                            </p>
-                        </td>
-                    </tr>"""
-
             # Ensure the link is properly formatted with protocol
             # Handle both dict and object attribute access
             article_link = article.get('link') if isinstance(article, dict) else article.link
@@ -320,6 +336,11 @@ def generate_enhanced_html_content(
                 article.get('comments') if isinstance(article, dict)
                 else getattr(article, "comments", None)
             )
+            sources = (
+                article.get('sources', []) if isinstance(article, dict)
+                else getattr(article, "sources", [])
+            )
+            sources_html = _render_sources_html(sources)
 
             content_parts.append(f'''
             <tr>
@@ -344,9 +365,9 @@ def generate_enhanced_html_content(
                                 </p>
                                 <p style="margin: 0 0 12px 0; font-size: 16px; color: #555; line-height: 1.6;">
                                 {article_summary}</p>
+                                {sources_html}
                             </td>
                         </tr>
-                        {related_html}
                     </table>
                 </td>
             </tr>''')
@@ -380,18 +401,11 @@ def _generate_claude_enhanced_html(
 
         if categorized_result:
             logger.info("Successfully processed articles with Claude")
-            # Create article map for lookups
-            article_map = {
-                f"article_{i}": item for i, item in enumerate(filtered_items)
-            }
-
             # Get ordered categories
             ordered_categories = group_articles_by_priority(categorized_result)
 
             # Generate enhanced HTML content
-            categorized_content = generate_enhanced_html_content(
-                ordered_categories, article_map
-            )
+            categorized_content = generate_enhanced_html_content(ordered_categories)
 
             # Load enhanced template - use simpler version for better email client compatibility
             try:
@@ -581,25 +595,13 @@ def create_html(
     Returns:
         HTML string for email body
     """
-    # Build article_map from all articles across categories
-    article_map = {}
-    article_counter = 0
-    for articles in categories.values():
-        for article in articles:
-            # Convert ProcessedArticle objects to dictionaries
-            if ProcessedArticle and isinstance(article, ProcessedArticle):
-                article_map[f"article_{article_counter}"] = article.model_dump()
-            else:
-                article_map[f"article_{article_counter}"] = article
-            article_counter += 1
+    article_counter = sum(len(items) for items in categories.values())
 
     # Convert categories dict to list of tuples for generate_enhanced_html_content
     categorized_articles = list(categories.items())
 
     # Generate enhanced HTML content
-    categorized_content = generate_enhanced_html_content(
-        categorized_articles, article_map
-    )
+    categorized_content = generate_enhanced_html_content(categorized_articles)
 
     # Load enhanced template
     try:

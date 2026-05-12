@@ -47,45 +47,64 @@ class TestComprehensiveEmailFlow(unittest.TestCase):
             </channel>
             </rss>"""
 
+        # Stage 1: grouping response (each article in its own group)
+        self.mock_grouping_response = {
+            "groups": [
+                ["article_0"],
+                ["article_1"],
+                ["article_2"],
+            ],
+            "article_count": 3,
+        }
+
+        # Stage 2: summarize+categorize response keyed by group_id
         self.mock_claude_response = {
             "categories": {
                 "AI/ML": [
                     {
-                        "id": "article_0",
+                        "group_id": "group_0",
                         "title": "AI Breakthrough: New Machine Learning Model",
-                        "link": "https://example.com/ai-breakthrough",
                         "summary": "Researchers developed a new ML model showing promising NLP results.",
                         "category": "AI/ML",
-                        "pubdate": recent_date1.strftime('%a, %d %b %Y %H:%M:%S GMT'),
-                        "related_articles": []
                     }
                 ],
                 "Cybersecurity": [
                     {
-                        "id": "article_1",
+                        "group_id": "group_1",
                         "title": "Cybersecurity Alert: New Vulnerability Discovered",
-                        "link": "https://example.com/security-alert",
-                        "summary": "Critical vulnerability found in popular web frameworks by security researchers.",
+                        "summary": "Critical vulnerability found in popular web frameworks.",
                         "category": "Cybersecurity",
-                        "pubdate": recent_date2.strftime('%a, %d %b %Y %H:%M:%S GMT'),
-                        "related_articles": []
                     }
                 ],
                 "Technology": [
                     {
-                        "id": "article_2",
+                        "group_id": "group_2",
                         "title": "Tech News: Python 3.13 Released",
-                        "link": "https://example.com/python-release",
-                        "summary": "Latest Python version includes performance improvements and new features.",
+                        "summary": "Latest Python version includes performance improvements.",
                         "category": "Technology",
-                        "pubdate": recent_date3.strftime('%a, %d %b %Y %H:%M:%S GMT'),
-                        "related_articles": []
                     }
-                ]
+                ],
             },
-            "article_count": 3,
-            "verification": "processed_all_articles"
+            "group_count": 3,
+            "verification": "processed_all_groups",
         }
+
+    @staticmethod
+    def _make_two_stage_side_effect(grouping_json, summary_json):
+        """Return a side_effect that produces grouping then summary responses."""
+        grouping = MagicMock()
+        grouping.content = [MagicMock()]
+        grouping.content[0].text = json.dumps(grouping_json)
+        grouping.usage.input_tokens = 200
+        grouping.usage.output_tokens = 100
+
+        summary = MagicMock()
+        summary.content = [MagicMock()]
+        summary.content[0].text = json.dumps(summary_json)
+        summary.usage.input_tokens = 1000
+        summary.usage.output_tokens = 500
+
+        return [grouping, summary]
 
     @patch("rss_email.email_articles.boto3.client")
     @patch.dict(
@@ -131,18 +150,17 @@ class TestComprehensiveEmailFlow(unittest.TestCase):
 
         mock_boto3_client.side_effect = mock_client
 
-        # Mock Claude API call
-        with patch("rss_email.article_processor.anthropic.Anthropic") as mock_anthropic:
+        # Mock Claude API call - one client used for grouping AND summarize
+        with patch("rss_email.article_processor.anthropic.Anthropic") as mock_proc_anthropic, \
+             patch("rss_email.article_grouper.anthropic.Anthropic") as mock_grp_anthropic:
             mock_client_instance = MagicMock()
-            mock_anthropic.return_value = mock_client_instance
-
-            # Create mock response
-            mock_response = MagicMock()
-            mock_response.content = [MagicMock()]
-            mock_response.content[0].text = json.dumps(self.mock_claude_response)
-            mock_response.usage.input_tokens = 1000
-            mock_response.usage.output_tokens = 500
-            mock_client_instance.messages.create.return_value = mock_response
+            mock_proc_anthropic.return_value = mock_client_instance
+            mock_grp_anthropic.return_value = mock_client_instance
+            mock_client_instance.messages.create.side_effect = (
+                self._make_two_stage_side_effect(
+                    self.mock_grouping_response, self.mock_claude_response
+                )
+            )
 
             # Create test event
             event = {
@@ -157,8 +175,8 @@ class TestComprehensiveEmailFlow(unittest.TestCase):
             # Verify S3 was called
             mock_s3_client.get_object.assert_called_once_with(Bucket="test-bucket", Key="test-key")
 
-            # Verify Claude API was called
-            mock_client_instance.messages.create.assert_called_once()
+            # Verify Claude was called twice (grouping + summarize)
+            self.assertEqual(mock_client_instance.messages.create.call_count, 2)
 
             # Verify email was sent
             mock_ses_client.send_email.assert_called_once()
@@ -215,12 +233,13 @@ class TestComprehensiveEmailFlow(unittest.TestCase):
 
         mock_boto3_client.side_effect = mock_client
 
-        # Mock Claude API call with malformed JSON
-        with patch("rss_email.article_processor.anthropic.Anthropic") as mock_anthropic:
+        # Mock both Claude calls with malformed JSON so we exercise fallback
+        with patch("rss_email.article_processor.anthropic.Anthropic") as mock_proc_anthropic, \
+             patch("rss_email.article_grouper.anthropic.Anthropic") as mock_grp_anthropic:
             mock_client_instance = MagicMock()
-            mock_anthropic.return_value = mock_client_instance
+            mock_proc_anthropic.return_value = mock_client_instance
+            mock_grp_anthropic.return_value = mock_client_instance
 
-            # Create mock response with truly malformed JSON that can't be repaired
             malformed_json = '{"categories": {"AI/ML": [{"id": "article_0", "tit'
             mock_response = MagicMock()
             mock_response.content = [MagicMock()]
@@ -242,18 +261,16 @@ class TestComprehensiveEmailFlow(unittest.TestCase):
             # Verify S3 was called
             mock_s3_client.get_object.assert_called_once()
 
-            # Verify Claude API was called
-            mock_client_instance.messages.create.assert_called_once()
+            # Verify Claude API was called at least once (grouping)
+            self.assertGreaterEqual(mock_client_instance.messages.create.call_count, 1)
 
-            # Verify email was sent (fallback to original format)
+            # Verify email was sent (fallback to Uncategorized)
             mock_ses_client.send_email.assert_called_once()
 
-            # Verify the email content falls back to original format
+            # Verify the email still contains the article titles
             call_args = mock_ses_client.send_email.call_args
             email_body = call_args[1]["Message"]["Body"]["Html"]["Data"]
-            # Should contain original format, not categorized format
-            self.assertNotIn("AI/ML", email_body)
-            self.assertIn("AI Breakthrough", email_body)  # Should still have articles
+            self.assertIn("AI Breakthrough", email_body)
 
     @patch("rss_email.email_articles.boto3.client")
     @patch.dict(
@@ -361,100 +378,122 @@ class TestComprehensiveEmailFlow(unittest.TestCase):
         self.assertGreater(stats["requests_remaining"], 0)
         self.assertGreater(stats["tokens_remaining"], 0)
 
+    @patch("rss_email.article_grouper.anthropic.Anthropic")
     @patch("rss_email.article_processor.anthropic.Anthropic")
-    def test_claude_processing_with_real_data(self, mock_anthropic):
+    def test_claude_processing_with_real_data(self, mock_proc_anthropic, mock_grp_anthropic):
         """Test Claude processing with actual RSS data structure."""
-        # Create articles from the sample RSS
         articles = [
             {
                 "title": "AI Breakthrough: New Machine Learning Model",
                 "link": "https://example.com/ai-breakthrough",
                 "description": "New ML model shows promising NLP results.",
                 "pubDate": "Thu, 02 Jan 2025 12:00:00 GMT",
-                "sortDate": 1735819200
+                "sortDate": 1735819200,
             },
             {
                 "title": "Cybersecurity Alert: New Vulnerability Discovered",
                 "link": "https://example.com/security-alert",
                 "description": "Critical vulnerability found in web frameworks.",
                 "pubDate": "Thu, 02 Jan 2025 10:30:00 GMT",
-                "sortDate": 1735813800
-            }
+                "sortDate": 1735813800,
+            },
         ]
 
-        # Mock Claude client
+        # Same client instance used for both stages
         mock_client_instance = MagicMock()
-        mock_anthropic.return_value = mock_client_instance
+        mock_proc_anthropic.return_value = mock_client_instance
+        mock_grp_anthropic.return_value = mock_client_instance
 
-        # Mock successful response
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock()]
-        mock_response.content[0].text = json.dumps(self.mock_claude_response)
-        mock_response.usage.input_tokens = 1000
-        mock_response.usage.output_tokens = 500
-        mock_client_instance.messages.create.return_value = mock_response
+        # Build a 2-article grouping response and matching summary response
+        grouping_response = {
+            "groups": [["article_0"], ["article_1"]],
+            "article_count": 2,
+        }
+        summary_response = {
+            "categories": {
+                "AI/ML": [self.mock_claude_response["categories"]["AI/ML"][0]],
+                "Cybersecurity": [
+                    self.mock_claude_response["categories"]["Cybersecurity"][0]
+                ],
+            },
+            "group_count": 2,
+        }
+        mock_client_instance.messages.create.side_effect = (
+            self._make_two_stage_side_effect(grouping_response, summary_response)
+        )
 
-        # Test with environment variables set
         with patch.dict("os.environ", {
             "CLAUDE_ENABLED": "true",
             "CLAUDE_MODEL": "claude-haiku-4-5-20251001",
-            "ANTHROPIC_API_KEY": "test-key"
+            "ANTHROPIC_API_KEY": "test-key",
         }):
             rate_limiter = ClaudeRateLimiter()
             result = process_articles_with_claude(articles, rate_limiter)
 
-            # Verify processing was successful
             self.assertIsNotNone(result)
             self.assertIn("AI/ML", result.categories)
             self.assertIn("Cybersecurity", result.categories)
             self.assertEqual(len(result.categories["AI/ML"]), 1)
             self.assertEqual(len(result.categories["Cybersecurity"]), 1)
 
-            # Verify rate limiter was updated
-            self.assertEqual(rate_limiter.current_requests, 1)
-            self.assertEqual(rate_limiter.current_tokens, 1500)
+            # Two Claude calls (grouping + summarize) → 2 requests, 1800 total tokens
+            self.assertEqual(rate_limiter.current_requests, 2)
+            self.assertEqual(rate_limiter.current_tokens, 1800)
 
+    @patch("rss_email.article_grouper.anthropic.Anthropic")
     @patch("rss_email.article_processor.anthropic.Anthropic")
-    def test_claude_processing_with_json_repair(self, mock_anthropic):
-        """Test Claude processing with JSON repair needed."""
+    def test_claude_processing_with_json_repair(self, mock_proc_anthropic, mock_grp_anthropic):
+        """Even with malformed grouping output, summarize stage still succeeds."""
         articles = [
             {
                 "title": "Test Article",
                 "link": "https://example.com/test",
                 "description": "Test description",
                 "pubDate": "Thu, 02 Jan 2025 12:00:00 GMT",
-                "sortDate": 1735819200
+                "sortDate": 1735819200,
             }
         ]
 
-        # Mock Claude client
         mock_client_instance = MagicMock()
-        mock_anthropic.return_value = mock_client_instance
+        mock_proc_anthropic.return_value = mock_client_instance
+        mock_grp_anthropic.return_value = mock_client_instance
 
-        # Mock response with malformed JSON that can be repaired
-        malformed_json = (
-            '{"categories": {"Technology": [{"id": "article_0", "title": "Test Article", '
-            '"link": "https://example.com/test" "summary": "Test", "category": "Technology", '
-            '"pubdate": "Thu, 02 Jan 2025 12:00:00 GMT", "related_articles": []}]}, '
-            '"article_count": 1, "verification": "processed_all_articles"}'
-        )
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock()]
-        mock_response.content[0].text = malformed_json
-        mock_response.usage.input_tokens = 500
-        mock_response.usage.output_tokens = 300
-        mock_client_instance.messages.create.return_value = mock_response
+        # First call: malformed grouping → falls back to singleton
+        bad_grouping = MagicMock()
+        bad_grouping.content = [MagicMock()]
+        bad_grouping.content[0].text = "{garbage"
+        bad_grouping.usage.input_tokens = 100
+        bad_grouping.usage.output_tokens = 50
 
-        # Test with environment variables set
+        # Second call: well-formed summary response
+        summary = MagicMock()
+        summary.content = [MagicMock()]
+        summary.content[0].text = json.dumps({
+            "categories": {
+                "Technology": [
+                    {
+                        "group_id": "group_0",
+                        "title": "Test Article",
+                        "summary": "Test summary.",
+                        "category": "Technology",
+                    }
+                ]
+            },
+            "group_count": 1,
+        })
+        summary.usage.input_tokens = 500
+        summary.usage.output_tokens = 300
+
+        mock_client_instance.messages.create.side_effect = [bad_grouping, summary]
+
         with patch.dict("os.environ", {
             "CLAUDE_ENABLED": "true",
             "CLAUDE_MODEL": "claude-haiku-4-5-20251001",
-            "ANTHROPIC_API_KEY": "test-key"
+            "ANTHROPIC_API_KEY": "test-key",
         }):
             rate_limiter = ClaudeRateLimiter()
             result = process_articles_with_claude(articles, rate_limiter)
 
-            # Verify processing was successful despite JSON repair
             self.assertIsNotNone(result)
             self.assertIn("Technology", result.categories)
             self.assertEqual(len(result.categories["Technology"]), 1)

@@ -12,29 +12,48 @@ from anthropic.types.message_create_params import MessageCreateParamsNonStreamin
 from anthropic.types.messages.batch_create_params import Request
 
 from .email_articles import get_feed_file, filter_items, get_last_run
-from .article_processor import split_articles_into_batches, create_categorization_prompt
+from .article_processor import (
+    ClaudeRateLimiter,
+    build_groups_for_articles,
+    create_group_summary_prompt,
+    _build_group_payload,
+)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
+def _split_groups_into_batches(
+    groups: List[List[int]], max_batch_size: int
+) -> List[List[tuple]]:
+    """Split groups into list-of-batches of (global_group_id, indices) tuples."""
+    batches: List[List[tuple]] = []
+    for start in range(0, len(groups), max_batch_size):
+        chunk = groups[start:start + max_batch_size]
+        batches.append([
+            (f"group_{start + offset}", indices)
+            for offset, indices in enumerate(chunk)
+        ])
+    return batches
+
+
 def create_batch_requests(
-    article_batches: List[tuple],
-    model: str
+    group_batches: List[List[tuple]],
+    articles: List[Dict[str, Any]],
+    model: str,
 ) -> List[Request]:
     """
-    Create batch requests for Claude API.
+    Create one Message Batch request per group-batch.
 
     Args:
-        article_batches: List of (batch, offset) tuples
-        model: Claude model ID
-
-    Returns:
-        List of batch request objects
+        group_batches: Output of _split_groups_into_batches.
+        articles: Original article list (for resolving group member content).
+        model: Claude model ID.
     """
     requests = []
-    for idx, (batch, offset) in enumerate(article_batches):
-        prompt = create_categorization_prompt(batch, batch_offset=offset)
+    for idx, batch in enumerate(group_batches):
+        payloads = [_build_group_payload(gid, indices, articles) for gid, indices in batch]
+        prompt = create_group_summary_prompt(payloads)
         requests.append(
             Request(
                 custom_id=f"email-batch-{idx}",
@@ -90,13 +109,24 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
 
         logger.info("Found %d articles to process", len(filtered_items))
 
-        # Store original articles metadata in S3 for later retrieval
-        # This preserves fields like comments that aren't sent to Claude
+        # Stage 1 (sync): group articles before submitting the summarize batch
+        os.environ.setdefault("ANTHROPIC_API_KEY", api_key)
+        rate_limiter = ClaudeRateLimiter()
+        groups = build_groups_for_articles(filtered_items, rate_limiter)
+        logger.info(
+            "Grouped %d articles into %d logical articles",
+            len(filtered_items),
+            len(groups),
+        )
+
+        # Store original articles + groups in S3 so the downstream Lambda can
+        # rebuild ProcessedArticle.sources without another Claude call.
         timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
         metadata_key = f"batch-metadata/batch-{timestamp}.json"
 
         metadata = {
             "articles": filtered_items,
+            "groups": groups,
             "submitted_at": datetime.now(UTC).isoformat(),
         }
 
@@ -107,17 +137,15 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
             Body=json.dumps(metadata, default=str),
             ContentType="application/json"
         )
-        logger.info("Stored article metadata to S3: %s", metadata_key)
+        logger.info("Stored article + group metadata to S3: %s", metadata_key)
 
-        # Split into batches (returns list of (batch, offset) tuples)
-        article_batches = split_articles_into_batches(
-            filtered_items, max_batch_size=batch_size
-        )
-        logger.info("Split into %d batches", len(article_batches))
+        # Split groups (not articles) into per-request batches
+        group_batches = _split_groups_into_batches(groups, max_batch_size=batch_size)
+        logger.info("Split into %d batch request(s)", len(group_batches))
 
-        # Create batch requests
+        # Create batch requests targeting groups
         client = anthropic.Anthropic(api_key=api_key)
-        requests = create_batch_requests(article_batches, model)
+        requests = create_batch_requests(group_batches, filtered_items, model)
 
         # Submit batch
         message_batch = client.messages.batches.create(requests=requests)

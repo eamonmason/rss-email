@@ -96,6 +96,49 @@ class TestRetrieveArticles(unittest.TestCase):
         result = generate_rss(articles)
         self.assertIn("<title>Article 1</title>", result)
 
+    def test_generate_rss_emits_source_element(self):
+        """Articles with source_name/source_url surface as a <source> element."""
+        articles = [
+            Article(
+                title="Article 1",
+                link=HttpUrl("http://example.com/1"),
+                pubdate=datetime.now(),
+                description="Description 1",
+                source_name="Krebs on Security",
+                source_url=HttpUrl("https://krebsonsecurity.com/feed/"),
+            )
+        ]
+
+        result = generate_rss(articles)
+
+        self.assertIn('<source url="https://krebsonsecurity.com/feed/">', result)
+        self.assertIn("Krebs on Security</source>", result)
+
+    def test_source_round_trip_via_filter_items(self):
+        """generate_rss -> filter_items preserves sourceName/sourceUrl."""
+        # Local import to avoid load-time coupling with retrieve_articles tests
+        # pylint: disable=import-outside-toplevel
+        from rss_email.email_articles import filter_items
+
+        pub = datetime.now() - timedelta(minutes=30)
+        articles = [
+            Article(
+                title="Round Trip",
+                link=HttpUrl("http://example.com/rt"),
+                pubdate=pub,
+                description="d",
+                source_name="Feed X",
+                source_url=HttpUrl("https://x.example/feed/"),
+            )
+        ]
+        rss_xml = generate_rss(articles)
+
+        items = filter_items(rss_xml, datetime.now() - timedelta(hours=2))
+
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["sourceName"], "Feed X")
+        self.assertEqual(items[0]["sourceUrl"], "https://x.example/feed/")
+
     @patch("rss_email.retrieve_articles.socket.create_connection")
     def test_is_connected(self, mock_create_connection):
         """Test internet connectivity check with mocked socket connection."""

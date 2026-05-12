@@ -1,4 +1,4 @@
-"""Unit tests for batch metadata enrichment functionality."""
+"""Unit tests for batch metadata reconstruction (groups + sources)."""
 
 import json
 import unittest
@@ -6,337 +6,183 @@ from unittest.mock import MagicMock, patch
 
 from botocore.exceptions import ClientError
 
-from rss_email.retrieve_and_send_email import (
-    retrieve_original_articles,
-    enrich_batch_results_with_metadata,
-)
 from rss_email.article_processor import ProcessedArticle
+from rss_email.retrieve_and_send_email import (
+    build_processed_articles_from_groups,
+    retrieve_batch_metadata,
+)
 
 
-class TestBatchMetadataEnrichment(unittest.TestCase):
-    """Test cases for batch metadata enrichment."""
-
-    def test_enrich_batch_results_with_comments(self):
-        """Test that enrich_batch_results_with_metadata restores comments from original articles."""
-        # Create original articles with comments
-        original_articles = [
-            {
-                "title": "Article 1",
-                "link": "https://example.com/1",
-                "comments": "https://example.com/1/comments",
-                "description": "Original description 1",
-                "pubDate": "Mon, 10 Jan 2026 08:00:00 GMT",
-            },
-            {
-                "title": "Article 2",
-                "link": "https://example.com/2",
-                "comments": "https://example.com/2/comments",
-                "description": "Original description 2",
-                "pubDate": "Mon, 10 Jan 2026 09:00:00 GMT",
-            },
-        ]
-
-        # Create categorized data from Claude (without comments)
-        categorized_data = {
-            "Technology": [
-                {
-                    "id": "article_0",
-                    "title": "Article 1",
-                    "link": "https://example.com/1",
-                    "summary": "AI-generated summary 1",
-                    "pubdate": "Mon, 10 Jan 2026 08:00:00 GMT",
-                },
-                {
-                    "id": "article_1",
-                    "title": "Article 2",
-                    "link": "https://example.com/2",
-                    "summary": "AI-generated summary 2",
-                    "pubdate": "Mon, 10 Jan 2026 09:00:00 GMT",
-                },
-            ]
+def _articles_with_sources(count: int):
+    """Build a list of test articles with feed attribution."""
+    return [
+        {
+            "title": f"Article {i}",
+            "link": f"https://example.com/{i}",
+            "comments": f"https://example.com/{i}/comments",
+            "description": f"Description {i}",
+            "pubDate": f"Mon, {10 + i} Jan 2026 08:00:00 GMT",
+            "sourceName": f"Feed {i % 3}",
+            "sourceUrl": f"https://example.com/feed/{i % 3}",
         }
+        for i in range(count)
+    ]
 
-        # Enrich with metadata
-        enriched_categories = enrich_batch_results_with_metadata(
-            categorized_data, original_articles
-        )
 
-        # Verify comments are restored
-        self.assertIn("Technology", enriched_categories)
-        self.assertEqual(len(enriched_categories["Technology"]), 2)
+class TestBatchMetadataReconstruction(unittest.TestCase):
+    """Reconstruction of ProcessedArticle from S3 metadata + Claude response."""
 
-        # Check first article
-        article1 = enriched_categories["Technology"][0]
-        self.assertIsInstance(article1, ProcessedArticle)
-        self.assertEqual(article1.title, "Article 1")
-        self.assertEqual(article1.comments, "https://example.com/1/comments")
-        self.assertEqual(article1.original_description, "Original description 1")
-        self.assertEqual(article1.summary, "AI-generated summary 1")
-
-        # Check second article
-        article2 = enriched_categories["Technology"][1]
-        self.assertIsInstance(article2, ProcessedArticle)
-        self.assertEqual(article2.title, "Article 2")
-        self.assertEqual(article2.comments, "https://example.com/2/comments")
-        self.assertEqual(article2.original_description, "Original description 2")
-
-    def test_enrich_batch_results_missing_metadata(self):
-        """Test graceful handling when original articles list is empty."""
-        categorized_data = {
-            "Technology": [
-                {
-                    "id": "article_0",
-                    "title": "Article 1",
-                    "link": "https://example.com/1",
-                    "summary": "Summary",
-                    "pubdate": "Mon, 10 Jan 2026 08:00:00 GMT",
-                }
-            ]
-        }
-
-        # Empty original articles list
-        original_articles = []
-
-        # Should not crash, but comments will be None
-        enriched_categories = enrich_batch_results_with_metadata(
-            categorized_data, original_articles
-        )
-
-        self.assertIn("Technology", enriched_categories)
-        article = enriched_categories["Technology"][0]
-        self.assertIsNone(article.comments)
-        self.assertEqual(article.original_description, "")
-
-    def test_enrich_batch_results_invalid_article_id(self):
-        """Test handling of malformed article IDs."""
-        original_articles = [
-            {
-                "title": "Article 1",
-                "comments": "https://example.com/1/comments",
-                "description": "Description",
+    def test_singleton_group_carries_primary_article_metadata(self):
+        """A singleton group rebuilds with comments + a single source."""
+        original_articles = _articles_with_sources(2)
+        groups = [[0], [1]]
+        response = {
+            "categories": {
+                "Technology": [
+                    {
+                        "group_id": "group_0",
+                        "title": "Article 0",
+                        "summary": "AI summary 0",
+                    },
+                    {
+                        "group_id": "group_1",
+                        "title": "Article 1",
+                        "summary": "AI summary 1",
+                    },
+                ]
             }
-        ]
-
-        # Invalid article IDs
-        categorized_data = {
-            "Technology": [
-                {
-                    "id": "invalid_id",  # No underscore format
-                    "title": "Article with invalid ID",
-                    "link": "https://example.com/invalid",
-                    "summary": "Summary",
-                    "pubdate": "Mon, 10 Jan 2026 08:00:00 GMT",
-                },
-                {
-                    "id": "article_abc",  # Non-numeric index
-                    "title": "Article with non-numeric ID",
-                    "link": "https://example.com/abc",
-                    "summary": "Summary",
-                    "pubdate": "Mon, 10 Jan 2026 08:00:00 GMT",
-                },
-            ]
         }
 
-        # Should handle gracefully without crashing
-        enriched_categories = enrich_batch_results_with_metadata(
-            categorized_data, original_articles
+        enriched = build_processed_articles_from_groups(
+            response, original_articles, groups
         )
 
-        self.assertEqual(len(enriched_categories["Technology"]), 2)
-        # Both articles should have None comments due to invalid IDs
-        self.assertIsNone(enriched_categories["Technology"][0].comments)
-        self.assertIsNone(enriched_categories["Technology"][1].comments)
+        self.assertIn("Technology", enriched)
+        self.assertEqual(len(enriched["Technology"]), 2)
 
-    def test_enrich_batch_results_out_of_range_index(self):
-        """Test handling when article index is out of range."""
-        original_articles = [
-            {
-                "title": "Article 1",
-                "comments": "https://example.com/1/comments",
-                "description": "Description",
+        first = enriched["Technology"][0]
+        self.assertIsInstance(first, ProcessedArticle)
+        self.assertEqual(first.title, "Article 0")
+        self.assertEqual(first.summary, "AI summary 0")
+        self.assertEqual(first.comments, "https://example.com/0/comments")
+        self.assertEqual(len(first.sources), 1)
+        self.assertEqual(first.sources[0].feed_name, "Feed 0")
+
+    def test_multi_article_group_merges_sources(self):
+        """A multi-member group exposes one source per original article."""
+        original_articles = _articles_with_sources(3)
+        groups = [[0, 1, 2]]
+        response = {
+            "categories": {
+                "AI/ML": [
+                    {
+                        "group_id": "group_0",
+                        "title": "Combined Story",
+                        "summary": "Three feeds covered this event.",
+                    }
+                ]
             }
-        ]
-
-        categorized_data = {
-            "Technology": [
-                {
-                    "id": "article_5",  # Index 5 is out of range
-                    "title": "Article with out-of-range index",
-                    "link": "https://example.com/5",
-                    "summary": "Summary",
-                    "pubdate": "Mon, 10 Jan 2026 08:00:00 GMT",
-                }
-            ]
         }
 
-        enriched_categories = enrich_batch_results_with_metadata(
-            categorized_data, original_articles
+        enriched = build_processed_articles_from_groups(
+            response, original_articles, groups
         )
 
-        article = enriched_categories["Technology"][0]
-        self.assertIsNone(article.comments)
-        self.assertEqual(article.original_description, "")
+        story = enriched["AI/ML"][0]
+        self.assertEqual(story.title, "Combined Story")
+        self.assertEqual(len(story.sources), 3)
+        feed_names = {source.feed_name for source in story.sources}
+        self.assertEqual(feed_names, {"Feed 0", "Feed 1", "Feed 2"})
+
+    def test_invalid_group_id_is_skipped(self):
+        """Malformed group_id values do not crash and are ignored."""
+        original_articles = _articles_with_sources(1)
+        groups = [[0]]
+        response = {
+            "categories": {
+                "Technology": [
+                    {"group_id": "not-a-group", "title": "X", "summary": "Y"},
+                    {"group_id": "group_5", "title": "Out of range", "summary": "Y"},
+                    {"group_id": "group_0", "title": "OK", "summary": "Z"},
+                ]
+            }
+        }
+
+        enriched = build_processed_articles_from_groups(
+            response, original_articles, groups
+        )
+
+        self.assertEqual(len(enriched["Technology"]), 1)
+        self.assertEqual(enriched["Technology"][0].title, "OK")
 
     @patch("rss_email.retrieve_and_send_email.boto3.client")
-    def test_retrieve_original_articles_success(self, mock_boto3):
-        """Test successful retrieval of original articles from S3."""
-        # Mock S3 client
+    def test_retrieve_batch_metadata_returns_articles_and_groups(self, mock_boto3):
+        """The S3 metadata blob is parsed into the articles + groups tuple."""
         mock_s3 = MagicMock()
         mock_boto3.return_value = mock_s3
 
-        # Mock S3 response
         metadata = {
-            "articles": [
-                {
-                    "title": "Article 1",
-                    "comments": "https://example.com/1/comments",
-                }
-            ],
+            "articles": [{"title": "A1"}],
+            "groups": [[0]],
             "submitted_at": "2026-01-10T12:00:00",
         }
-
         mock_response = {"Body": MagicMock()}
         mock_response["Body"].read.return_value = json.dumps(metadata).encode("utf-8")
         mock_s3.get_object.return_value = mock_response
 
-        # Test retrieval
-        articles = retrieve_original_articles(
+        articles, groups = retrieve_batch_metadata(
             "test-bucket", "batch-metadata/batch-123.json"
         )
 
-        # Verify S3 call
         mock_s3.get_object.assert_called_once_with(
             Bucket="test-bucket", Key="batch-metadata/batch-123.json"
         )
-
-        # Verify returned articles
-        self.assertEqual(len(articles), 1)
-        self.assertEqual(articles[0]["title"], "Article 1")
-        self.assertEqual(articles[0]["comments"], "https://example.com/1/comments")
+        self.assertEqual(articles, [{"title": "A1"}])
+        self.assertEqual(groups, [[0]])
 
     @patch("rss_email.retrieve_and_send_email.boto3.client")
-    def test_retrieve_original_articles_s3_error(self, mock_boto3):
-        """Test handling of S3 errors when retrieving metadata."""
-        # Mock S3 client that raises an error
+    def test_retrieve_batch_metadata_defaults_groups_to_singletons(self, mock_boto3):
+        """Legacy metadata without groups produces one-singleton-per-article."""
+        mock_s3 = MagicMock()
+        mock_boto3.return_value = mock_s3
+        metadata = {"articles": [{"title": "A1"}, {"title": "A2"}]}
+        mock_response = {"Body": MagicMock()}
+        mock_response["Body"].read.return_value = json.dumps(metadata).encode("utf-8")
+        mock_s3.get_object.return_value = mock_response
+
+        _, groups = retrieve_batch_metadata("test-bucket", "key")
+
+        self.assertEqual(groups, [[0], [1]])
+
+    @patch("rss_email.retrieve_and_send_email.boto3.client")
+    def test_retrieve_batch_metadata_handles_s3_error(self, mock_boto3):
+        """S3 errors return empty lists rather than raising."""
         mock_s3 = MagicMock()
         mock_boto3.return_value = mock_s3
         mock_s3.get_object.side_effect = ClientError(
             {"Error": {"Code": "NoSuchKey", "Message": "Not found"}}, "GetObject"
         )
 
-        # Should return empty list on error
-        articles = retrieve_original_articles(
+        articles, groups = retrieve_batch_metadata(
             "test-bucket", "batch-metadata/nonexistent.json"
         )
 
         self.assertEqual(articles, [])
+        self.assertEqual(groups, [])
 
     @patch("rss_email.retrieve_and_send_email.boto3.client")
-    def test_retrieve_original_articles_invalid_json(self, mock_boto3):
-        """Test handling of invalid JSON in S3 metadata file."""
-        # Mock S3 client
+    def test_retrieve_batch_metadata_handles_invalid_json(self, mock_boto3):
+        """Invalid JSON in S3 returns empty lists rather than raising."""
         mock_s3 = MagicMock()
         mock_boto3.return_value = mock_s3
-
-        # Mock S3 response with invalid JSON
         mock_response = {"Body": MagicMock()}
         mock_response["Body"].read.return_value = b"invalid json {"
         mock_s3.get_object.return_value = mock_response
 
-        # Should return empty list on parse error
-        articles = retrieve_original_articles(
-            "test-bucket", "batch-metadata/invalid.json"
-        )
+        articles, groups = retrieve_batch_metadata("test-bucket", "key")
 
         self.assertEqual(articles, [])
-
-    def test_enrich_batch_results_multi_batch_scenario(self):
-        """Test that metadata enrichment works correctly with multiple batches."""
-        # Create 50 original articles with comments (simulating 2 batches of 25)
-        original_articles = []
-        for i in range(50):
-            original_articles.append({
-                "title": f"Article {i}",
-                "link": f"https://example.com/{i}",
-                "comments": f"https://example.com/{i}/comments",
-                "description": f"Description {i}",
-                "pubDate": f"Mon, {10 + i} Jan 2026 08:00:00 GMT",
-            })
-
-        # Create categorized data simulating what Claude returns from 2 batches
-        # Batch 0: articles 0-24 with IDs article_0 to article_24
-        # Batch 1: articles 25-49 with IDs article_25 to article_49 (now with offset!)
-        categorized_data = {
-            "Technology": [
-                {
-                    "id": "article_5",  # Should map to original article 5
-                    "title": "Article 5",
-                    "link": "https://example.com/5",
-                    "summary": "AI-generated summary 5",
-                    "pubdate": "Mon, 15 Jan 2026 08:00:00 GMT",
-                },
-                {
-                    "id": "article_30",  # Should map to original article 30 (NOT article 5!)
-                    "title": "Article 30",
-                    "link": "https://example.com/30",
-                    "summary": "AI-generated summary 30",
-                    "pubdate": "Mon, 40 Jan 2026 08:00:00 GMT",
-                },
-            ],
-            "AI/ML": [
-                {
-                    "id": "article_0",  # Should map to original article 0
-                    "title": "Article 0",
-                    "link": "https://example.com/0",
-                    "summary": "AI-generated summary 0",
-                    "pubdate": "Mon, 10 Jan 2026 08:00:00 GMT",
-                },
-                {
-                    "id": "article_49",  # Should map to original article 49
-                    "title": "Article 49",
-                    "link": "https://example.com/49",
-                    "summary": "AI-generated summary 49",
-                    "pubdate": "Mon, 59 Jan 2026 08:00:00 GMT",
-                },
-            ],
-        }
-
-        # Enrich with metadata
-        enriched_categories = enrich_batch_results_with_metadata(
-            categorized_data, original_articles
-        )
-
-        # Verify Technology category
-        self.assertIn("Technology", enriched_categories)
-        self.assertEqual(len(enriched_categories["Technology"]), 2)
-
-        # Check article 5 from batch 0
-        article5 = enriched_categories["Technology"][0]
-        self.assertEqual(article5.title, "Article 5")
-        self.assertEqual(article5.comments, "https://example.com/5/comments")
-        self.assertEqual(article5.original_description, "Description 5")
-
-        # Check article 30 from batch 1 - THIS IS THE CRITICAL TEST
-        article30 = enriched_categories["Technology"][1]
-        self.assertEqual(article30.title, "Article 30")
-        self.assertEqual(article30.comments, "https://example.com/30/comments")
-        self.assertEqual(article30.original_description, "Description 30")
-
-        # Verify AI/ML category
-        self.assertIn("AI/ML", enriched_categories)
-        self.assertEqual(len(enriched_categories["AI/ML"]), 2)
-
-        # Check article 0
-        article0 = enriched_categories["AI/ML"][0]
-        self.assertEqual(article0.title, "Article 0")
-        self.assertEqual(article0.comments, "https://example.com/0/comments")
-        self.assertEqual(article0.original_description, "Description 0")
-
-        # Check article 49 from batch 1
-        article49 = enriched_categories["AI/ML"][1]
-        self.assertEqual(article49.title, "Article 49")
-        self.assertEqual(article49.comments, "https://example.com/49/comments")
-        self.assertEqual(article49.original_description, "Description 49")
+        self.assertEqual(groups, [])
 
 
 if __name__ == "__main__":

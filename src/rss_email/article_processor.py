@@ -19,6 +19,8 @@ from rss_email.json_repair import (
     repair_truncated_json,
 )  # Move this import to the top level
 
+from .models import ArticleSource
+
 # Add to the top imports section
 
 logger = logging.getLogger(__name__)
@@ -44,14 +46,14 @@ PRIORITY_CATEGORIES = [
 
 
 class ProcessedArticle(BaseModel):
-    """Processed article with categorization and summary."""
+    """Logical article with categorization, summary, and one or more sources."""
 
     title: str
     link: str
     summary: str
     category: str
     pubdate: str
-    related_articles: List[str] = Field(default_factory=list)
+    sources: List[ArticleSource] = Field(default_factory=list)
     original_description: Optional[str] = None
     comments: Optional[str] = None
     model_config = {"arbitrary_types_allowed": True}
@@ -207,95 +209,96 @@ def split_articles_into_batches(
     return batches
 
 
-def create_categorization_prompt(
-    articles: List[Dict[str, Any]], batch_offset: int = 0
-) -> str:
-    """
-    Create the prompt for Claude to categorize and summarize articles.
-
-    Args:
-        articles: List of articles to process
-        batch_offset: Starting index of this batch in the global article list
-    """
-    # Optimize articles for processing
-    optimized_articles = optimize_articles_for_claude(articles)
-    articles_json = []
-    for idx, article in enumerate(optimized_articles):
-        articles_json.append(
+def _build_group_payload(
+    group_id: str,
+    indices: List[int],
+    articles: List[Dict[str, Any]],
+    description_max_length: int = 200,
+) -> Dict[str, Any]:
+    """Build a single group's payload for the summarization prompt."""
+    members = []
+    for idx in indices:
+        article = articles[idx]
+        members.append(
             {
-                "id": f"article_{batch_offset + idx}",
                 "title": article.get("title", ""),
-                "description": article.get("description", ""),
-                "link": article.get("link", ""),
+                "description": truncate_description(
+                    article.get("description", ""), description_max_length
+                ),
                 "pubdate": article.get("pubDate", ""),
             }
         )
+    return {"group_id": group_id, "members": members}
 
-    prompt = f"""You are processing {len(articles_json)} RSS articles.
-                 You MUST return ALL {len(articles_json)} articles in your response.
 
-CRITICAL REQUIREMENTS:
-- Input: {len(articles_json)} articles
-- Output: EXACTLY {len(articles_json)} articles (no more, no less)
-- Every single article from the input must appear in your output
-- If you're unsure about categorization, use your best judgment but DO NOT omit any articles
+def create_group_summary_prompt(
+    group_payloads: List[Dict[str, Any]],
+) -> str:
+    """Prompt Claude to assign one category + one summary per pre-formed group."""
+    group_count = len(group_payloads)
+    return f"""You are categorizing and summarizing {group_count} groups of RSS articles.
 
-PROCESSING INSTRUCTIONS:
-1. Read through ALL articles first to get complete context
-2. Categorize each article using the priority categories below
-3. Create 2-3 sentence summaries for each article
-4. Identify related articles that cover similar topics
-5. VERIFY your output contains all {len(articles_json)} articles before responding
+Each group represents ONE logical news story; some groups contain a single
+article, others contain multiple articles that all cover the same event from
+different feeds. You must return EXACTLY {group_count} group entries, with no
+group omitted or duplicated.
 
-CATEGORIES (in priority order - prefer tech-related when applicable):
+INSTRUCTIONS:
+1. For each group, pick the best single canonical title (prefer the clearest
+   wording from the members).
+2. Write a 2-3 sentence summary that covers the event, drawing on every
+   member's title and description.
+3. Assign exactly one category from the priority list below.
+
+CATEGORIES (in priority order; prefer tech-related when applicable):
 {", ".join(PRIORITY_CATEGORIES)}
 
-Return a JSON response in this exact format (before compression):
-
-YOU MUST FOLLOW THESE STRICT FORMAT RULES:
-- Return ONLY valid JSON with no explanations or additional text
-- Use proper JSON syntax with commas between all properties and array elements
-- Do not include any text before or after the JSON
-- Ensure all strings are properly quoted with double quotes
-- Ensure all commas are properly placed between properties and array elements
-- Test your JSON mentally for syntax errors before responding
-
-Required JSON structure (compress before returning):
+OUTPUT FORMAT (return ONLY valid JSON, no commentary):
 {{
   "categories": {{
     "category_name": [
       {{
-        "id": "article_X",
-        "title": "original title",
-        "link": "original link",
-        "summary": "brief 1-2 sentence summary",
-        "category": "category_name",
-        "pubdate": "original pubdate",
-        "related_articles": ["article_Y", "article_Z"]
+        "group_id": "group_X",
+        "title": "canonical title",
+        "summary": "2-3 sentence summary",
+        "category": "category_name"
       }}
     ]
   }},
-  "article_count": {len(articles_json)},
-  "verification": "processed_all_articles"
+  "group_count": {group_count},
+  "verification": "processed_all_groups"
 }}
 
-  }}
-}}
-
-Important:
-- Every article must appear in exactly one category
-- All original articles must be included in the response.
-- The count of articles in the response must match the input count.
-- Preserve all original article data (title, link, pubdate)
-- Group similar articles using the related_articles field
-- Prioritize tech-related categories over entertainment/lifestyle categories
-
-FINAL CHECK: Before responding, count your articles and confirm you have exactly {len(articles_json)} articles.
-
-Articles to process:
-{json.dumps(articles_json, indent=2)}
+Groups to process:
+{json.dumps(group_payloads, indent=2)}
 """
-    return prompt
+
+
+def _article_to_source(article: Dict[str, Any]) -> ArticleSource:
+    """Build an ArticleSource from a raw filtered article dict."""
+    return ArticleSource(
+        feed_name=article.get("sourceName"),
+        feed_url=article.get("sourceUrl"),
+        title=article.get("title", ""),
+        link=article.get("link", ""),
+        pubdate=article.get("pubDate", ""),
+        comments=article.get("comments"),
+    )
+
+
+def build_groups_for_articles(
+    articles: List[Dict[str, Any]], rate_limiter: ClaudeRateLimiter
+) -> List[List[int]]:
+    """Run the grouping stage; fall back to singletons on failure."""
+    # Imported lazily to avoid circular import (article_grouper imports from us)
+    # pylint: disable=import-outside-toplevel
+    from .article_grouper import group_articles_with_claude
+
+    groups = group_articles_with_claude(articles, rate_limiter)
+    if groups is None:
+        logger.warning("Grouping failed - falling back to singleton groups")
+        return [[i] for i in range(len(articles))]
+    return groups
 
 
 @pydantic.validate_call(
@@ -304,29 +307,18 @@ Articles to process:
 def process_articles_with_claude(
     articles: List[Dict[str, Any]], rate_limiter: ClaudeRateLimiter
 ) -> Optional[CategorizedArticles]:
-    """Process articles using Claude API for categorization and summarization."""
-    result = None
-
-    # Early validation check
+    """Two-stage Claude processing: cluster, then categorize + summarize."""
     if not should_process_articles(articles):
         return None
 
     try:
-        # Check if we need to split into batches for large article sets
-        if len(articles) > 15:
-            logger.info(
-                "Large article set detected (%d articles), processing in batches",
-                len(articles),
-            )
-            result = _process_articles_in_batches(articles, rate_limiter)
-        else:
-            # Initialize client and process articles normally
-            result = _process_with_claude_client(articles, rate_limiter)
+        groups = build_groups_for_articles(articles, rate_limiter)
+        result = _summarize_groups_with_claude(articles, groups, rate_limiter)
 
-        # Validate the result is properly formatted before returning
         if result is not None and not isinstance(result, CategorizedArticles):
             logger.error("Expected CategorizedArticles but got %r", type(result))
             return None
+        return result
 
     except (
         json.JSONDecodeError,
@@ -338,8 +330,7 @@ def process_articles_with_claude(
     ) as e:
         logger.error("Failed to process articles with Claude: %s", e)
         logger.info("Claude processing failed, original email format will be used")
-
-    return result
+        return None
 
 
 def _create_fallback_articles(articles: List[Dict[str, Any]]) -> List[ProcessedArticle]:
@@ -358,124 +349,191 @@ def _create_fallback_articles(articles: List[Dict[str, Any]]) -> List[ProcessedA
         # Truncate if too long
         summary = truncate_description(description, max_length=300)
 
+        source = _article_to_source(article)
         fallback_article = ProcessedArticle(
             title=article.get("title", "Untitled"),
             link=article.get("link", ""),
             summary=summary,
             category="Uncategorized",
             pubdate=article.get("pubDate", ""),
-            related_articles=[],
+            sources=[source],
             original_description=description,
+            comments=article.get("comments"),
         )
         fallback_articles.append(fallback_article)
 
     return fallback_articles
 
 
-def _process_articles_in_batches(
-    articles: List[Dict[str, Any]], rate_limiter: ClaudeRateLimiter
-) -> Optional[CategorizedArticles]:
-    """Process articles in smaller batches to avoid token limits."""
-    # Get batch size from environment or use default
-    batch_size = int(os.environ.get("CLAUDE_BATCH_SIZE", "25"))
-    batches = split_articles_into_batches(articles, max_batch_size=batch_size)
+def _group_fallback_articles(
+    indices: List[int], articles: List[Dict[str, Any]]
+) -> ProcessedArticle:
+    """Create a single fallback ProcessedArticle for a group of indices."""
+    members = [articles[i] for i in indices]
+    primary = members[0]
+    description = primary.get("description") or primary.get("title", "")
+    summary = truncate_description(description, max_length=300)
+    sources = [_article_to_source(article) for article in members]
+    return ProcessedArticle(
+        title=primary.get("title", "Untitled"),
+        link=primary.get("link", ""),
+        summary=summary,
+        category="Uncategorized",
+        pubdate=primary.get("pubDate", ""),
+        sources=sources,
+        original_description=description,
+        comments=primary.get("comments"),
+    )
 
-    all_categories = {}
-    combined_metadata = {
+
+def _processed_article_from_response(
+    entry: Dict[str, Any],
+    indices: List[int],
+    articles: List[Dict[str, Any]],
+    category: str,
+) -> ProcessedArticle:
+    """Convert one Claude category entry into a ProcessedArticle with sources."""
+    members = [articles[i] for i in indices]
+    primary = members[0]
+    sources = [_article_to_source(article) for article in members]
+    return ProcessedArticle(
+        title=entry.get("title") or primary.get("title", "Untitled"),
+        link=primary.get("link", ""),
+        summary=entry.get("summary", ""),
+        category=entry.get("category", category),
+        pubdate=primary.get("pubDate", ""),
+        sources=sources,
+        original_description=primary.get("description"),
+        comments=primary.get("comments"),
+    )
+
+
+def _iter_category_entries(
+    categorized_data: Dict[str, Any]
+) -> List[Tuple[str, Dict[str, Any]]]:
+    """Yield (category_name, entry_dict) tuples from a category-summary response."""
+    pairs: List[Tuple[str, Dict[str, Any]]] = []
+    categories_section = categorized_data.get("categories", categorized_data)
+    if isinstance(categories_section, dict):
+        for category, entries in categories_section.items():
+            if category in ("group_count", "article_count", "verification"):
+                continue
+            if not isinstance(entries, list):
+                continue
+            for entry in entries:
+                if isinstance(entry, dict):
+                    pairs.append((category, entry))
+    elif isinstance(categories_section, list):
+        for category_obj in categories_section:
+            if not isinstance(category_obj, dict):
+                continue
+            name = category_obj.get("name") or category_obj.get("category")
+            entries = category_obj.get("articles") or category_obj.get("groups") or []
+            if not name or not isinstance(entries, list):
+                continue
+            for entry in entries:
+                if isinstance(entry, dict):
+                    pairs.append((name, entry))
+    return pairs
+
+
+def _summarize_groups_with_claude(
+    articles: List[Dict[str, Any]],
+    groups: List[List[int]],
+    rate_limiter: ClaudeRateLimiter,
+) -> Optional[CategorizedArticles]:
+    """Categorize + summarize each group via Claude (batched if necessary)."""
+    if not groups:
+        return None
+
+    batch_size = int(os.environ.get("CLAUDE_BATCH_SIZE", "25"))
+    all_categories: Dict[str, List[ProcessedArticle]] = {}
+    combined_metadata: Dict[str, Any] = {
         "processed_at": datetime.now().isoformat(),
         "articles_count": len(articles),
+        "groups_count": len(groups),
         "batches_processed": 0,
-        "total_batches": len(batches),
+        "total_batches": (len(groups) + batch_size - 1) // batch_size,
         "batches_failed": 0,
         "tokens_used": 0,
         "model": os.environ.get("CLAUDE_MODEL", "claude-haiku-4-5-20251001"),
         "processing_time_seconds": 0,
     }
-
     start_time = datetime.now()
 
-    for batch_idx, batch in enumerate(batches):
-        logger.info(
-            "Processing batch %d/%d with %d articles",
-            batch_idx + 1,
-            len(batches),
-            len(batch),
-        )
+    client = _initialize_claude_client()
 
-        # Process this batch
-        batch_result = _process_with_claude_client(batch, rate_limiter)
+    for batch_start in range(0, len(groups), batch_size):
+        batch_groups = groups[batch_start:batch_start + batch_size]
+        payloads = []
+        gid_to_indices: Dict[str, List[int]] = {}
+        for offset, indices in enumerate(batch_groups):
+            gid = f"group_{batch_start + offset}"
+            payloads.append(_build_group_payload(gid, indices, articles))
+            gid_to_indices[gid] = indices
 
-        if batch_result is None:
-            logger.warning(
-                "Batch %d failed to process, using fallback display for %d articles",
-                batch_idx + 1,
-                len(batch),
-            )
+        prompt = create_group_summary_prompt(payloads)
+
+        if not rate_limiter.can_make_request(len(prompt) // 4):
+            logger.warning("Rate limit reached before group batch starting at %d", batch_start)
             combined_metadata["batches_failed"] += 1
-            # Create fallback articles for failed batch
-            fallback_articles = _create_fallback_articles(batch)
-            if "Uncategorized" not in all_categories:
-                all_categories["Uncategorized"] = []
-            all_categories["Uncategorized"].extend(fallback_articles)
+            for indices in batch_groups:
+                all_categories.setdefault("Uncategorized", []).append(
+                    _group_fallback_articles(indices, articles)
+                )
             continue
 
-        # Merge results
-        for category, category_articles in batch_result.categories.items():
-            if category not in all_categories:
-                all_categories[category] = []
-            all_categories[category].extend(category_articles)
+        categorized_data, usage_stats = _call_claude_with_prompt(
+            client,
+            prompt,
+            rate_limiter,
+            unit_count=len(payloads),
+            unit_label="groups",
+        )
 
-        # Update metadata
+        if not categorized_data or usage_stats is None:
+            combined_metadata["batches_failed"] += 1
+            for indices in batch_groups:
+                all_categories.setdefault("Uncategorized", []).append(
+                    _group_fallback_articles(indices, articles)
+                )
+            continue
+
         combined_metadata["batches_processed"] += 1
-        if "tokens_used" in batch_result.processing_metadata:
-            combined_metadata["tokens_used"] += batch_result.processing_metadata[
-                "tokens_used"
-            ]
+        combined_metadata["tokens_used"] += usage_stats.get("tokens_used", 0)
+
+        seen_gids: set[str] = set()
+        for category, entry in _iter_category_entries(categorized_data):
+            gid = entry.get("group_id") or entry.get("id")
+            if not gid or gid not in gid_to_indices or gid in seen_gids:
+                continue
+            seen_gids.add(gid)
+            indices = gid_to_indices[gid]
+            processed = _processed_article_from_response(
+                entry, indices, articles, category
+            )
+            all_categories.setdefault(category, []).append(processed)
+
+        # Any group not echoed by Claude gets a fallback so it's not dropped
+        for gid, indices in gid_to_indices.items():
+            if gid not in seen_gids:
+                logger.warning("Group %s missing from Claude response; using fallback", gid)
+                all_categories.setdefault("Uncategorized", []).append(
+                    _group_fallback_articles(indices, articles)
+                )
 
     combined_metadata["processing_time_seconds"] = (
         datetime.now() - start_time
     ).total_seconds()
 
     if not all_categories:
-        logger.error("No articles were successfully processed in any batch")
+        logger.error("No groups were successfully processed")
         return None
 
     return CategorizedArticles(
         categories=all_categories,
         processing_metadata=combined_metadata,
     )
-
-
-def _process_with_claude_client(
-    articles: List[Dict[str, Any]], rate_limiter: ClaudeRateLimiter
-) -> Optional[CategorizedArticles]:
-    """Process articles with initialized Claude client."""
-    # Initialize client and check rate limits
-    client = _initialize_claude_client()
-    if not _check_rate_limits(articles, rate_limiter):
-        return None
-
-    # Process with Claude API
-    categorized_data, usage_stats = _call_claude_api(client, articles, rate_limiter)
-    if not categorized_data or usage_stats is None:
-        return None
-
-    # Convert to structured format
-    return _create_categorized_articles(categorized_data, articles, usage_stats)
-
-
-def _log_processing_error(error: Exception) -> None:
-    """Log specific error types with appropriate messages."""
-    if isinstance(error, json.JSONDecodeError):
-        logger.error("Failed to parse Claude response: %s", error)
-    elif isinstance(error, anthropic.APIError):
-        logger.error("Anthropic API error: %s", error)
-    elif isinstance(error, (KeyError, IndexError, ValueError)):
-        logger.error("Error processing API response structure: %s", error)
-    elif isinstance(error, ClientError):
-        logger.error("AWS client error: %s", error)
-    else:
-        logger.error("Unexpected error processing articles: %s", error)
 
 
 def should_process_articles(articles: List[Dict[str, Any]]) -> bool:
@@ -497,31 +555,17 @@ def _initialize_claude_client() -> anthropic.Anthropic:
     return anthropic.Anthropic(api_key=api_key)
 
 
-def _check_rate_limits(
-    articles: List[Dict[str, Any]], rate_limiter: ClaudeRateLimiter
-) -> bool:
-    """Check if the request is within rate limits."""
-    estimated_tokens = estimate_tokens(articles)
-    if not rate_limiter.can_make_request(estimated_tokens):
-        logger.warning(
-            "Rate limit would be exceeded. Estimated tokens: %s, Current usage: %s",
-            estimated_tokens,
-            rate_limiter.get_usage_stats(),
-        )
-        return False
-    return True
-
-
-def _call_claude_api(
+def _call_claude_with_prompt(
     client: anthropic.Anthropic,
-    articles: List[Dict[str, Any]],
+    prompt: str,
     rate_limiter: ClaudeRateLimiter,
+    *,
+    unit_count: int,
+    unit_label: str = "items",
 ) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
-    """Call the Claude API and process the response."""
+    """Call the Claude API with a pre-built prompt and parse the JSON response."""
     try:
-        # Create prompt and call API
-        prompt = create_categorization_prompt(articles)
-        estimated_tokens = estimate_tokens(articles)
+        estimated_tokens = len(prompt) // 4
         logger.info("Estimated input tokens: %s", estimated_tokens)
 
         # Get timeout from environment variable or default to 120 seconds (2 minutes)
@@ -565,9 +609,10 @@ def _call_claude_api(
         # Warn if response seems suspiciously short
         if response_size < 500:
             logger.warning(
-                "Response is suspiciously short (%d chars) for %d articles",
+                "Response is suspiciously short (%d chars) for %d %s",
                 response_size,
-                len(articles)
+                unit_count,
+                unit_label,
             )
 
         # Try to extract valid JSON with error handling for truncation
@@ -630,13 +675,13 @@ def _call_claude_api(
         processing_time = (datetime.now() - start_time).total_seconds()
         usage_stats = {
             "processed_at": datetime.now().isoformat(),
-            "articles_count": len(articles),
+            unit_label + "_count": unit_count,
             "tokens_used": tokens_used,
             "model": model_name,
             "processing_time_seconds": processing_time,
         }
 
-        _log_api_success(usage_stats, rate_limiter, articles)
+        _log_api_success(usage_stats, rate_limiter, unit_count, unit_label)
 
         return categorized_data, usage_stats
 
@@ -683,154 +728,20 @@ def _get_max_tokens_for_model(model_name: str) -> int:
 def _log_api_success(
     usage_stats: Dict[str, Any],
     rate_limiter: ClaudeRateLimiter,
-    articles: List[Dict[str, Any]],
+    unit_count: int,
+    unit_label: str,
 ) -> None:
     """Log API success metrics."""
     logger.info(
         {
             "event": "claude_api_success",
             "model": os.environ.get("CLAUDE_MODEL"),
-            "articles_processed": len(articles),
+            f"{unit_label}_processed": unit_count,
             "tokens_used": usage_stats["tokens_used"],
             "processing_time_seconds": usage_stats["processing_time_seconds"],
             "usage_stats": rate_limiter.get_usage_stats(),
         }
     )
-
-
-def _process_article_entry(article, articles, category):
-    """Process a single article entry."""
-    article_id = article["id"]
-    idx = int(article_id.split("_")[1])
-    if idx < len(articles):
-        original_desc = articles[idx].get("description", "")
-        comments = articles[idx].get("comments", None)
-    else:
-        logger.warning("Article index %s out of range. Using empty description.", idx)
-        original_desc = ""
-        comments = None
-
-    return ProcessedArticle(
-        title=article["title"],
-        link=article["link"],
-        summary=article["summary"],
-        category=category,
-        pubdate=article["pubdate"],
-        related_articles=article.get("related_articles", []),
-        original_description=original_desc,
-        comments=comments,
-    )
-
-
-def _process_dictionary_categories(categories_data, articles):
-    """Process categories in dictionary format."""
-    processed_categories = {}
-    for category, category_data in categories_data.items():
-        # Skip metadata fields that are not actual categories
-        if category in ("article_count", "verification"):
-            continue
-        articles_data = category_data
-        # Handle both possible structures for articles
-        if isinstance(category_data, dict) and "articles" in category_data:
-            articles_data = category_data["articles"]
-
-        # Ensure articles_data is actually iterable
-        if not isinstance(articles_data, (list, tuple)):
-            logger.error(
-                "Expected list of articles but got %s for category %s",
-                type(articles_data),
-                category,
-            )
-            continue
-
-        processed_articles = []
-        for article in articles_data:
-            processed_article = _process_article_entry(article, articles, category)
-            processed_articles.append(processed_article)
-
-        if processed_articles:
-            processed_categories[category] = processed_articles
-    return processed_categories
-
-
-def _process_list_categories(categories_data, articles):
-    """Process categories in list format."""
-    processed_categories = {}
-    for category_obj in categories_data:
-        if "name" in category_obj and "articles" in category_obj:
-            category = category_obj["name"]
-            articles_list = category_obj["articles"]
-
-            # Ensure articles_list is actually iterable
-            if not isinstance(articles_list, (list, tuple)):
-                logger.error(
-                    "Expected list of articles but got %s for category %s",
-                    type(articles_list),
-                    category,
-                )
-                continue
-
-            processed_articles = []
-            for article in articles_list:
-                processed_article = _process_article_entry(article, articles, category)
-                processed_articles.append(processed_article)
-
-            if processed_articles:
-                processed_categories[category] = processed_articles
-    return processed_categories
-
-
-def _create_categorized_articles(
-    categorized_data: Dict[str, Any],
-    articles: List[Dict[str, Any]],
-    usage_stats: Dict[str, Any],
-) -> CategorizedArticles:
-    """Convert categorized data to structured format."""
-    try:
-        processed_categories = {}
-
-        # Handle both possible JSON structures from Claude
-        if "categories" in categorized_data:
-            categories_data = categorized_data["categories"]
-
-            # Handle structure where categories are keys
-            if isinstance(categories_data, dict):
-                processed_categories = _process_dictionary_categories(
-                    categories_data, articles
-                )
-            # Handle structure where categories is a list of category objects
-            elif isinstance(categories_data, list):
-                processed_categories = _process_list_categories(
-                    categories_data, articles
-                )
-        else:
-            # Handle case where categories are at the top level
-            # Filter out metadata fields first
-            categories_data = {
-                k: v
-                for k, v in categorized_data.items()
-                if k not in ("article_count", "verification")
-            }
-            processed_categories = _process_dictionary_categories(
-                categories_data, articles
-            )
-
-        return CategorizedArticles(
-            categories=processed_categories,
-            processing_metadata=usage_stats,
-        )
-    except (ValueError, KeyError, TypeError, IndexError) as e:
-        logger.error("Error creating categorized articles: %s", e)
-        logger.warning(
-            "Using fallback display for %d articles due to categorization error",
-            len(articles),
-        )
-        # Create fallback articles so they're still displayed
-        fallback_articles = _create_fallback_articles(articles)
-        return CategorizedArticles(
-            categories={"Uncategorized": fallback_articles},
-            processing_metadata=usage_stats,
-        )
 
 
 def group_articles_by_priority(
