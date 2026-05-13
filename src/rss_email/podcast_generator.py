@@ -320,11 +320,7 @@ def generate_script(articles: List[Dict[str, Any]]) -> Optional[str]:
         parameter = ssm.get_parameter(Name=api_key_param, WithDecryption=True)
         api_key = parameter["Parameter"]["Value"]
     except ClientError as e:
-        logger.error(
-            "Failed to retrieve parameter '%s' from parameter store: %s",
-            api_key_param,
-            e
-        )
+        logger.error("Failed to retrieve API key from parameter store: %s", e)
         return None
 
     client = anthropic.Anthropic(api_key=api_key)

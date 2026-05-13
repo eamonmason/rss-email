@@ -81,7 +81,7 @@ class FunctionalWorkflowTest:
             # The article processor will fall back to direct env var if parameter fails
             print("   🔧 Using direct ANTHROPIC_API_KEY for testing")
         elif api_key_param:
-            print(f"   🔧 Using Parameter Store: {api_key_param}")
+            print("   🔧 Using Parameter Store for API key")
         elif not api_key and not api_key_param:
             print("   ⚠️  No Claude API key configuration found")
             print("   💡 Set ANTHROPIC_API_KEY in .env file for Claude features")
@@ -94,7 +94,7 @@ class FunctionalWorkflowTest:
         try:
             response = self.ssm_client.get_parameter(Name=self.ssm_parameter_name)
             self.original_parameter_value = response["Parameter"]["Value"]
-            print(f"   📝 Saved original SSM parameter: {self.original_parameter_value}")
+            print("   📝 Saved original SSM parameter value")
         except ClientError as error:
             if error.response["Error"]["Code"] == "ParameterNotFound":
                 print("   ⚠️  SSM parameter doesn't exist, will create new one")
@@ -384,15 +384,7 @@ def main():
     print("\n🤖 Claude configuration:")
     for var in claude_vars:
         if var in os.environ:
-            if var == "ANTHROPIC_API_KEY":
-                api_key_value = os.environ[var]
-                if len(api_key_value) > 4:
-                    masked_key = f"{'*' * 10}...{api_key_value[-4:]}"
-                else:
-                    masked_key = "*" * len(api_key_value)
-                print(f"   ✅ {var}: {masked_key}")
-            else:
-                print(f"   ✅ {var}: {os.environ[var]}")
+            print(f"   ✅ {var}: [set]")
         else:
             print(f"   ⚠️  {var}: not set")
 

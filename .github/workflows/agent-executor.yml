@@ -4,6 +4,10 @@ on:
   issue_comment:
     types: [created]
 
+permissions:
+  contents: read
+  issues: write
+
 jobs:
   call-executor:
     if: ${{ !github.event.issue.pull_request && contains(github.event.comment.body, '@agent') && contains(github.event.comment.body, 'execute') }}

@@ -17,8 +17,8 @@
   "license": "ISC",
   "dependencies": {
     "@aws-sdk/client-sns": "^3.1026.0",
-    "aws-cdk": "^2.1117.0",
-    "aws-cdk-lib": "^2.248.0",
+    "aws-cdk": "^2.1121.0",
+    "aws-cdk-lib": "^2.253.1",
     "constructs": "^10.x",
     "dotenv": "^16.x",
     "fast-xml-parser": "^5.7.2",
@@ -30,5 +30,9 @@
     "ts-node": "^10.9.1",
     "tsx": "^4.7.1",
     "typescript": "~5.1.6"
+  },
+  "overrides": {
+    "fast-uri": ">=3.1.2",
+    "fast-xml-builder": ">=1.1.7"
   }
 }
