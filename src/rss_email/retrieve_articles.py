@@ -216,7 +216,7 @@ def get_feed_items(url: str, timestamp: datetime) -> bytes:
                 logger.debug("URL: %s not modified in 3 days", url)
                 break
             if error.code == 403:
-                logger.error(
+                logger.warning(
                     "URL: %s returned 403 Forbidden. This might be a site that aggressively blocks scrapers.",
                     url,
                 )
@@ -825,9 +825,14 @@ def retrieve_rss_feeds(feed_file: str, update_date: datetime) -> Tuple[str, Dict
         limits = feed_limits.get(item_url, {})
         lookback = limits.get("lookback_days")
         feed_update_date = get_update_date(lookback) if lookback else update_date
-        feed_articles = get_feed(
-            item_url, item, feed_update_date, feed_name=feed_names.get(item_url)
-        )
+        try:
+            feed_articles = get_feed(
+                item_url, item, feed_update_date, feed_name=feed_names.get(item_url)
+            )
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            logger.warning("Failed to parse feed %s: %s", item_url, exc)
+            per_url_counts[item_url] = 0
+            continue
         max_articles = limits.get("max_articles")
         if max_articles is not None:
             feed_articles = sorted(feed_articles, reverse=True)[:max_articles]

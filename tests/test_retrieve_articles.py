@@ -301,6 +301,37 @@ class TestRetrieveArticles(unittest.TestCase):
             os.environ.pop("FEED_DEFINITIONS_FILE", None)
 
 
+class TestFeedParseIsolation(unittest.TestCase):
+    """Tests that a single feed failure does not abort the whole run."""
+
+    @patch("rss_email.retrieve_articles.get_feed_urls")
+    @patch("rss_email.retrieve_articles.get_feed_items")
+    @patch("rss_email.retrieve_articles.is_connected")
+    def test_feed_parse_failure_does_not_fail_run(
+        self, mock_connected, mock_get_items, mock_get_urls
+    ):
+        """A get_feed() exception on one URL must not prevent other feeds from processing."""
+        mock_connected.return_value = True
+        mock_get_urls.return_value = [
+            "http://good.example/feed",
+            "http://bad.example/feed",
+        ]
+        mock_get_items.return_value = b"<rss/>"
+
+        def side_effect_get_feed(url, *_, **__):
+            if "bad" in url:
+                raise ValueError("simulated parse failure")
+            return []
+
+        with patch("rss_email.retrieve_articles.get_feed", side_effect=side_effect_get_feed):
+            _, counts = retrieve_rss_feeds(
+                "feed_file.json", datetime.now() - timedelta(days=3)
+            )
+
+        self.assertEqual(counts.get("http://bad.example/feed", 0), 0)
+        self.assertIn("http://good.example/feed", counts)
+
+
 class TestFeedLimits(unittest.TestCase):
     """Tests for per-feed max_articles and lookback_days config."""
 
