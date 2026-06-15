@@ -268,6 +268,22 @@ def _render_sources_html(sources: List[Any]) -> str:
 
 
 @pydantic.validate_call(validate_return=True)
+def category_color(category: str) -> str:
+    """Return the header background colour hex for a given category name."""
+    name = category.lower()
+    if "technology" in name:
+        return "#2196F3"
+    if "ai" in name or "ml" in name:
+        return "#9C27B0"
+    if "cybersecurity" in name:
+        return "#F44336"
+    if "programming" in name:
+        return "#4CAF50"
+    if "science" in name:
+        return "#FF9800"
+    return "#667eea"
+
+
 def generate_enhanced_html_content(
     categorized_articles,
     article_map: Optional[Dict[str, Dict[str, Any]]] = None,
@@ -279,17 +295,7 @@ def generate_enhanced_html_content(
 
     for category, articles in categorized_articles:
         # Category header color logic
-        category_color = "#667eea"
-        if "technology" in category.lower():
-            category_color = "#2196F3"
-        elif "ai" in category.lower() or "ml" in category.lower():
-            category_color = "#9C27B0"
-        elif "cybersecurity" in category.lower():
-            category_color = "#F44336"
-        elif "programming" in category.lower():
-            category_color = "#4CAF50"
-        elif "science" in category.lower():
-            category_color = "#FF9800"
+        header_color = category_color(category)
 
         # Add category header
         content_parts.append(
@@ -298,7 +304,7 @@ def generate_enhanced_html_content(
             <tr>
                 <td>
                     <table width="100%" cellpadding="12" cellspacing="0" border="0"
-                    style="background-color: {category_color}; border-radius: 6px; margin-bottom: 15px;">
+                    style="background-color: {header_color}; border-radius: 6px; margin-bottom: 15px;">
                         <tr>
                             <td>
                                 <h2 style="color: #ffffff; margin: 0; font-size: 20px;

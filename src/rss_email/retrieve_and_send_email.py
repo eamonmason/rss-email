@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+from datetime import datetime
 from typing import Any, Dict, List, Tuple
 
 import anthropic
@@ -15,6 +16,7 @@ from .article_processor import (
     _article_to_source,
     _iter_category_entries,
 )
+from .brief_generator import generate_brief
 from .models import ArticleSource
 
 logger = logging.getLogger(__name__)
@@ -107,6 +109,33 @@ def build_processed_articles_from_groups(
         ))
 
     return enriched
+
+
+def _maybe_send_brief(
+    categories: Dict[str, List[Any]],
+    client: anthropic.Anthropic,
+    to_email: str,
+    source_email: str,
+) -> None:
+    """Generate and send the companion RSS Brief (best-effort).
+
+    Any failure is logged and swallowed: the digest has already been sent, so the
+    brief must never break the main flow or affect last_run.
+    """
+    try:
+        article_count = sum(len(items) for items in categories.values())
+        today = datetime.now().strftime("%Y-%m-%d")
+        brief_html = generate_brief(
+            categories,
+            date=today,
+            article_count=article_count,
+            client=client,
+        )
+        if brief_html:
+            send_via_ses(to_email, source_email, f"RSS Brief — {today}", brief_html)
+            logger.info("Sent companion RSS Brief")
+    except Exception as exc:  # pylint: disable=broad-except
+        logger.error("Brief generation/send failed (digest already sent): %s", exc)
 
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # pylint: disable=W0613,too-many-locals
@@ -253,6 +282,9 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
 
         # Update last_run parameter
         set_last_run(last_run_param)
+
+        # Companion RSS Brief (best-effort; must never block the digest)
+        _maybe_send_brief(all_categories, client, to_email, source_email)
 
         logger.info("Successfully sent email with %d categories", len(all_categories))
 

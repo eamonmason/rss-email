@@ -1,0 +1,7 @@
+{
+  "enabled": true,
+  "model": "claude-sonnet-4-6",
+  "reader_profile": "Head of Architecture (Assets, Data & Tooling) at S&P Global, recently joined from Thomson Reuters (Distinguished Engineer, Platform/DevEx). Focus: developer experience, platform engineering, internal developer portals, AI/data tooling, cloud infrastructure economics, DORA metrics. Currently onboarding and building a strategic view of the industry.",
+  "themed_categories": ["AI/ML", "Technology", "Cybersecurity", "Business", "Programming", "Politics"],
+  "personal_categories": ["Cycling"]
+}

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, HttpUrl
 
@@ -152,3 +152,43 @@ class ClaudeResponse(BaseModel):
     model_config = {
         "arbitrary_types_allowed": True,
     }
+
+
+class BriefTheme(BaseModel):
+    """A single synthesised theme within a category for the RSS Brief."""
+
+    theme: str
+    signal_strength: Literal["HIGH", "STRATEGIC", "GENERAL"]
+    tldr: str = ""
+    top_articles: List[str] = Field(default_factory=list)
+    relevance_to_reader: Optional[str] = None
+
+
+class BriefCategory(BaseModel):
+    """A category's synthesised verdict and themes for the RSS Brief."""
+
+    week_verdict: str = ""
+    themes: List[BriefTheme] = Field(default_factory=list)
+
+
+class CrossCuttingSignal(BaseModel):
+    """A signal that spans multiple categories in the RSS Brief."""
+
+    signal: str = ""
+    categories_involved: List[str] = Field(default_factory=list)
+    implication: str = ""
+
+
+class PersonalBlock(BaseModel):
+    """The personal-interest digest block (e.g. Cycling) of the RSS Brief."""
+
+    top_stories: List[str] = Field(default_factory=list)
+    summary: str = ""
+
+
+class BriefSynthesis(BaseModel):
+    """Validated structure of the Claude synthesis response for the RSS Brief."""
+
+    categories: Dict[str, BriefCategory] = Field(default_factory=dict)
+    cross_cutting: List[CrossCuttingSignal] = Field(default_factory=list)
+    personal: Optional[PersonalBlock] = None

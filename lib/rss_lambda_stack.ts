@@ -298,6 +298,8 @@ export class RSSEmailStack extends cdk.Stack {
         SOURCE_EMAIL_ADDRESS: SOURCE_EMAIL_ADDRESS,
         TO_EMAIL_ADDRESS: TO_EMAIL_ADDRESS,
         LAST_RUN_PARAMETER: LAST_RUN_PARAMETER,
+        BRIEF_ENABLED: 'true',
+        BRIEF_CLAUDE_MODEL: 'claude-sonnet-4-6',
       },
       role: role,
       layers: [layer],
