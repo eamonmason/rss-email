@@ -18,7 +18,7 @@ export class RSSPipelineStack extends cdk.Stack {
         input: CodePipelineSource.connection('eamonmason/rss-email', 'main', {
           connectionArn: 'arn:aws:codeconnections:eu-west-1:002681522526:connection/54e18fbd-fb99-4888-ac79-3a906b55f7ae',
         }),
-        commands: ['npm ci', 'npx cdk synth'],
+        commands: ['npm ci --legacy-peer-deps', 'npx cdk synth'],
         buildEnvironment: {
           privileged: true,  // Enable Docker in CodeBuild
           environmentVariables: {
