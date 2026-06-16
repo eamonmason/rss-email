@@ -11,7 +11,9 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "synth": "tsx bin/pipeline-cdk.ts",
     "deploy": "cdk deploy",
-    "diff": "cdk diff"
+    "diff": "cdk diff",
+    "eval": "PROMPTFOO_PYTHON=.venv/bin/python promptfoo eval -c eval/promptfooconfig.yaml",
+    "eval:view": "promptfoo view"
   },
   "author": "",
   "license": "ISC",
@@ -27,6 +29,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.9.3",
+    "promptfoo": "^0.121.0",
     "ts-node": "^10.9.1",
     "tsx": "^4.22.4",
     "typescript": "~6.0.3"

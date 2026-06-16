@@ -45,15 +45,22 @@ SIGNAL_BADGE_STYLES = {
     "GENERAL": ("#eafaf1", "#4caf50", "#1b5e20"),
 }
 
-# Note: ``{READER_PROFILE}`` and ``{ARTICLES_BY_CATEGORY}`` are substituted with
-# ``str.replace`` (not ``str.format``) so the literal JSON braces below survive.
+# Source-tier ordering used to present higher-quality sources to the model first.
+_TIER_ORDER = {"high": 0, "medium": 1, "low": 2}
+
+# Note: the ``{...}`` placeholders are substituted with ``str.replace`` (not
+# ``str.format``) so the literal JSON braces in the schema below survive.
 PROMPT_TEMPLATE = """You are synthesising a day's RSS digest articles for a specific reader.
 
 READER PROFILE:
 {READER_PROFILE}
 
-For each professional category below, identify 3-5 key themes. Return ONLY valid
-JSON, no markdown, no backticks, matching this schema:
+PERSONAL INTERESTS:
+{PERSONAL_INTERESTS}
+
+For each category below, identify 3-5 key themes. Use each category key EXACTLY as given
+(keep slashes and punctuation, e.g. "AI/ML"). Return ONLY valid JSON, no markdown, no
+backticks, matching this schema:
 
 {
   "<CATEGORY_KEY>": {
@@ -80,14 +87,40 @@ Signal strength:
 - STRATEGIC = watch-list item, 6-18 month horizon
 - GENERAL   = awareness only, no action
 
-Be ruthless with noise: ignore incremental patch notes, repetitive market
-commentary, and minor funding rounds. Use the reader's exact article titles in
-top_articles so they can be linked. relevance_to_reader must be null when a theme
-has no real bearing on the profile - do not invent relevance.
+{MAJOR_STORY_RULE}
+
+{SOURCE_RULE}
+
+Use the reader's exact article titles in top_articles so they can be linked.
+relevance_to_reader must be null when a theme has no real bearing on the profile - do not
+invent relevance. A story can still be worth featuring with null relevance.
+
+Each article is prefixed with its source in brackets, e.g. "[Hacker News] Title".
 
 ARTICLES:
 {ARTICLES_BY_CATEGORY}
 """
+
+MAJOR_STORY_RULE = (
+    "Be ruthless with genuine noise: drop incremental patch notes, repetitive market "
+    "commentary, and minor funding rounds. BUT never drop a genuinely major story merely "
+    "because it is not work-relevant - industry-shifting announcements, major outages or "
+    "incidents, large acquisitions or IPOs, and high-impact societal tech stories must "
+    "appear as themes (set relevance_to_reader to null when they do not bear on the "
+    "reader's job). This is a personal feed as much as a work feed."
+)
+
+RUTHLESS_RULE = (
+    "Be ruthless with noise: ignore incremental patch notes, repetitive market commentary, "
+    "and minor funding rounds."
+)
+
+SOURCE_RULE = (
+    "Source ranking: prefer independent blogs, Hacker News, Reddit, and similar community "
+    "or primary sources over wire-service and aggregator reposts (e.g. Techmeme, Slashdot, "
+    "Google News) when choosing which articles to feature. When the same story appears from "
+    "multiple sources, feature and rank the higher-quality primary or community source."
+)
 
 
 def load_brief_config() -> Dict[str, Any]:
@@ -102,8 +135,12 @@ def load_brief_config() -> Dict[str, Any]:
     config.setdefault("enabled", True)
     config.setdefault("model", DEFAULT_SYNTHESIS_MODEL)
     config.setdefault("reader_profile", "")
+    config.setdefault("personal_interests", "")
+    config.setdefault("major_story_floor", True)
     config.setdefault("themed_categories", [])
     config.setdefault("personal_categories", [])
+    config.setdefault("prioritised_sources", [])
+    config.setdefault("deprioritised_sources", [])
 
     if "BRIEF_ENABLED" in os.environ:
         config["enabled"] = os.environ["BRIEF_ENABLED"].lower() == "true"
@@ -120,6 +157,41 @@ def _article_field(article: Any, name: str) -> Any:
     if isinstance(article, dict):
         return article.get(name)
     return getattr(article, name, None)
+
+
+def _article_source(article: Any) -> str:
+    """Best-effort feed/source name for an article (``ProcessedArticle`` or dict)."""
+    sources = _article_field(article, "sources")
+    if sources:
+        first = sources[0]
+        name = (
+            first.get("feed_name")
+            if isinstance(first, dict)
+            else getattr(first, "feed_name", None)
+        )
+        if name:
+            return str(name)
+    if isinstance(article, dict):
+        return str(article.get("sourceName") or "")
+    return str(getattr(article, "source_name", "") or "")
+
+
+def source_tier(name: str, config: Dict[str, Any]) -> str:
+    """Classify a source name as ``high``, ``low``, or ``medium`` priority.
+
+    Independent blogs, Hacker News, Reddit, etc. (``prioritised_sources``) rank
+    ``high``; wire/aggregator reposts (``deprioritised_sources``) rank ``low``.
+    """
+    if not name:
+        return "medium"
+    lowered = name.lower()
+    for token in config.get("prioritised_sources", []):
+        if token and token.lower() in lowered:
+            return "high"
+    for token in config.get("deprioritised_sources", []):
+        if token and token.lower() in lowered:
+            return "low"
+    return "medium"
 
 
 @pydantic.validate_call(
@@ -150,6 +222,7 @@ def build_synthesis_input(
                     "title": str(title),
                     "url": str(_article_field(article, "link") or ""),
                     "summary": str(_article_field(article, "summary") or ""),
+                    "source": _article_source(article),
                 }
             )
         if items:
@@ -157,27 +230,65 @@ def build_synthesis_input(
     return synthesis_input
 
 
-@pydantic.validate_call(validate_return=True)
+@pydantic.validate_call(validate_return=True, config={"arbitrary_types_allowed": True})
 def build_prompt(
-    synthesis_input: Dict[str, List[Dict[str, str]]], reader_profile: str
+    synthesis_input: Dict[str, List[Dict[str, str]]], config: Dict[str, Any]
 ) -> str:
-    """Assemble the synthesis prompt from the reader profile and articles."""
+    """Assemble the synthesis prompt from the profile, sources, and articles.
+
+    Within each category, articles are ordered by source tier (high-quality
+    sources first) so the model sees prioritised sources before the rest.
+    """
     blocks = []
     for category, items in synthesis_input.items():
+        ranked = sorted(
+            items,
+            key=lambda item: _TIER_ORDER[source_tier(item.get("source", ""), config)],
+        )
         lines = [f"## {category}"]
-        for item in items:
-            lines.append(f"- {item['title']}")
+        for item in ranked:
+            source = item.get("source") or "Unknown"
+            lines.append(f"- [{source}] {item['title']}")
             summary = item.get("summary")
             if summary:
                 lines.append(f"  {summary}")
         blocks.append("\n".join(lines))
     articles_block = "\n\n".join(blocks)
-    return PROMPT_TEMPLATE.replace("{READER_PROFILE}", reader_profile).replace(
-        "{ARTICLES_BY_CATEGORY}", articles_block
+    major_rule = MAJOR_STORY_RULE if config.get("major_story_floor", True) else RUTHLESS_RULE
+    return (
+        PROMPT_TEMPLATE
+        .replace("{READER_PROFILE}", config.get("reader_profile", ""))
+        .replace("{PERSONAL_INTERESTS}", config.get("personal_interests", ""))
+        .replace("{MAJOR_STORY_RULE}", major_rule)
+        .replace("{SOURCE_RULE}", SOURCE_RULE)
+        .replace("{ARTICLES_BY_CATEGORY}", articles_block)
     )
 
 
-def _parse_synthesis(response_text: str) -> Optional[BriefSynthesis]:
+def _normalise_key(text: str) -> str:
+    """Reduce a category key to comparable alphanumerics (so AI/ML == AI_ML)."""
+    return re.sub(r"[^a-z0-9]", "", text.lower())
+
+
+def _canonical_category(key: str, known: List[str]) -> str:
+    """Map a model-returned category key onto its configured name when they match.
+
+    Models often sanitise ``AI/ML`` to ``AI_ML``; this restores the configured
+    spelling so ordering and the rendered header are correct. Unknown keys are
+    returned unchanged.
+    """
+    if not known or key in known:
+        return key
+    target = _normalise_key(key)
+    for candidate in known:
+        if _normalise_key(candidate) == target:
+            return candidate
+    return key
+
+
+def _parse_synthesis(
+    response_text: str, known_categories: Optional[List[str]] = None
+) -> Optional[BriefSynthesis]:
     """Parse and validate a synthesis response into a ``BriefSynthesis``."""
     data = extract_json_from_text(response_text)
     if not data:
@@ -185,9 +296,13 @@ def _parse_synthesis(response_text: str) -> Optional[BriefSynthesis]:
     payload = dict(data)
     cross_cutting = payload.pop("cross_cutting", []) or []
     personal = payload.pop("personal", None)
+    known = known_categories or []
+    categories = {
+        _canonical_category(key, known): value for key, value in payload.items()
+    }
     try:
         return BriefSynthesis(
-            categories=payload,
+            categories=categories,
             cross_cutting=cross_cutting,
             personal=personal,
         )
@@ -198,14 +313,14 @@ def _parse_synthesis(response_text: str) -> Optional[BriefSynthesis]:
 
 def synthesize(
     synthesis_input: Dict[str, List[Dict[str, str]]],
-    reader_profile: str,
-    model: str,
+    config: Dict[str, Any],
     client: Optional[Any] = None,
 ) -> Optional[BriefSynthesis]:
     """Run one Claude synthesis call (with one retry) and validate the result.
 
-    Returns ``None`` on persistent failure so the caller can skip the brief
-    without blocking the main digest. Never raises.
+    The model, reader profile, personal interests, source tiers, and category
+    names are read from ``config``. Returns ``None`` on persistent failure so the
+    caller can skip the brief without blocking the main digest. Never raises.
     """
     if not synthesis_input:
         logger.info("No themed articles to synthesise; skipping brief")
@@ -214,7 +329,11 @@ def synthesize(
     if client is None:
         client = anthropic.Anthropic(api_key=get_anthropic_api_key())
 
-    prompt = build_prompt(synthesis_input, reader_profile)
+    model = config.get("model", DEFAULT_SYNTHESIS_MODEL)
+    known_categories = list(config.get("themed_categories", [])) + list(
+        config.get("personal_categories", [])
+    )
+    prompt = build_prompt(synthesis_input, config)
     api_timeout = int(os.environ.get("CLAUDE_API_TIMEOUT", "120"))
 
     for attempt in (1, 2):
@@ -227,7 +346,7 @@ def synthesize(
                 timeout=api_timeout,
             )
             response_text = response.content[0].text.strip()
-            brief = _parse_synthesis(response_text)
+            brief = _parse_synthesis(response_text, known_categories)
         except (
             anthropic.APIError,
             anthropic.APIConnectionError,
@@ -503,12 +622,7 @@ def generate_brief(
         logger.info("No themed/personal articles available; skipping brief")
         return None
 
-    brief = synthesize(
-        synthesis_input,
-        config.get("reader_profile", ""),
-        config.get("model", DEFAULT_SYNTHESIS_MODEL),
-        client=client,
-    )
+    brief = synthesize(synthesis_input, config, client=client)
     if brief is None:
         return None
 

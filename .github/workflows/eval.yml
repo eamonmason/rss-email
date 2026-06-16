@@ -1,0 +1,51 @@
+name: Brief Fidelity Eval
+
+# Runs the promptfoo brief-vs-digest fidelity eval. Not part of the per-push merge
+# gate: it makes live Claude calls (costs credits), so it runs weekly and on demand.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 1'  # Mondays 06:00 UTC
+
+permissions:
+  contents: read
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Install Python library
+        run: uv sync --dev
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      - name: Install Node dependencies
+        run: npm install
+
+      - name: Run promptfoo fidelity eval
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # The provider runs synthesize() via uv's venv.
+          PROMPTFOO_PYTHON: .venv/bin/python
+        run: npm run eval -- --output eval-results.json
+
+      - name: Upload eval results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: brief-eval-results
+          path: eval-results.json
+          if-no-files-found: warn

@@ -1,0 +1,48 @@
+# promptfoo eval: fidelity of the RSS Brief vs the source digest.
+# Run from the repo root:  npm run eval   (needs ANTHROPIC_API_KEY)
+# View results:            npx promptfoo view
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: RSS Brief fidelity (brief vs digest)
+
+# The system under test is the real Python synthesis pipeline.
+providers:
+  - id: file://eval/provider.py
+    label: rss-brief
+
+# Grader used by llm-rubric assertions.
+defaultTest:
+  options:
+    provider: anthropic:messages:claude-sonnet-4-6
+  assert:
+    - type: is-json
+    - type: javascript
+      value: file://eval/assertions/schema.cjs
+    - type: javascript
+      value: file://eval/assertions/major_coverage.cjs
+    - type: javascript
+      value: file://eval/assertions/source_ranking.cjs
+    - type: llm-rubric
+      value: |
+        You are auditing an editorial brief that was synthesised from a news digest.
+
+        DIGEST (the only allowed source of facts):
+        {{digest_text}}
+
+        Grade the brief OUTPUT (JSON). PASS only if every factual claim, number,
+        company, product, and named entity in the brief is supported by the digest
+        above — nothing invented or extrapolated beyond the digest. Minor rewording
+        and summarisation are fine; fabricated specifics are not.
+    - type: llm-rubric
+      value: |
+        In the brief OUTPUT (JSON), each theme's `relevance_to_reader` must be either
+        null OR a claim genuinely tied to the reader profile (a senior platform/
+        architecture leader in financial-data infrastructure). PASS unless some
+        `relevance_to_reader` is clearly forced or fabricated for an unrelated story.
+
+# One test per saved digest+brief fixture. Add more dated fixtures over time.
+tests:
+  - description: 2026-06-15 digest
+    vars:
+      fixture: eval/fixtures/2026-06-15/digest_articles.json
+      expected_major: eval/fixtures/2026-06-15/expected_major.json
+      digest_text: file://eval/fixtures/2026-06-15/digest_text.txt

@@ -2,6 +2,10 @@
   "enabled": true,
   "model": "claude-sonnet-4-6",
   "reader_profile": "Head of Architecture (Assets, Data & Tooling) at S&P Global, recently joined from Thomson Reuters (Distinguished Engineer, Platform/DevEx). Focus: developer experience, platform engineering, internal developer portals, AI/data tooling, cloud infrastructure economics, DORA metrics. Currently onboarding and building a strategic view of the industry.",
+  "personal_interests": "This is also a personal tech-interest feed, not only a work feed. The reader is a curious technologist who enjoys indie/hacker culture, programming languages and language design, retro and low-level computing, self-hosting and open source, and follows pro cycling closely. Surface things that are genuinely interesting to that person even when they have no bearing on the job.",
+  "major_story_floor": true,
   "themed_categories": ["AI/ML", "Technology", "Cybersecurity", "Business", "Programming", "Politics"],
-  "personal_categories": ["Cycling"]
+  "personal_categories": ["Cycling"],
+  "prioritised_sources": ["Hacker News", "Reddit", "Lobsters", "Blog", "Simon Willison", "Substack"],
+  "deprioritised_sources": ["Techmeme", "Slashdot", "Google News", "Yahoo", "MSN"]
 }

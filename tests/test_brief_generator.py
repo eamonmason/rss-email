@@ -13,15 +13,31 @@ import cli_brief_generator
 from rss_email.article_processor import ProcessedArticle
 from rss_email.brief_generator import (
     build_article_map,
+    build_prompt,
     build_synthesis_input,
     generate_brief,
     match_title_to_url,
     render_brief_html,
+    source_tier,
     synthesize,
+    _canonical_category,
     _signal_badge,
 )
 from rss_email.models import BriefSynthesis, BriefTheme
 from rss_email.retrieve_and_send_email import lambda_handler
+
+
+# Minimal config for synthesize()/build_prompt() in tests.
+SYNTH_CONFIG = {
+    "reader_profile": "profile",
+    "personal_interests": "personal interests",
+    "model": "model",
+    "major_story_floor": True,
+    "themed_categories": ["AI/ML"],
+    "personal_categories": ["Cycling"],
+    "prioritised_sources": ["Hacker News", "Blog"],
+    "deprioritised_sources": ["Techmeme", "Slashdot"],
+}
 
 
 VALID_SYNTHESIS = {
@@ -84,7 +100,12 @@ def test_build_synthesis_input_filters_categories():
     }
     result = build_synthesis_input(categories, ["AI/ML"], ["Cycling"])
     assert set(result.keys()) == {"AI/ML", "Cycling"}
-    assert result["AI/ML"][0] == {"title": "A", "url": "https://x/a", "summary": "sa"}
+    assert result["AI/ML"][0] == {
+        "title": "A",
+        "url": "https://x/a",
+        "summary": "sa",
+        "source": "",
+    }
 
 
 def test_build_synthesis_input_handles_objects_and_dicts():
@@ -99,6 +120,117 @@ def test_build_synthesis_input_handles_objects_and_dicts():
     titles = [item["title"] for item in result["AI/ML"]]
     assert titles == ["Obj", "Dict"]
     assert result["AI/ML"][0]["url"] == "https://x/o"
+
+
+def test_build_synthesis_input_extracts_source():
+    """The feed/source name is captured from objects (sources) and dicts."""
+    article = ProcessedArticle(
+        title="Obj",
+        link="https://x/o",
+        summary="so",
+        category="AI/ML",
+        pubdate="",
+        sources=[{"feed_name": "Hacker News", "title": "Obj", "link": "https://x/o",
+                  "pubdate": ""}],
+    )
+    categories = {
+        "AI/ML": [
+            article,
+            {"title": "Dict", "link": "https://x/d", "summary": "sd",
+             "sourceName": "Techmeme"},
+        ]
+    }
+    result = build_synthesis_input(categories, ["AI/ML"], [])
+    sources = {item["title"]: item["source"] for item in result["AI/ML"]}
+    assert sources == {"Obj": "Hacker News", "Dict": "Techmeme"}
+
+
+# --- source tiering -------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "name,expected",
+    [
+        ("Hacker News", "high"),
+        ("Simon Willison's Blog", "high"),
+        ("Techmeme", "low"),
+        ("Slashdot", "low"),
+        ("Reuters", "medium"),
+        ("", "medium"),
+    ],
+)
+def test_source_tier(name, expected):
+    """Source names map to the expected priority tier."""
+    assert source_tier(name, SYNTH_CONFIG) == expected
+
+
+# --- build_prompt ---------------------------------------------------------
+
+
+def test_build_prompt_includes_source_and_rules():
+    """The prompt surfaces sources, the source rule, personal interests, and floor."""
+    synthesis_input = {
+        "AI/ML": [
+            {"title": "Aggregated", "url": "https://x/a", "summary": "sa",
+             "source": "Techmeme"},
+            {"title": "From HN", "url": "https://x/h", "summary": "sh",
+             "source": "Hacker News"},
+        ]
+    }
+    prompt = build_prompt(synthesis_input, SYNTH_CONFIG)
+    assert "[Hacker News] From HN" in prompt
+    assert "[Techmeme] Aggregated" in prompt
+    assert "personal interests" in prompt.lower()
+    assert "Source ranking:" in prompt
+    assert "never drop a genuinely major story" in prompt
+    # High-tier source is presented before the deprioritised one.
+    assert prompt.index("From HN") < prompt.index("Aggregated")
+
+
+def test_build_prompt_floor_can_be_disabled():
+    """With major_story_floor false, the ruthless rule is used instead."""
+    config = {**SYNTH_CONFIG, "major_story_floor": False}
+    prompt = build_prompt(
+        {"AI/ML": [{"title": "T", "url": "u", "summary": "s", "source": "Blog"}]},
+        config,
+    )
+    assert "never drop a genuinely major story" not in prompt
+    assert "Be ruthless with noise" in prompt
+
+
+# --- category canonicalisation (AI/ML key fix) ----------------------------
+
+
+@pytest.mark.parametrize("key", ["AI_ML", "ai/ml", "AI / ML", "ai-ml"])
+def test_canonical_category_variants(key):
+    """Sanitised category keys map back to the configured AI/ML spelling."""
+    assert _canonical_category(key, ["AI/ML", "Technology"]) == "AI/ML"
+
+
+def test_canonical_category_unknown_passthrough():
+    """An unrecognised key is returned unchanged."""
+    assert _canonical_category("Sports", ["AI/ML"]) == "Sports"
+
+
+def test_synthesize_canonicalises_and_orders_ai_ml():
+    """A response keyed AI_ML validates, canonicalises, and renders AI/ML first."""
+    payload = {
+        "AI_ML": VALID_SYNTHESIS["AI/ML"],
+        "Technology": {"week_verdict": "v", "themes": []},
+    }
+    client = make_client([json.dumps(payload)])
+    brief = synthesize(
+        {"AI/ML": [{"title": "x", "url": "u", "summary": "s", "source": "Blog"}]},
+        SYNTH_CONFIG,
+        client=client,
+    )
+    assert "AI/ML" in brief.categories
+    assert "AI_ML" not in brief.categories
+    html_body = render_brief_html(
+        brief, {}, "2026-06-14", 1, themed_order=["AI/ML", "Technology"]
+    )
+    assert ">AI/ML</h2>" in html_body
+    assert html_body.index(">AI/ML</h2>") < html_body.index(">Technology</h2>")
 
 
 # --- URL back-mapping -----------------------------------------------------
@@ -149,8 +281,7 @@ def test_synthesize_valid():
     client = make_client([json.dumps(VALID_SYNTHESIS)])
     brief = synthesize(
         {"AI/ML": [{"title": "x", "url": "u", "summary": "s"}]},
-        "profile",
-        "model",
+        SYNTH_CONFIG,
         client=client,
     )
     assert isinstance(brief, BriefSynthesis)
@@ -166,8 +297,7 @@ def test_synthesize_strips_json_fences():
     client = make_client([fenced])
     brief = synthesize(
         {"AI/ML": [{"title": "x", "url": "u", "summary": "s"}]},
-        "profile",
-        "model",
+        SYNTH_CONFIG,
         client=client,
     )
     assert isinstance(brief, BriefSynthesis)
@@ -179,8 +309,7 @@ def test_synthesize_retries_then_skips():
     client = make_client(["not json at all", "still not json"])
     brief = synthesize(
         {"AI/ML": [{"title": "x", "url": "u", "summary": "s"}]},
-        "profile",
-        "model",
+        SYNTH_CONFIG,
         client=client,
     )
     assert brief is None
@@ -190,7 +319,7 @@ def test_synthesize_retries_then_skips():
 def test_synthesize_empty_input_skips():
     """No themed articles means no API call and a None result."""
     client = make_client([json.dumps(VALID_SYNTHESIS)])
-    assert synthesize({}, "profile", "model", client=client) is None
+    assert synthesize({}, SYNTH_CONFIG, client=client) is None
     assert client.messages.create.call_count == 0
 
 

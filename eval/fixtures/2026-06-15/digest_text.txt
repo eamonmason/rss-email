@@ -1,0 +1,150 @@
+## AI/ML
+- [Techmeme] AI Deepfakes and 'Nudify' Tools Create New Bullying Crisis Among Children
+  Proliferating AI tools that create non-consensual intimate images of minors are enabling a new form of digital bullying, leaving parents and schools struggling to protect victims. Even leading digital forensics experts like UC Berkeley professor Hany Farid are finding it increasingly difficult to identify and authenticate AI-generated fakes, raising concerns about the technology's detection.
+- [Techmeme] Orbio Raises $21M Series A for AI-Powered Frontline Worker Management
+  Madrid-based startup Orbio has secured $21M in Series A funding led by Dawn Capital to expand its AI agent platform that helps businesses interview, onboard, and manage frontline workers. The funding will support the company's growth in automating human resources processes for workforce management.
+- [Techmeme] Rylo Raises $85M for Real-Time Speech and Sign-Language Translation Tools
+  Israeli startup Rylo has raised $85M led by General Catalyst and Canaan Partners for its real-time translation technology that converts speech to sign language for deaf and hard-of-hearing users. The funding will accelerate development and deployment of accessibility-focused AI translation tools.
+- [Techmeme] Sandstone Raises $30M Series A for AI-Powered Legal Workflow Automation
+  Sandstone has secured $30M in Series A funding led by Lightspeed Venture Partners to expand its AI-powered workflow automation platform for legal teams at small and mid-sized businesses. The platform helps legal professionals automate routine tasks and improve efficiency.
+- [Simon Willison's Blog] Statement on the US government directive to suspend access to Fable 5 and Mythos 5
+  The US government issued an export control directive suspending access to Fable 5 and Mythos 5 AI models, citing national security concerns.
+- [Simon Willison's Blog] OpenAI WebRTC Audio Session, now with document context
+  A developer built an enhanced version of OpenAI's WebRTC API for interacting with realtime audio, now incorporating document context capabilities for more sophisticated AI interactions.
+- [GitHub Blog] How we made GitHub Copilot CLI more selective about delegation
+  GitHub improved Copilot CLI's orchestration to be more selective in delegating tasks, resulting in fewer handoffs and faster progress without requiring additional configuration.
+- [Towards Data Science] When PyMuPDF Can't See the Table: Parse PDFs for RAG with Azure Layout
+  This article discusses using Azure Layout for improved PDF parsing in RAG systems, handling native table cells, OCR for scanned pages, and extracting captions without regex.
+- [Towards Data Science] Why Decade-Old Residual Connections Still Power All of AI (And Why That's a Problem)
+  Despite nearly a decade without significant changes, residual connections remain fundamental to modern AI architectures, though researchers like DeepSeek are exploring innovative alternatives.
+- [Hugging Face Blog] olmo-eval: An evaluation workbench for the model development loop
+  olmo-eval provides an evaluation workbench designed to support the iterative model development process with comprehensive testing capabilities.
+- [Towards Data Science] A Harness for Every Task: Putting a Team of Claudes on One Job
+  Claude can now dynamically generate its own task-specific harness on the fly, enabling more efficient coordination of multiple AI agents working on the same objective.
+- [O'Reilly Radar] This Week in AI: The Next-Gen Recommendation Experience
+  Miguel Fierro, founder of RecoMind and former Microsoft principal researcher, discusses the current state and future of AI-powered recommendation systems.
+- [Techmeme] Chinese Tesla Drivers Use Plastic Heads to Fool Distracted-Driving Controls
+  Tesla's driver-monitoring system in China is being circumvented by drivers using small plastic figurine heads to fool the distracted-driving detection, exposing a significant limitation in the vehicle's vision-based safety systems. The security gap highlights the vulnerability of AI systems to simple physical spoofing.
+- [Towards Data Science] Four Essential Lines to Include in Your Claude Skill Configuration
+  An article provides guidance on critical configuration lines needed when building Claude skills to prevent the AI from generating confident incorrect responses. The piece addresses essential safety and accuracy measures for Claude AI implementation.
+- [OpenAI News] OpenAI Launches Partner Network with $150M Investment
+  OpenAI announced a new Partner Network and committed $150 million to help global partners accelerate enterprise AI adoption, deployment, and digital transformation. The initiative aims to expand OpenAI's ecosystem and support widespread enterprise AI implementation.
+- [Hacker News] Rio de Janeiro's Homegrown LLM Appears to Be Merge of Existing Models
+  A supposedly independent language model developed in Rio de Janeiro has been revealed to actually be a merge of existing pre-trained models rather than a truly original development. The discovery raises questions about authenticity claims in the AI model space.
+- [Slashdot] Department of Energy Building National AI Platform for Scientific Research
+  The U.S. Energy Department is developing the Genesis Mission, a national platform designed to connect scientists and enable scientific research using AI capabilities. The initiative represents a coordinated government effort to leverage AI for advancing scientific discovery.
+- [Hacker News] Indexing 669 GB of GoPro Videos Using Local ML Models on M1 Max
+  A developer built a project to index 2,207 GoPro videos using local open-source ML models running on an M1 Max computer to identify and catalog interesting moments from cycling footage. The approach demonstrates practical applications of edge-based ML for personal content management.
+- [Towards Data Science] Vision LLMs Function as PDF Parsers for Charts and Diagrams in RAG Systems
+  Vision-capable large language models can effectively parse PDF documents by reading both text and visual elements like charts and diagrams, providing advantages over traditional text-only parsers for retrieval-augmented generation systems. The capability expands the utility of LLMs for enterprise document intelligence.
+- [Top News - MIT Technology Review] Reprogramming aging and the hidden sense of interoception
+  This newsletter edition explores two emerging scientific frontiers: the buzziest approaches to reversing aging through cellular reprogramming, and the discovery of interoception—the hidden sense of how the body feels from within. Both represent cutting-edge research into understanding and potentially modifying fundamental biological processes.
+- [Towards Data Science] Is Language Visual? An Experiment with Chinese Characters
+  This article examines visual inductive bias in machine learning by exploring whether language, specifically Chinese characters, is fundamentally visual through an experimental investigation involving a broken printer. The study investigates how neural networks learn visual representations of language and whether visual processing plays a role in character recognition.
+- [OpenAI News] New OpenAI Academy courses for the next era of work
+  OpenAI has introduced three new Academy courses designed to help workers develop practical artificial intelligence skills for the modern workplace. These courses enable users to build repeatable workflows and apply AI agents to everyday work tasks, preparing the workforce for AI-driven job transformation.
+
+## Technology
+- [Lobsters] Clojure Performance Reaches Near C-Speed with Optimization Techniques
+  A technical analysis demonstrates that the Clojure programming language can achieve performance nearly equivalent to C with proper optimization and implementation strategies. This finding challenges common perceptions about the performance limitations of higher-level languages.
+- [Techmeme] ByteDance Pursues Chinese AI Inference GPU Deals Amid Chip Supply Constraints
+  ByteDance is in negotiations with Shanghai-based Iluvatar CoreX to purchase AI inference GPUs and is considering acquiring Baidu's Kunlunxin chips as it seeks to reduce reliance on foreign semiconductor suppliers. The move reflects China's broader push for technological self-sufficiency in AI infrastructure.
+- [Lobsters] Jinx: Meta-Build-System for Operating System Distribution Bootstrapping
+  Jinx is a new meta-build system designed to simplify the process of bootstrapping and building operating system distributions. The tool aims to streamline OS development workflows for developers.
+- [Slashdot] Microsoft Updates Six Windows Apps with New Features Including AI Image Watermarking
+  Microsoft has released major updates to six built-in Windows applications including Clock, Media Player, and Calculator, with the Photos app gaining the ability to watermark Copilot-generated images to identify AI-created content. The watermarking feature ships disabled by default, allowing users to opt in.
+- [Hacker News] ePub Compatibility Issues Between Kobo and Adobe Standards
+  An article discusses technical problems with ePub file formats, examining disagreements between Kobo and Adobe regarding file compatibility and standards compliance. The piece explores the technical and practical implications of these incompatibilities.
+- [Hacker News] Windows 11 Users Frustrated by Microsoft Account Requirements
+  Windows 11 users are increasingly frustrated with Microsoft's creeping expansion of mandatory account requirements across the operating system. The resistance highlights growing user concerns about privacy and forced cloud integration.
+- [The Register] Fire Burns Google Cloud India Network, Causing Week-Long Slowdown
+  A fire at Google Cloud's India data center caused significant damage to network infrastructure, with the facility remaining slow a week after the incident. The disruption highlights the vulnerability of cloud infrastructure to physical incidents.
+- [Hacker News] Kage: Tool to Shadow Any Website into Single Binary for Offline Viewing
+  A new tool called Kage enables users to convert and shadow any website into a single binary file for offline viewing and archival purposes. The project offers a solution for preserving web content locally.
+- [Slashdot] Vintage AMD R600 Graphics Driver Improved with GitHub Copilot Code Cleanups
+  The AMD R600 Gallium3D driver received 59 commits in Mesa 26.2 featuring code restructuring and cleanups, notably accomplished with assistance from GitHub Copilot. The project demonstrates AI-assisted improvements to legacy graphics driver code.
+
+## Programming
+- [Lobsters] Comparison and Benchmarking of Rust Decimal Crates
+  A comprehensive analysis compares and benchmarks different decimal number handling libraries available in the Rust programming language ecosystem. The evaluation helps developers choose the most appropriate crate for their precision arithmetic needs.
+- [Lobsters] Datalog: Logic Programming Fundamentals and Applications
+  An overview of Datalog, a declarative logic programming language designed for querying and reasoning about data. The piece explores Datalog's principles, use cases, and relevance to modern data processing applications.
+- [Lobsters] Write for One Person: Crafting Focused Technical Communication
+  A guide emphasizing the writing principle of targeting a specific individual reader rather than a broad audience, with applications to technical documentation and communication. This approach helps writers maintain clarity and relevance in their content.
+- [Hacker News] Even More Batteries Included with Emacs
+  An article exploring the expanded built-in functionality and features available in the Emacs text editor and environment. The piece highlights the continued evolution of Emacs' comprehensive toolset for developers.
+- [Towards Data Science] Solving the 3Blue1Brown String Probability Problem (Without AI)
+  This article explores a probability problem through data science thinking, demonstrating analytical approaches to mathematical problem-solving without relying on AI tools.
+- [Lobsters] Diplomat: Multi-language FFI for Rust Libraries
+  Diplomat is a new tool that enables multi-language foreign function interfaces for Rust libraries, allowing developers to create bindings across different programming languages.
+- [Towards Data Science] I Thought Data Engineering Was Just Writing Scripts. I Was Wrong.
+  This article documents lessons learned from attempting to make an ETL pipeline production-ready, highlighting challenges that extend beyond basic scripting to encompass broader data engineering principles.
+- [Lobsters] Parsing JSON at Compile Time with C++26 Static Reflection
+  C++26 introduces static reflection capabilities that enable JSON parsing to occur at compile time rather than runtime. This advanced feature allows developers to validate and process JSON structures during the compilation phase.
+- [Hacker News] Perlisisms: Alan Perlis Programming Wisdom from 1982
+  A collection of quotes and aphorisms from pioneering computer scientist Alan Perlis offers timeless insights about programming, computer science, and software design principles. These observations from 1982 continue to influence programming philosophy and practice.
+
+## Business
+- [Techmeme] Alibaba in Talks to Acquire Fresh Grocery Delivery Platform Pupu for $1.5B
+  Alibaba is negotiating the acquisition of Chinese fresh grocery delivery platform Pupu for approximately $1.5 billion to strengthen its competitive position against rivals like Meituan. The deal would bolster Alibaba's food delivery and e-commerce capabilities in China.
+- [Techmeme] Health Wearable IPOs Face Investor Skepticism Despite Market Growth
+  Oura and Whoop, two prominent health wearable companies, are eyeing IPO opportunities as the sector experiences significant growth, but investor enthusiasm remains cautious due to Fitbit's disappointing performance and historically low margins in consumer hardware. The uncertainty reflects broader concerns about the viability of wearable-focused business models.
+- [Techmeme] Hypha Raises $50M Seed Funding for Private-Market Document Automation
+  Hypha has raised $50M in seed funding to expand its data extraction platform that automates workflows for private-market underwriting, portfolio monitoring, and asset management. The technology extracts structured data from complex private-market documents to streamline financial services processes.
+- [Slashdot] Workers Spend Equal Time Monitoring AI as Producing Useful Work
+  A survey reveals that as AI adoption spreads across organizations globally, workers are spending nearly as much time supervising and correcting AI outputs as they spend on actual productive work. This emerging phenomenon of 'botsitting' creates unexpected efficiency challenges despite automation promises.
+- [BBC News - Technology] Elon Musk's stratospheric rise to trillionaire status - in charts
+  Elon Musk has become the world's first trillionaire as the boss of X, Tesla, and SpaceX, with the BBC documenting his extraordinary wealth accumulation through visualizations.
+- [Simon Willison's Blog] Quoting Andrew Singleton
+- [a16z] Charts of the Week: Making the Stuff that Makes the Stuff
+  A weekly visualization roundup covering topics including manufacturing, user engagement efficiency, and SaaS revenue patterns across different business segments.
+- [Technology] SpaceX IPO makes history as largest ever. Stock gains 19% on first day
+  SpaceX completed the largest IPO in history, raising approximately $75 billion and gaining 19% on its first trading day, solidifying its position as one of the world's largest companies.
+- [The Register] Chinese e-tailer claimed 14-inch box stretched the size of a 9-inch tablet
+  A Chinese e-commerce company made implausible shipping claims about a 14-inch box dimensions, illustrating the consequences of cost-cutting decisions made by junior staff.
+- [A-Team Insight] The UK Bond Tape Goes Live – And the Real Work Begins
+  The UK's bond Consolidated Tape launches on June 22 after receiving Financial Conduct Authority authorization, with ETS Connect UK appointed as the operator.
+- [Slashdot] IT Workers Struggle to Find Jobs as Companies Demand AI Skills
+  California tech workers facing years of mass layoffs are encountering an even more challenging job market in 2026, with companies becoming increasingly selective and demanding AI expertise. The mismatch between available positions and required skills is worsening employment prospects.
+- [A-Team Insight] The Hidden Challenge Lurking Beneath Energy Trading's Bumper Profits
+  This article examines the paradox of sky-high profits in energy trading during market turbulence, exploring why some firms consistently emerge as victors while others struggle. It investigates the underlying challenges and strategies that separate successful energy traders from their competitors during volatile market conditions.
+- [A-Team Insight] What the 2026 TradingTech Insight Awards USA Reveal About the Direction of the Trading Stack
+  The trading infrastructure used by North American capital markets has significantly evolved over the past five years, with previously standalone front-office systems now required to integrate with one another. The 2026 TradingTech Insight Awards reveal emerging trends in how trading technology stacks are being modernized and unified.
+
+## Politics
+- [Techmeme] Tech Billionaires Coordinate Opposition to California Wealth Tax via Private Chats
+  Tech industry leaders including Sergey Brin, Marc Andreessen, and Garry Tan have been coordinating strategies in private Signal group chats to oppose California's proposed wealth tax. The leaked communications reveal how influential figures collaborate behind the scenes on major policy issues affecting their interests.
+- [Techmeme] Google CEO Faces Student Walkout at Stanford Commencement Over Israel Ties
+  More than 100 Stanford students walked out during Sundar Pichai's commencement speech, chanting "Free, free Palestine" in protest of Google's business relationships with Israel. The demonstration reflects ongoing student activism around corporate ties to the Israeli-Palestinian conflict.
+- [Techmeme] Frank Founder Charlie Javice Seeks Presidential Pardon After JPMorgan Fraud Conviction
+  Charlie Javice, founder of fintech startup Frank, who was sentenced to 85 months in prison in September 2025 for defrauding JPMorgan Chase, is reportedly seeking a presidential pardon from Donald Trump. The case involves allegations of inflated customer numbers used in the acquisition by JPMorgan Chase.
+
+## Cycling
+- [Escape Collective] Shimano Updates Deore Mechanical Shifting for Budget Mountain Bikers
+  Shimano has refreshed its Deore mechanical shifting system, offering updated components for budget-conscious mountain bike enthusiasts. The upgrade provides improved performance and reliability for riders seeking affordable drivetrain solutions.
+- [Escape Collective] Movistar's days in cycling may be numbered
+  Reports suggest that Movistar, which has maintained a consistent cycling team presence for over a decade and a half, may be discontinuing its sponsorship in the sport.
+- [Escape Collective] Jorgenson's support slashed by illness at Tour Auvergne
+  Matteo Jorgenson heads into the final weekend of the Tour Auvergne-Rhône-Alpes in fourth place but faces weakened team support on the final mountain stages due to teammate illness.
+- [Escape Collective] Onley out of Tour Auvergne with dislocated shoulder three weeks from Tour
+  Oscar Onley was forced to withdraw from the Tour Auvergne-Rhône-Alpes after crashing and dislocating his shoulder on stage 6, just three weeks before the Tour de France.
+- [Inner Ring] Aura Tour Stage 7 Preview
+  Stage 7 of the Tour Auvergne-Rhône-Alpes features a challenging mountain route with 133km of distance and 3,820m of vertical gain, culminating with a long finish on the Grand Colombier.
+- [Escape Collective] Spotted: New Orbea and Cube aero bikes at the Tour Auvergne-Rhône-Alpes
+  New aero bicycle designs from Orbea and Cube debuted at the Tour Auvergne-Rhône-Alpes, offering significant updates that represent the latest developments in the ongoing aero bike arms race.
+- [Escape Collective] Decathlon-CMA CGM Philosophical After Paul Seixas Abandons Tour Auvergne-Rhône-Alpes
+  Pre-race favorite Paul Seixas crashed on the penultimate stage of the Tour Auvergne-Rhône-Alpes warm-up race for the Tour de France, leading to his abandonment and casting a shadow over the final weekend. Decathlon-CMA CGM team responded philosophically to the setback.
+- [Escape Collective] Liam Slock Secures Viral Victory by Sliding Across Finish Line in Gippingen
+  Cyclist Liam Slock achieved a memorable and widely-shared victory photo at the GP Gippingen one-day race in Switzerland by sliding across the finish line on his backside in an unusual finish. The moment became a notable cycling story worth documenting.
+- [Escape Collective] Del Toro Dominates Tour Auvergne-Rhône-Alpes as Tour de France Dress Rehearsal
+  UAE Team Emirates-XRG secured a dominant victory at the Tour Auvergne-Rhône-Alpes, with Del Toro winning the stage 8 summit finish that will also feature in the upcoming Tour de France. The race serves as a crucial warm-up event for cycling's premier competition.
+- [Escape Collective] XCO World Series Leogang Marked by Controversy in Both Men's and Women's Races
+  The UCI Mountain Bike World Series event in Leogang, Austria featured controversial moments including an early crash in the women's race and a disqualification in the men's competition. Both incidents significantly impacted the outcomes of the races.
+
+## Cybersecurity
+- [Aphyr: Posts] More Fake Mastodon Signups
+  A Mastodon server administrator reports a flood of implausible bot signup requests, indicating ongoing automated attack attempts against decentralized social platforms.
+- [Cloudflare Blog] Scaling Security Insights: how we achieved a 10x increase in global scanning capacity
+  Cloudflare optimized its Security Insights system to process over 120 scans per second by improving Kafka consumers, Postgres queries, and API performance, dramatically increasing security scanning capacity.
+- [Trail of Bits Blog] Factoring "short-sleeve" RSA keys with polynomials
+  This article examines a cryptographic vulnerability where RSA private key bits are heavily biased toward 0 rather than being randomly generated, making them detectable and potentially factorable. The research demonstrates how improper key generation can compromise the security of RSA encryption through polynomial-based attacks.
