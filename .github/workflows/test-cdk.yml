@@ -28,7 +28,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        npm ci
+        npm ci --legacy-peer-deps
         pip install --upgrade pip
 
     - name: Test CDK Synth with CDK_DOCKER=false
