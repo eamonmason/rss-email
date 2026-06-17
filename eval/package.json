@@ -1,0 +1,13 @@
+{
+  "name": "rss-email-eval",
+  "version": "1.0.0",
+  "description": "promptfoo fidelity eval for the RSS Brief (isolated from the CDK dependency tree)",
+  "private": true,
+  "scripts": {
+    "eval": "PROMPTFOO_PYTHON=../.venv/bin/python promptfoo eval -c promptfooconfig.yaml",
+    "eval:view": "promptfoo view"
+  },
+  "devDependencies": {
+    "promptfoo": "^0.121.0"
+  }
+}

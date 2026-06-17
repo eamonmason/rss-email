@@ -32,14 +32,17 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install Node dependencies
-        run: npm install
+      - name: Install eval dependencies
+        # promptfoo lives in its own dependency island (eval/) so it stays out of
+        # the CDK/Lambda build's npm tree. See eval/README.md.
+        run: npm --prefix eval ci
 
       - name: Run promptfoo fidelity eval
+        working-directory: eval
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          # The provider runs synthesize() via uv's venv.
-          PROMPTFOO_PYTHON: .venv/bin/python
+        # The eval script sets PROMPTFOO_PYTHON=../.venv/bin/python so the provider
+        # runs synthesize() via uv's venv at the repo root.
         run: npm run eval -- --output eval-results.json
 
       - name: Upload eval results
@@ -47,5 +50,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: brief-eval-results
-          path: eval-results.json
+          path: eval/eval-results.json
           if-no-files-found: warn

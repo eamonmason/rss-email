@@ -1,12 +1,14 @@
 # promptfoo eval: fidelity of the RSS Brief vs the source digest.
-# Run from the repo root:  npm run eval   (needs ANTHROPIC_API_KEY)
-# View results:            npx promptfoo view
+# Run from this directory:  npm run eval        (needs ANTHROPIC_API_KEY)
+#   or from the repo root:  npm --prefix eval run eval
+# View results:             npm run eval:view
 # yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
 description: RSS Brief fidelity (brief vs digest)
 
 # The system under test is the real Python synthesis pipeline.
+# Paths are relative to this eval/ directory (where promptfoo runs).
 providers:
-  - id: file://eval/provider.py
+  - id: file://provider.py
     label: rss-brief
 
 # Grader used by llm-rubric assertions.
@@ -16,11 +18,11 @@ defaultTest:
   assert:
     - type: is-json
     - type: javascript
-      value: file://eval/assertions/schema.cjs
+      value: file://assertions/schema.cjs
     - type: javascript
-      value: file://eval/assertions/major_coverage.cjs
+      value: file://assertions/major_coverage.cjs
     - type: javascript
-      value: file://eval/assertions/source_ranking.cjs
+      value: file://assertions/source_ranking.cjs
     - type: llm-rubric
       value: |
         You are auditing an editorial brief that was synthesised from a news digest.
@@ -43,6 +45,6 @@ defaultTest:
 tests:
   - description: 2026-06-15 digest
     vars:
-      fixture: eval/fixtures/2026-06-15/digest_articles.json
-      expected_major: eval/fixtures/2026-06-15/expected_major.json
-      digest_text: file://eval/fixtures/2026-06-15/digest_text.txt
+      fixture: fixtures/2026-06-15/digest_articles.json
+      expected_major: fixtures/2026-06-15/expected_major.json
+      digest_text: file://fixtures/2026-06-15/digest_text.txt

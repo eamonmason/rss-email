@@ -19,7 +19,7 @@ function tier(name, cfg) {
 }
 
 module.exports = (output, context) => {
-  const cfg = JSON.parse(fs.readFileSync('src/rss_email/brief_config.json', 'utf-8'));
+  const cfg = JSON.parse(fs.readFileSync('../src/rss_email/brief_config.json', 'utf-8'));
   const digest = JSON.parse(fs.readFileSync(context.vars.fixture, 'utf-8'));
 
   // Flatten the digest into {title, tier}.

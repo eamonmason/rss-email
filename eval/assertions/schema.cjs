@@ -12,7 +12,7 @@ module.exports = (output, context) => {
     return { pass: false, score: 0, reason: `output is not valid JSON: ${e.message}` };
   }
 
-  const cfg = JSON.parse(fs.readFileSync('src/rss_email/brief_config.json', 'utf-8'));
+  const cfg = JSON.parse(fs.readFileSync('../src/rss_email/brief_config.json', 'utf-8'));
   const known = new Set([...(cfg.themed_categories || []), ...(cfg.personal_categories || [])]);
   const keys = Object.keys(brief.categories || {});
 
