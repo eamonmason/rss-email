@@ -11,6 +11,7 @@ import os
 import unittest
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
+from urllib.error import HTTPError
 
 import boto3
 from moto import mock_aws
@@ -29,6 +30,8 @@ from rss_email.retrieve_articles import (
     get_update_date,
     is_connected,
     retrieve_rss_feeds,
+    _rate_limited_host_key,
+    _throttle_host,
 )
 
 EXAMPLE_RSS_FILE = "example_rss_file.xml"
@@ -48,6 +51,56 @@ class TestRetrieveArticles(unittest.TestCase):
         timestamp = datetime.now() - timedelta(days=3)
         result = get_feed_items(url, timestamp)
         self.assertEqual(result, b"feed data")
+
+    def test_rate_limited_host_key(self):
+        """Reddit hosts map to the throttle key; unrelated hosts do not."""
+        self.assertEqual(
+            _rate_limited_host_key("https://www.reddit.com/r/aws/top/.rss?t=month"),
+            "reddit.com",
+        )
+        self.assertEqual(
+            _rate_limited_host_key("https://old.reddit.com/r/aws/.rss"), "reddit.com"
+        )
+        self.assertIsNone(_rate_limited_host_key("https://example.com/feed"))
+        # A look-alike host must not match.
+        self.assertIsNone(_rate_limited_host_key("https://notreddit.com.evil.test/x"))
+
+    @patch("rss_email.retrieve_articles.time.sleep")
+    def test_throttle_spaces_requests(self, mock_sleep):
+        """A second request to a rate-limited host waits out the interval."""
+        # pylint: disable=protected-access
+        rss_email.retrieve_articles._host_last_start.clear()
+        self.addCleanup(rss_email.retrieve_articles._host_last_start.clear)
+        url = "https://www.reddit.com/r/aws/top/.rss?t=month"
+
+        # First call records the start time and must not sleep.
+        _throttle_host(url)
+        mock_sleep.assert_not_called()
+
+        # Second call (immediately after) must wait close to the configured interval.
+        _throttle_host(url)
+        mock_sleep.assert_called_once()
+        waited = mock_sleep.call_args[0][0]
+        interval = rss_email.retrieve_articles.RATE_LIMITED_HOSTS["reddit.com"]
+        self.assertGreater(waited, 0)
+        self.assertLessEqual(waited, interval)
+
+    @patch("rss_email.retrieve_articles.time.sleep")
+    @patch("rss_email.retrieve_articles.urllib.request.urlopen")
+    def test_get_feed_items_429_skips_without_retry(self, mock_urlopen, mock_sleep):
+        """A 429 is skipped without retrying or firing fallback requests."""
+        mock_urlopen.side_effect = HTTPError(
+            "https://example.com/rss", 429, "Too Many Requests", {}, None
+        )
+
+        url = "https://example.com/rss"
+        timestamp = datetime.now() - timedelta(days=3)
+        result = get_feed_items(url, timestamp)
+
+        # No content, a single request (no SSL fallback, no retry), no backoff sleep.
+        self.assertEqual(result, b"")
+        self.assertEqual(mock_urlopen.call_count, 1)
+        mock_sleep.assert_not_called()
 
     @patch("rss_email.retrieve_articles.urllib.request.urlopen")
     def test_get_feed(self, mock_urlopen):

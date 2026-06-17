@@ -24,6 +24,8 @@ import re
 import socket
 import ssl
 import sys
+import threading
+import urllib.parse
 import urllib.request
 import zlib
 import time
@@ -61,6 +63,52 @@ logger.setLevel(logging.INFO)
 CHARACTER_ENCODING = "utf-8"
 REMOTE_SERVER = "www.google.com"
 DAYS_OF_NEWS = 3
+
+# Some hosts (notably Reddit) aggressively rate-limit bursts of requests from a
+# single IP. Reddit returns 429 the moment a handful of its feeds are fetched
+# concurrently (as the thread pool does), so we serialise requests to these
+# hosts and space out their starts. Keyed by registrable-domain suffix ->
+# minimum seconds between request starts. Within the 5-minute Lambda budget this
+# comfortably covers a daily batch of the configured Reddit feeds.
+RATE_LIMITED_HOSTS = {"reddit.com": 8.0}
+
+# HTTP status codes that should be handled by status logic, not retried via the
+# SSL-fallback / opener paths (which would multiply requests to the same host).
+_STATUS_CODES_NO_FALLBACK = (304, 403, 429)
+
+_throttle_registry_lock = threading.Lock()
+_host_locks: Dict[str, threading.Lock] = {}
+_host_last_start: Dict[str, float] = {}
+
+
+def _rate_limited_host_key(url: str) -> Optional[str]:
+    """Return the ``RATE_LIMITED_HOSTS`` key matching ``url``'s host, else None."""
+    host = (urllib.parse.urlsplit(url).hostname or "").lower()
+    for key in RATE_LIMITED_HOSTS:
+        if host == key or host.endswith("." + key):
+            return key
+    return None
+
+
+def _throttle_host(url: str) -> None:
+    """Serialise and space out requests to known rate-limited hosts (e.g. Reddit).
+
+    No-op for other hosts. When called from the retrieval thread pool this ensures
+    only one request to a sensitive host runs at a time, with at least
+    ``RATE_LIMITED_HOSTS[key]`` seconds between request starts, so a burst of feeds
+    on the same host does not trip 429 Too Many Requests.
+    """
+    key = _rate_limited_host_key(url)
+    if key is None:
+        return
+    with _throttle_registry_lock:
+        lock = _host_locks.setdefault(key, threading.Lock())
+    with lock:
+        wait = RATE_LIMITED_HOSTS[key] - (time.monotonic() - _host_last_start.get(key, 0.0))
+        if wait > 0:
+            logger.debug("Throttling %s for %.1fs to respect %s rate limit", url, wait, key)
+            time.sleep(wait)
+        _host_last_start[key] = time.monotonic()
 
 
 @pydantic.validate_call(validate_return=True)
@@ -107,6 +155,9 @@ def get_feed_items(url: str, timestamp: datetime) -> bytes:
     max_retries = 3
     retry_delay = 2  # seconds
 
+    # Politely serialise/space requests to rate-limited hosts (e.g. Reddit).
+    _throttle_host(url)
+
     for attempt in range(max_retries):
         try:
             # Try to handle common edge cases for HTTP(S) request problems
@@ -122,6 +173,14 @@ def get_feed_items(url: str, timestamp: datetime) -> bytes:
                             content = conn.read()
                             feed_items = detect_and_decompress(content, url)
                 except (ssl.SSLError, URLError, HTTPError) as ssl_error:
+                    # Genuine HTTP status responses (e.g. 304/403/429) are not SSL
+                    # problems: let the outer status handler deal with them instead
+                    # of firing more requests at the same host via the fallbacks.
+                    if (
+                        isinstance(ssl_error, HTTPError)
+                        and ssl_error.code in _STATUS_CODES_NO_FALLBACK
+                    ):
+                        raise
                     logger.debug(
                         "SSL verification failed for %s: %s. Trying without verification.",
                         url,
@@ -219,6 +278,17 @@ def get_feed_items(url: str, timestamp: datetime) -> bytes:
                 logger.warning(
                     "URL: %s returned 403 Forbidden. This might be a site that aggressively blocks scrapers.",
                     url,
+                )
+                break
+            if error.code == 429:
+                # Rate limited. Retrying within this invocation only makes it
+                # worse, so skip and pick the feed up on the next run. Logged at
+                # INFO so it does not trigger the error/warning alert.
+                logger.info(
+                    "URL: %s rate-limited (429); skipping without retry to avoid "
+                    "hammering (Retry-After=%s)",
+                    url,
+                    error.headers.get("Retry-After") if error.headers else None,
                 )
                 break
             logger.error("URL: %s, data not retrieved because %s", url, error)
