@@ -43,7 +43,7 @@ def call_api(prompt: str, options: Dict[str, Any], context: Dict[str, Any]):
         synthesis_input = json.load(handle)
 
     config = load_brief_config()
-    brief = synthesize(synthesis_input, config)
+    brief = synthesize(synthesis_input, config, temperature=0)
     if brief is None:
         return {"error": "synthesis returned None (parse/validation/API failure)"}
 

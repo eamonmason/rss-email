@@ -8,6 +8,7 @@ Some code duplication with test_article_data.py is intentional for test isolatio
 """
 
 import os
+import ssl
 import unittest
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
@@ -285,27 +286,30 @@ class TestRetrieveArticles(unittest.TestCase):
                         f"Feed {feed_url} did not return valid RSS/XML content",
                     )
 
-    def test_ssl_certificate_handling(self):
-        """Test the SSL certificate verification handling with fallback to unverified."""
-        # Test some feeds that are likely to have SSL certificate issues but should work with our fallback
-        # Using feeds that worked in our test_all_feeds.py
-        feeds_to_test = [
-            "https://stratechery.passport.online/feed/rss/S4nwHuhEnykTmJfDZVx4Ui",  # This worked with our SSL fix
-            "https://www.awsarchitectureblog.com/atom.xml",  # This should work with our SSL fix
+    @patch("rss_email.retrieve_articles.urllib.request.urlopen")
+    def test_ssl_certificate_handling(self, mock_urlopen):
+        """SSL fallback: when verification fails the code retries with an unverified context."""
+        rss_bytes = b"<?xml version='1.0'?><rss version='2.0'><channel/></rss>"
+
+        # Simulate the retrieve call returning RSS content via context-manager protocol.
+        mock_conn = MagicMock()
+        mock_conn.__enter__.return_value = mock_conn
+        mock_conn.read.return_value = rss_bytes
+
+        # Call 1 (check_new, verified SSL) → raises; calls 2 & 3 (unverified) → succeed.
+        mock_urlopen.side_effect = [
+            ssl.SSLError("certificate verify failed"),
+            MagicMock(),  # check_new unverified (for contextlib.closing)
+            mock_conn,    # retrieve unverified
         ]
 
         timestamp = datetime.now() - timedelta(days=3)
+        result = get_feed_items("https://example.com/feed.xml", timestamp)
 
-        for feed_url in feeds_to_test:
-            with self.subTest(feed=feed_url):
-                result = get_feed_items(feed_url, timestamp)
-                # Verify we got actual content
-                self.assertNotEqual(result, b"")
-                # Verify it looks like RSS/XML content
-                self.assertTrue(
-                    b"<rss" in result or b"<feed" in result or b"<?xml" in result,
-                    f"Feed {feed_url} did not return valid RSS/XML content",
-                )
+        self.assertNotEqual(result, b"")
+        self.assertIn(b"<rss", result)
+        # SSL fallback triggered a second urlopen call with an unverified context.
+        self.assertGreater(mock_urlopen.call_count, 1)
 
     EXAMPLE_RSS_FILE = """
     {

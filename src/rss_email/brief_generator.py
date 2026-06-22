@@ -315,6 +315,7 @@ def synthesize(
     synthesis_input: Dict[str, List[Dict[str, str]]],
     config: Dict[str, Any],
     client: Optional[Any] = None,
+    temperature: float = 0.3,
 ) -> Optional[BriefSynthesis]:
     """Run one Claude synthesis call (with one retry) and validate the result.
 
@@ -341,7 +342,7 @@ def synthesize(
             response = client.messages.create(
                 model=model,
                 max_tokens=SYNTHESIS_MAX_TOKENS,
-                temperature=0.3,
+                temperature=temperature,
                 messages=[{"role": "user", "content": prompt}],
                 timeout=api_timeout,
             )

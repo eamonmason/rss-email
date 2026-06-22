@@ -30,7 +30,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Install eval dependencies
         # promptfoo lives in its own dependency island (eval/) so it stays out of
