@@ -300,11 +300,12 @@ export class RSSEmailStack extends cdk.Stack {
         LAST_RUN_PARAMETER: LAST_RUN_PARAMETER,
         BRIEF_ENABLED: 'true',
         BRIEF_CLAUDE_MODEL: 'claude-sonnet-4-6',
+        CLAUDE_API_TIMEOUT: '60',
       },
       role: role,
       layers: [layer],
       memorySize: 512,
-      timeout: cdk.Duration.seconds(300)
+      timeout: cdk.Duration.seconds(600)
     });
 
     // Podcast Batch Processing Functions
