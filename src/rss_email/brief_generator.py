@@ -339,14 +339,14 @@ def synthesize(
 
     for attempt in (1, 2):
         try:
-            response = client.messages.create(
+            with client.messages.stream(
                 model=model,
                 max_tokens=SYNTHESIS_MAX_TOKENS,
                 temperature=temperature,
                 messages=[{"role": "user", "content": prompt}],
                 timeout=api_timeout,
-            )
-            response_text = response.content[0].text.strip()
+            ) as stream:
+                response_text = stream.get_final_text().strip()
             brief = _parse_synthesis(response_text, known_categories)
         except (
             anthropic.APIError,

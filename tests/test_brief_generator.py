@@ -75,16 +75,16 @@ VALID_SYNTHESIS = {
 
 
 def make_client(texts):
-    """Return a mock Anthropic client whose messages.create yields the given texts."""
+    """Return a mock Anthropic client whose messages.stream yields the given texts."""
     client = MagicMock()
-    responses = []
+    stream_cms = []
     for text in texts:
-        response = MagicMock()
-        content = MagicMock()
-        content.text = text
-        response.content = [content]
-        responses.append(response)
-    client.messages.create.side_effect = responses
+        cm = MagicMock()
+        cm.__enter__ = MagicMock(return_value=cm)
+        cm.__exit__ = MagicMock(return_value=False)
+        cm.get_final_text.return_value = text
+        stream_cms.append(cm)
+    client.messages.stream.side_effect = stream_cms
     return client
 
 
@@ -288,7 +288,7 @@ def test_synthesize_valid():
     assert brief.categories["AI/ML"].themes[0].signal_strength == "HIGH"
     assert brief.categories["AI/ML"].themes[1].relevance_to_reader is None
     assert brief.personal.summary == "Cycling season heats up."
-    assert client.messages.create.call_count == 1
+    assert client.messages.stream.call_count == 1
 
 
 def test_synthesize_strips_json_fences():
@@ -313,14 +313,14 @@ def test_synthesize_retries_then_skips():
         client=client,
     )
     assert brief is None
-    assert client.messages.create.call_count == 2
+    assert client.messages.stream.call_count == 2
 
 
 def test_synthesize_empty_input_skips():
     """No themed articles means no API call and a None result."""
     client = make_client([json.dumps(VALID_SYNTHESIS)])
     assert synthesize({}, SYNTH_CONFIG, client=client) is None
-    assert client.messages.create.call_count == 0
+    assert client.messages.stream.call_count == 0
 
 
 # --- schema validation ----------------------------------------------------
