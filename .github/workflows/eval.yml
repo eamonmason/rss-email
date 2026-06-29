@@ -43,7 +43,13 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         # The eval script sets PROMPTFOO_PYTHON=../.venv/bin/python so the provider
         # runs synthesize() via uv's venv at the repo root.
-        run: npm run eval -- --output eval-results.json
+        # One retry: "Could not extract JSON from llm-rubric response" is a transient
+        # promptfoo grader-parse failure unrelated to brief quality.
+        run: |
+          npm run eval -- --output eval-results.json || {
+            echo "First attempt failed; retrying once…"
+            npm run eval -- --output eval-results.json
+          }
 
       - name: Upload eval results
         if: always()

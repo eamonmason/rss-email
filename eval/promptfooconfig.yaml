@@ -11,10 +11,15 @@ providers:
   - id: file://provider.py
     label: rss-brief
 
-# Grader used by llm-rubric assertions.
+# Grader used by llm-rubric assertions. temperature: 0 prevents the grader
+# from returning non-JSON prose, which causes "Could not extract JSON from
+# llm-rubric response" failures unrelated to brief quality.
 defaultTest:
   options:
-    provider: anthropic:messages:claude-sonnet-4-6
+    provider:
+      id: anthropic:messages:claude-sonnet-4-6
+      config:
+        temperature: 0
   assert:
     - type: is-json
     - type: javascript
