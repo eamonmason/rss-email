@@ -428,7 +428,7 @@ def _signal_badge(signal: str) -> str:
         signal, SIGNAL_BADGE_STYLES["GENERAL"]
     )
     return (
-        f'<span style="display: inline-block; padding: 2px 8px; font-size: 12px; '
+        f'<span style="display: inline-block; padding: 2px 8px; font-size: 0.75em; '
         f'font-weight: bold; border-radius: 4px; background-color: {background}; '
         f'border: 1px solid {border}; color: {text};">{html.escape(signal)}</span>'
     )
@@ -454,7 +454,7 @@ def _render_article_links(titles: List[str], article_map: Dict[str, str]) -> str
     if not parts:
         return ""
     return (
-        '<ul style="margin: 8px 0 0 0; padding-left: 20px; font-size: 14px;">'
+        '<ul style="margin: 8px 0 0 0; padding-left: 20px; font-size: 0.875em;">'
         + "".join(parts)
         + "</ul>"
     )
@@ -467,15 +467,15 @@ def _render_theme(theme: BriefTheme, article_map: Dict[str, str]) -> str:
         'style="margin: 0 0 18px 0;"><tr><td '
         'style="padding: 14px 16px; background-color: #f8f9fa; '
         'border-left: 4px solid #3498db;">',
-        f'<p style="margin: 0 0 8px 0; font-size: 16px; color: #2c3e50;">'
+        f'<p style="margin: 0 0 8px 0; font-size: 1em; color: #2c3e50;">'
         f"{_signal_badge(theme.signal_strength)} "
         f"<strong>{html.escape(theme.theme)}</strong></p>",
-        f'<p style="margin: 0 0 10px 0; font-size: 16px; color: #555; '
+        f'<p style="margin: 0 0 10px 0; font-size: 1em; color: #555; '
         f'line-height: 1.6;">{html.escape(theme.tldr)}</p>',
     ]
     if theme.relevance_to_reader:
         parts.append(
-            f'<p style="margin: 0 0 8px 0; font-size: 14px; color: #1a5276; '
+            f'<p style="margin: 0 0 8px 0; font-size: 0.875em; color: #1a5276; '
             f'line-height: 1.5;"><strong>Why this matters to you:</strong> '
             f"{html.escape(theme.relevance_to_reader)}</p>"
         )
@@ -492,14 +492,14 @@ def _render_category(
         f'<table width="100%" cellpadding="12" cellspacing="0" border="0" '
         f'style="background-color: {category_color(name)}; border-radius: 6px; '
         f'margin: 0 0 12px 0;"><tr><td>'
-        f'<h2 style="color: #ffffff; margin: 0; font-size: 20px; '
+        f'<h2 style="color: #ffffff; margin: 0; font-size: 1.25em; '
         f'font-weight: bold; line-height: 1.3;">{html.escape(name)}</h2>'
         f"</td></tr></table>"
     )
     verdict = ""
     if category.week_verdict:
         verdict = (
-            f'<p style="margin: 0 0 14px 0; font-size: 15px; color: #2c3e50; '
+            f'<p style="margin: 0 0 14px 0; font-size: 0.95em; color: #2c3e50; '
             f'font-style: italic;">{html.escape(category.week_verdict)}</p>'
         )
     themes = "".join(_render_theme(theme, article_map) for theme in category.themes)
@@ -521,10 +521,10 @@ def _render_cross_cutting(signals: List[CrossCuttingSignal]) -> str:
             'style="margin: 0 0 14px 0;"><tr><td '
             'style="padding: 14px 16px; background-color: #f8f9fa; '
             'border-left: 4px solid #667eea;">'
-            f'<p style="margin: 0 0 6px 0; font-size: 16px; color: #2c3e50;">'
+            f'<p style="margin: 0 0 6px 0; font-size: 1em; color: #2c3e50;">'
             f"<strong>{html.escape(signal.signal)}</strong></p>"
-            f'<p style="margin: 0 0 6px 0; font-size: 13px; color: #666;">{cats}</p>'
-            f'<p style="margin: 0; font-size: 16px; color: #555; '
+            f'<p style="margin: 0 0 6px 0; font-size: 0.8em; color: #666;">{cats}</p>'
+            f'<p style="margin: 0; font-size: 1em; color: #555; '
             f'line-height: 1.6;">{html.escape(signal.implication)}</p>'
             "</td></tr></table>"
         )
@@ -532,7 +532,7 @@ def _render_cross_cutting(signals: List[CrossCuttingSignal]) -> str:
         '<table width="100%" cellpadding="12" cellspacing="0" border="0" '
         'style="background-color: #667eea; border-radius: 6px; '
         'margin: 0 0 12px 0;"><tr><td>'
-        '<h2 style="color: #ffffff; margin: 0; font-size: 20px; '
+        '<h2 style="color: #ffffff; margin: 0; font-size: 1.25em; '
         'font-weight: bold;">Cross-Cutting Signals</h2></td></tr></table>'
     )
     return (
@@ -551,13 +551,13 @@ def _render_personal(
         '<table width="100%" cellpadding="12" cellspacing="0" border="0" '
         'style="background-color: #16a085; border-radius: 6px; '
         'margin: 0 0 12px 0;"><tr><td>'
-        '<h2 style="color: #ffffff; margin: 0; font-size: 20px; '
+        '<h2 style="color: #ffffff; margin: 0; font-size: 1.25em; '
         'font-weight: bold;">Personal</h2></td></tr></table>'
     )
     summary = ""
     if personal.summary:
         summary = (
-            f'<p style="margin: 0 0 10px 0; font-size: 16px; color: #555; '
+            f'<p style="margin: 0 0 10px 0; font-size: 1em; color: #555; '
             f'line-height: 1.6;">{html.escape(personal.summary)}</p>'
         )
     links = _render_article_links(personal.top_stories, article_map)

@@ -261,7 +261,7 @@ def _render_sources_html(sources: List[Any]) -> str:
         body = " · ".join(links)
 
     return (
-        '<p style="margin: 6px 0 0 0; font-size: 13px; color: #666; line-height: 1.5;">'
+        '<p style="margin: 6px 0 0 0; font-size: 0.8em; color: #666; line-height: 1.5;">'
         f'<strong>{prefix}:</strong> {body}'
         '</p>'
     )
@@ -307,7 +307,7 @@ def generate_enhanced_html_content(
                     style="background-color: {header_color}; border-radius: 6px; margin-bottom: 15px;">
                         <tr>
                             <td>
-                                <h2 style="color: #ffffff; margin: 0; font-size: 20px;
+                                <h2 style="color: #ffffff; margin: 0; font-size: 1.25em;
                                     font-weight: bold; line-height: 1.3;">
                                     {category}
                                 </h2>
@@ -356,12 +356,12 @@ def generate_enhanced_html_content(
                                  margin-bottom: 18px;">
                         <tr>
                             <td>
-                                <h3 style="margin: 0 0 10px 0; line-height: 1.4;">
+                                <h3 style="margin: 0 0 10px 0; line-height: 1.4; font-size: 1.1em;">
                                     <a href="{article_link}" target="_blank"
-                                    style="color: #0066cc; text-decoration: underline; font-size: 18px;">
+                                    style="color: #0066cc; text-decoration: underline;">
                                     {article_title}</a>
                                 </h3>
-                                <p style="margin: 0 0 12px 0; font-size: 14px; color: #666;">
+                                <p style="margin: 0 0 12px 0; font-size: 0.875em; color: #666;">
                                     {article_pubdate}
                                     {
                                         f' | <a href="{article_comments}" target="_blank" '
@@ -369,7 +369,7 @@ def generate_enhanced_html_content(
                                         if article_comments else ''
                                     }
                                 </p>
-                                <p style="margin: 0 0 12px 0; font-size: 16px; color: #555; line-height: 1.6;">
+                                <p style="margin: 0 0 12px 0; font-size: 1em; color: #555; line-height: 1.6;">
                                 {article_summary}</p>
                                 {sources_html}
                             </td>
@@ -574,10 +574,10 @@ def _generate_feed_summary_html(feed_stats: Dict[str, int]) -> str:
         f'<table width="100%" cellpadding="0" cellspacing="0" border="0"'
         f' style="margin-top: 30px; border-top: 2px solid #dee2e6;">'
         f'<tr><td style="padding-top: 16px;">'
-        f'<p style="margin: 0 0 8px 0; font-size: 13px; font-weight: bold; color: #2c3e50;">'
+        f'<p style="margin: 0 0 8px 0; font-size: 0.8em; font-weight: bold; color: #2c3e50;">'
         f'Feed breakdown &mdash; {total} articles retrieved</p>'
         f'<table width="100%" cellpadding="0" cellspacing="0" border="1"'
-        f' style="border-collapse: collapse; font-size: 12px; color: #444;">'
+        f' style="border-collapse: collapse; font-size: 0.75em; color: #444;">'
         f'<tr style="background-color: #f8f9fa;">'
         f'<th style="padding: 5px 8px; text-align: left; border: 1px solid #dee2e6;">Feed</th>'
         f'<th style="padding: 5px 8px; text-align: right; border: 1px solid #dee2e6;">Articles</th>'

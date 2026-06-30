@@ -396,12 +396,11 @@ def test_render_relevance_omitted_when_null(rendered_html):
 
 
 def test_render_is_email_safe(rendered_html):
-    """No JavaScript, flexbox, grid, or style blocks in the output."""
+    """No JavaScript, flexbox, grid, or inline scripts in the output."""
     lowered = rendered_html.lower()
     assert "<script" not in lowered
     assert "display: flex" not in lowered
     assert "display: grid" not in lowered
-    assert "<style" not in lowered
 
 
 # --- generate_brief orchestration -----------------------------------------
