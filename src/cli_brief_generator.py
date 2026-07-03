@@ -67,7 +67,7 @@ def generate(
 ) -> None:
     """Categorise articles, synthesise the brief, and write or send it."""
     try:
-        logging.info("Reading RSS file from s3://%s/%s", bucket, key)
+        logging.info("Reading articles JSON from s3://%s/%s", bucket, key)
         rss_content = read_s3_file(bucket, key)
         filtered_items = filter_items(rss_content, run_date)
 
@@ -128,7 +128,7 @@ def main() -> None:
         "--bucket", "-b", help="S3 bucket name (defaults to BUCKET environment variable)"
     )
     parser.add_argument(
-        "--key", "-k", help="S3 key for RSS file (defaults to KEY environment variable)"
+        "--key", "-k", help="S3 key for articles JSON file (defaults to KEY environment variable)"
     )
     parser.add_argument(
         "--parameter",

@@ -3,27 +3,19 @@ import unittest
 from unittest.mock import MagicMock, patch
 from datetime import datetime
 
+import httpx
+
 from rss_email.retrieve_articles import get_feed_items, get_feed
 
 
 class TestRetryAndComments(unittest.TestCase):
     """Test cases for retry logic and comment field extraction in RSS feeds."""
     @patch("rss_email.retrieve_articles.time.sleep")
-    @patch("urllib.request.urlopen")
-    def test_get_feed_items_retry(self, mock_urlopen, mock_sleep):
+    @patch("rss_email.retrieve_articles.httpx.get")
+    def test_get_feed_items_retry(self, mock_get, mock_sleep):
         """Test that get_feed_items retries on failure."""
-        # Mock urlopen to fail twice then succeed
-        mock_response = MagicMock()
-        mock_response.read.return_value = b"<rss></rss>"
-
-        # Create a side effect that raises an exception twice, then returns the mock response
-        # We need to handle the context manager protocol for urlopen
-        mock_context = MagicMock()
-        mock_context.__enter__.return_value = mock_response
-        mock_context.__exit__.return_value = None
-
-        # Mock to fail always
-        mock_urlopen.side_effect = RuntimeError("Always fail")
+        # Mock to fail always with a generic httpx error
+        mock_get.side_effect = httpx.ConnectError("Always fail")
 
         # Call the function (it catches exceptions and returns empty bytes)
         result = get_feed_items("https://example.com", datetime.now())
@@ -32,7 +24,7 @@ class TestRetryAndComments(unittest.TestCase):
         self.assertEqual(result, b'')
 
         # Should be called 3 times
-        self.assertEqual(mock_urlopen.call_count, 3)
+        self.assertEqual(mock_get.call_count, 3)
         # Verify sleep was called (2 retries = 2 sleeps)
         self.assertEqual(mock_sleep.call_count, 2)
 

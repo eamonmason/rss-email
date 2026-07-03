@@ -18,6 +18,7 @@ from .article_processor import (
     create_group_summary_prompt,
     _build_group_payload,
 )
+from .models import DEFAULT_CLAUDE_MODEL
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -84,7 +85,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
         key = os.environ["RSS_KEY"]
         last_run_param = os.environ["LAST_RUN_PARAMETER"]
         api_key_param = os.environ["ANTHROPIC_API_KEY_PARAMETER"]
-        model = os.environ.get("CLAUDE_MODEL", "claude-haiku-4-5-20251001")
+        model = os.environ.get("CLAUDE_MODEL", DEFAULT_CLAUDE_MODEL)
         batch_size = int(os.environ.get("CLAUDE_BATCH_SIZE", "25"))
 
         # Get API key from Parameter Store
@@ -164,6 +165,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
             "request_count": len(requests),
             "submitted_at": datetime.now(UTC).isoformat(),
             "articles_count": len(filtered_items),
+            "poll_count": 0,
         }
 
     except Exception as e:

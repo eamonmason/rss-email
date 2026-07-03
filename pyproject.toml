@@ -8,13 +8,13 @@ requires-python = ">=3.13"
 dependencies = [
     "boto3>=1.28.49",
     "feedparser>=6.0.10",
-    "PyRSS2Gen>=1.1",
     "beautifulsoup4>=4.12.2",
     "pydantic>=2.10.6",
     "anthropic>=0.52.0",
     "regex>=2024.11.6",
     "brotli>=1.2.0",
     "python-dotenv>=1.1.1",
+    "httpx>=0.28.1",
 ]
 
 [project.optional-dependencies]

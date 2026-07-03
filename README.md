@@ -584,7 +584,7 @@ export CLAUDE_MODEL="claude-3-5-sonnet-20241022"
 
 2. Run the email generation:
 ```bash
-python src/rss_email/email_articles.py bucket-name rss.xml --local-file test-rss.xml
+python src/rss_email/email_articles.py bucket-name articles.json --local-file test-articles.json
 ```
 
 #### Testing Without AWS
@@ -698,10 +698,10 @@ The test provides detailed progress information:
    📝 Saved original SSM parameter: 2025-07-02T10:30:33.811000
    ✅ Updated SSM parameter with test timestamp: 2025-07-02T10:30:33.811000
 
-📥 Downloading RSS file from S3...
-   ✅ Downloaded RSS file to: downloaded_rss.xml
+📥 Downloading articles JSON from S3...
+   ✅ Downloaded articles JSON to: downloaded_articles.json
    📊 File size: 158188 characters
-   📰 Found 126 articles in RSS feed
+   📰 Found 126 articles
 
 🔄 Running email generation workflow...
    📅 Last run date: 2025-07-02 10:30:33.811000
@@ -724,14 +724,14 @@ The test provides detailed progress information:
 
 🧹 Cleaning up test environment...
    ✅ Restored original SSM parameter: 2025-07-02T08:30:33.811000
-   ✅ Cleaned up downloaded RSS file: downloaded_rss.xml
+   ✅ Cleaned up downloaded articles JSON: downloaded_articles.json
 ```
 
 #### Output Files
 
 The test generates:
 - `functional_test_output.html` - The generated email HTML (can be opened in a browser)
-- `downloaded_rss.xml` - Temporarily downloaded RSS file (cleaned up automatically)
+- `downloaded_articles.json` - Temporarily downloaded articles JSON (cleaned up automatically)
 
 ### Configuration Options
 
@@ -742,9 +742,9 @@ class FunctionalWorkflowTest:
     def __init__(self):
         self.ssm_parameter_name = "rss-email-lastrun"
         self.s3_bucket = "cd-rssemailstack-rssbucket91adb797-1ds7r89g7wdoo"
-        self.s3_key = "rss.xml"
+        self.s3_key = "articles.json"
         self.output_file = "functional_test_output.html"
-        self.downloaded_rss_file = "downloaded_rss.xml"
+        self.downloaded_rss_file = "downloaded_articles.json"
 ```
 
 ### Troubleshooting
@@ -793,7 +793,7 @@ If the test fails and doesn't clean up properly:
 
 ```bash
 # Remove test files
-rm -f functional_test_output.html downloaded_rss.xml
+rm -f functional_test_output.html downloaded_articles.json
 
 # Reset SSM parameter (replace with your original value)
 aws ssm put-parameter --name "rss-email-lastrun" --value "2025-07-02T08:30:33.811000" --type String --overwrite

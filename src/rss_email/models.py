@@ -7,6 +7,12 @@ from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, HttpUrl
 
+# Single source of truth for the default Claude model ID, so every module
+# that falls back to it (submit_email_batch, submit_podcast_batch,
+# article_grouper, article_processor, podcast_generator, email_articles)
+# stays in sync instead of repeating (and drifting on) the same literal.
+DEFAULT_CLAUDE_MODEL = "claude-haiku-4-5-20251001"
+
 
 class RSSItem(BaseModel):
     """
@@ -114,7 +120,7 @@ class ApplicationSettings(BaseModel):
 
     # Claude Configuration
     claude_enabled: bool = True
-    claude_model: str = "claude-haiku-4-5-20251001"
+    claude_model: str = DEFAULT_CLAUDE_MODEL
     claude_max_tokens: int = 100000
     claude_max_requests: int = 10
     anthropic_api_key_parameter: str = "rss-email-anthropic-api-key"

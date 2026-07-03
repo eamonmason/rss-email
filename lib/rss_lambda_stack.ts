@@ -23,7 +23,7 @@ import { execSync } from 'child_process';
 
 
 const BUCKET_NAME = 'rss-bucket';
-const KEY = 'rss.xml';
+const KEY = 'articles.json';
 const SNS_RECEIVE_EMAIL = 'rss-receive-email';
 const SNS_ERROR_ALERTS = 'rss-error-alerts';
 const RSS_RULE_SET_NAME = 'RSSRuleSet';
@@ -32,6 +32,10 @@ const LAST_RUN_PARAMETER = 'rss-email-lastrun';
 const PODCAST_LAST_RUN_PARAMETER = 'rss-podcast-lastrun';
 const PODCAST_CLOUDFRONT_DOMAIN_PARAMETER = 'rss-podcast-cloudfront-domain';
 const ANTHROPIC_API_KEY_PARAMETER = 'rss-email-anthropic-api-key';
+
+// Keep in sync with DEFAULT_CLAUDE_MODEL in src/rss_email/models.py
+const DEFAULT_CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
+const BRIEF_SYNTHESIS_CLAUDE_MODEL = 'claude-sonnet-4-6';
 
 export class RSSEmailStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -117,8 +121,13 @@ export class RSSEmailStack extends cdk.Stack {
           statements: [
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: ['s3:PutObject', 's3:GetObject', 's3:ListBucket', 's3:ListObjects'],
+              actions: ['s3:PutObject', 's3:GetObject'],
               resources: [bucket.bucketArn + '/*'],
+            }),
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['s3:ListBucket'],
+              resources: [bucket.bucketArn],
             }),
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
@@ -266,7 +275,7 @@ export class RSSEmailStack extends cdk.Stack {
         RSS_BUCKET: bucket.bucketName,
         RSS_KEY: KEY,
         ANTHROPIC_API_KEY_PARAMETER: ANTHROPIC_API_KEY_PARAMETER,
-        CLAUDE_MODEL: 'claude-haiku-4-5-20251001',
+        CLAUDE_MODEL: DEFAULT_CLAUDE_MODEL,
         LAST_RUN_PARAMETER: LAST_RUN_PARAMETER,
         CLAUDE_BATCH_SIZE: '25',
       },
@@ -299,8 +308,8 @@ export class RSSEmailStack extends cdk.Stack {
         TO_EMAIL_ADDRESS: TO_EMAIL_ADDRESS,
         LAST_RUN_PARAMETER: LAST_RUN_PARAMETER,
         BRIEF_ENABLED: 'true',
-        BRIEF_CLAUDE_MODEL: 'claude-sonnet-4-6',
-        CLAUDE_MODEL: 'claude-sonnet-4-6',
+        BRIEF_CLAUDE_MODEL: BRIEF_SYNTHESIS_CLAUDE_MODEL,
+        CLAUDE_MODEL: BRIEF_SYNTHESIS_CLAUDE_MODEL,
         CLAUDE_API_TIMEOUT: '60',
       },
       role: role,
@@ -319,7 +328,7 @@ export class RSSEmailStack extends cdk.Stack {
         RSS_KEY: KEY,
         PODCAST_LAST_RUN_PARAMETER: PODCAST_LAST_RUN_PARAMETER,
         ANTHROPIC_API_KEY_PARAMETER: ANTHROPIC_API_KEY_PARAMETER,
-        CLAUDE_MODEL: 'claude-haiku-4-5-20251001',
+        CLAUDE_MODEL: DEFAULT_CLAUDE_MODEL,
       },
       role: role,
       layers: [layer],
@@ -358,84 +367,164 @@ export class RSSEmailStack extends cdk.Stack {
 
     // ===== Step Functions State Machine =====
 
+    // Number of 60s polls before backing off to a longer interval. Message
+    // Batches can take a while, so hammering the status API every minute for
+    // hours is wasteful once a batch is clearly not going to finish quickly.
+    const POLL_BACKOFF_THRESHOLD = 5;
+
+    // Add a generic retry (with backoff) to a LambdaInvoke task so transient
+    // failures inside a branch don't immediately cascade into a full Parallel
+    // state failure (which would otherwise kill the sibling branch too).
+    const withRetry = (task: tasks.LambdaInvoke): tasks.LambdaInvoke => {
+      task.addRetry({
+        errors: [sfn.Errors.ALL],
+        interval: cdk.Duration.seconds(30),
+        maxAttempts: 2,
+        backoffRate: 2,
+      });
+      return task;
+    };
+
     // RSS Retrieval Task (first step)
-    const retrieveArticlesTask = new tasks.LambdaInvoke(this, 'Retrieve RSS Articles', {
+    const retrieveArticlesTask = withRetry(new tasks.LambdaInvoke(this, 'Retrieve RSS Articles', {
       lambdaFunction: retrieveRSSArticlesFunction,
       outputPath: '$.Payload',
-    });
+    }));
 
     // Email Branch Tasks
-    const submitEmailBatchTask = new tasks.LambdaInvoke(this, 'Submit Email Batch', {
+    const submitEmailBatchTask = withRetry(new tasks.LambdaInvoke(this, 'Submit Email Batch', {
       lambdaFunction: submitEmailBatchFunction,
       resultPath: '$.emailBatch',
-    });
+    }));
 
-    const checkEmailStatusTask = new tasks.LambdaInvoke(this, 'Check Email Status', {
+    const checkEmailStatusTask = withRetry(new tasks.LambdaInvoke(this, 'Check Email Status', {
       lambdaFunction: checkEmailBatchStatusFunction,
       inputPath: '$.emailBatch.Payload',
       resultPath: '$.emailBatch',
-    });
+    }));
 
-    const waitEmailState = new sfn.Wait(this, 'Wait Email 60s', {
+    const waitEmailShort = new sfn.Wait(this, 'Wait Email 60s', {
       time: sfn.WaitTime.duration(cdk.Duration.seconds(60)),
     });
 
-    const retrieveAndSendEmailTask = new tasks.LambdaInvoke(this, 'Retrieve and Send Email', {
+    const waitEmailLong = new sfn.Wait(this, 'Wait Email 5m', {
+      time: sfn.WaitTime.duration(cdk.Duration.minutes(5)),
+    });
+
+    const retrieveAndSendEmailTask = withRetry(new tasks.LambdaInvoke(this, 'Retrieve and Send Email', {
       lambdaFunction: retrieveAndSendEmailFunction,
       inputPath: '$.emailBatch.Payload',
       outputPath: '$.Payload',
-    });
+    }));
+
+    const emailPollBackoffChoice = new sfn.Choice(this, 'Email Poll Backoff?')
+      .when(
+        sfn.Condition.numberLessThan('$.emailBatch.Payload.poll_count', POLL_BACKOFF_THRESHOLD),
+        waitEmailShort.next(checkEmailStatusTask)
+      )
+      .otherwise(waitEmailLong.next(checkEmailStatusTask));
 
     const emailChoice = new sfn.Choice(this, 'Is Email Batch Complete?')
       .when(
         sfn.Condition.stringEquals('$.emailBatch.Payload.processing_status', 'ended'),
         retrieveAndSendEmailTask
       )
-      .otherwise(waitEmailState.next(checkEmailStatusTask));
+      .otherwise(emailPollBackoffChoice);
 
     const emailBranch = submitEmailBatchTask
       .next(checkEmailStatusTask)
       .next(emailChoice);
 
-    // Podcast Branch Tasks
-    const submitPodcastBatchTask = new tasks.LambdaInvoke(this, 'Submit Podcast Batch', {
-      lambdaFunction: submitPodcastBatchFunction,
-      resultPath: '$.podcastBatch',
+    // Isolate the email branch inside its own single-branch Parallel so a
+    // Catch here stops the failure from propagating to (and killing) the
+    // podcast branch running alongside it.
+    const emailBranchIsolated = new sfn.Parallel(this, 'Email Branch Isolated', {
+      resultPath: '$.emailResult',
+    }).branch(emailBranch);
+
+    const notifyEmailFailure = new tasks.SnsPublish(this, 'Notify Email Branch Failure', {
+      topic: error_alerts_topic,
+      subject: 'RSS workflow: email branch failed',
+      message: sfn.TaskInput.fromJsonPathAt('$.emailBranchError.Cause'),
     });
 
-    const checkPodcastStatusTask = new tasks.LambdaInvoke(this, 'Check Podcast Status', {
+    const emailBranchFailed = new sfn.Pass(this, 'Email Branch Failed', {
+      parameters: { status: 'failed', branch: 'email' },
+    });
+
+    emailBranchIsolated.addCatch(notifyEmailFailure.next(emailBranchFailed), {
+      resultPath: '$.emailBranchError',
+    });
+
+    // Podcast Branch Tasks
+    const submitPodcastBatchTask = withRetry(new tasks.LambdaInvoke(this, 'Submit Podcast Batch', {
+      lambdaFunction: submitPodcastBatchFunction,
+      resultPath: '$.podcastBatch',
+    }));
+
+    const checkPodcastStatusTask = withRetry(new tasks.LambdaInvoke(this, 'Check Podcast Status', {
       lambdaFunction: checkPodcastBatchStatusFunction,
       inputPath: '$.podcastBatch.Payload',
       resultPath: '$.podcastBatch',
-    });
+    }));
 
-    const waitPodcastState = new sfn.Wait(this, 'Wait Podcast 60s', {
+    const waitPodcastShort = new sfn.Wait(this, 'Wait Podcast 60s', {
       time: sfn.WaitTime.duration(cdk.Duration.seconds(60)),
     });
 
-    const retrieveAndGeneratePodcastTask = new tasks.LambdaInvoke(this, 'Retrieve and Generate Podcast', {
+    const waitPodcastLong = new sfn.Wait(this, 'Wait Podcast 5m', {
+      time: sfn.WaitTime.duration(cdk.Duration.minutes(5)),
+    });
+
+    const retrieveAndGeneratePodcastTask = withRetry(new tasks.LambdaInvoke(this, 'Retrieve and Generate Podcast', {
       lambdaFunction: retrieveAndGeneratePodcastFunction,
       inputPath: '$.podcastBatch.Payload',
       outputPath: '$.Payload',
-    });
+    }));
+
+    const podcastPollBackoffChoice = new sfn.Choice(this, 'Podcast Poll Backoff?')
+      .when(
+        sfn.Condition.numberLessThan('$.podcastBatch.Payload.poll_count', POLL_BACKOFF_THRESHOLD),
+        waitPodcastShort.next(checkPodcastStatusTask)
+      )
+      .otherwise(waitPodcastLong.next(checkPodcastStatusTask));
 
     const podcastChoice = new sfn.Choice(this, 'Is Podcast Batch Complete?')
       .when(
         sfn.Condition.stringEquals('$.podcastBatch.Payload.processing_status', 'ended'),
         retrieveAndGeneratePodcastTask
       )
-      .otherwise(waitPodcastState.next(checkPodcastStatusTask));
+      .otherwise(podcastPollBackoffChoice);
 
     const podcastBranch = submitPodcastBatchTask
       .next(checkPodcastStatusTask)
       .next(podcastChoice);
 
+    // Isolate the podcast branch the same way as the email branch above.
+    const podcastBranchIsolated = new sfn.Parallel(this, 'Podcast Branch Isolated', {
+      resultPath: '$.podcastResult',
+    }).branch(podcastBranch);
+
+    const notifyPodcastFailure = new tasks.SnsPublish(this, 'Notify Podcast Branch Failure', {
+      topic: error_alerts_topic,
+      subject: 'RSS workflow: podcast branch failed',
+      message: sfn.TaskInput.fromJsonPathAt('$.podcastBranchError.Cause'),
+    });
+
+    const podcastBranchFailed = new sfn.Pass(this, 'Podcast Branch Failed', {
+      parameters: { status: 'failed', branch: 'podcast' },
+    });
+
+    podcastBranchIsolated.addCatch(notifyPodcastFailure.next(podcastBranchFailed), {
+      resultPath: '$.podcastBranchError',
+    });
+
     // Parallel Processing
     const parallelState = new sfn.Parallel(this, 'Process Email and Podcast', {
       resultPath: '$.results',
     })
-      .branch(emailBranch)
-      .branch(podcastBranch);
+      .branch(emailBranchIsolated)
+      .branch(podcastBranchIsolated);
 
     // Success State
     const successState = new sfn.Succeed(this, 'Workflow Complete');
@@ -448,7 +537,10 @@ export class RSSEmailStack extends cdk.Stack {
     // Create State Machine
     const stateMachine = new sfn.StateMachine(this, 'DailyRSSNewsletterWorkflow', {
       definitionBody: sfn.DefinitionBody.fromChainable(definition),
-      timeout: cdk.Duration.hours(12),
+      // The Message Batches API SLA window is 24h; give the workflow enough
+      // headroom that a slow batch doesn't time out the execution just
+      // before the (already paid for) results become available.
+      timeout: cdk.Duration.hours(25),
       comment: 'Orchestrates daily RSS newsletter: process email & podcast in parallel using Message Batches API',
     });
 
@@ -487,9 +579,33 @@ import json
 import os
 
 def lambda_handler(event, context):
-    """Trigger Step Functions workflow when email is received."""
+    """Trigger Step Functions workflow when email is received.
+
+    Validates the sender against ALLOWED_SENDER_EMAIL (the old is_valid_email
+    check the SES-receipt-rule flow used to perform) and skips starting a new
+    execution if one is already running, to avoid double-sending the digest
+    and double Claude spend from concurrent triggers.
+    """
     sfn = boto3.client('stepfunctions')
     state_machine_arn = os.environ['STATE_MACHINE_ARN']
+    allowed_sender = os.environ.get('ALLOWED_SENDER_EMAIL', '').lower()
+
+    sns_message = json.loads(event['Records'][0]['Sns']['Message'])
+    sender = sns_message.get('mail', {}).get('source', '').lower()
+
+    if allowed_sender and sender != allowed_sender:
+        print(f"Ignoring trigger from unauthorized sender: {sender}")
+        return {'statusCode': 200, 'started': False, 'reason': 'unauthorized_sender'}
+
+    running = sfn.list_executions(
+        stateMachineArn=state_machine_arn,
+        statusFilter='RUNNING',
+        maxResults=1,
+    )
+    if running.get('executions'):
+        existing_arn = running['executions'][0]['executionArn']
+        print(f"Execution already running ({existing_arn}), skipping start")
+        return {'statusCode': 200, 'started': False, 'reason': 'already_running'}
 
     # Start execution
     response = sfn.start_execution(
@@ -501,18 +617,25 @@ def lambda_handler(event, context):
     )
 
     print(f"Started execution: {response['executionArn']}")
-    return {'statusCode': 200}
+    return {'statusCode': 200, 'started': True, 'executionArn': response['executionArn']}
       `),
       handler: 'index.lambda_handler',
       runtime: lambda.Runtime.PYTHON_3_13,
       timeout: cdk.Duration.seconds(30),
       environment: {
-        STATE_MACHINE_ARN: stateMachine.stateMachineArn
+        STATE_MACHINE_ARN: stateMachine.stateMachineArn,
+        ALLOWED_SENDER_EMAIL: TO_EMAIL_ADDRESS,
       }
     });
 
-    // Grant permission to start Step Functions execution
+    // Grant permission to start Step Functions execution and to list
+    // executions (for the concurrency guard above)
     stateMachine.grantStartExecution(manualTriggerFunction);
+    manualTriggerFunction.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['states:ListExecutions'],
+      resources: [stateMachine.stateMachineArn],
+    }));
 
     // Subscribe Lambda to SNS topic
     receive_topic.addSubscription(new sns_subscriptions.LambdaSubscription(manualTriggerFunction));
@@ -593,6 +716,21 @@ def lambda_handler(event, context):
     });
 
     retrieveRSSArticlesErrorAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(error_alerts_topic));
+
+    // Alarm on the workflow itself failing (e.g. a top-level task exhausting
+    // its retries before a branch Catch could even isolate it), rather than
+    // relying solely on log-grep alarms per Lambda.
+    const stateMachineExecutionsFailedAlarm = new cdk.aws_cloudwatch.Alarm(this, 'StateMachineExecutionsFailedAlarm', {
+      metric: stateMachine.metricFailed({ period: cdk.Duration.minutes(5) }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      comparisonOperator: cdk.aws_cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: cdk.aws_cloudwatch.TreatMissingData.NOT_BREACHING,
+      alarmDescription: 'Alarm when the daily RSS newsletter Step Functions execution fails',
+      actionsEnabled: true,
+    });
+
+    stateMachineExecutionsFailedAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(error_alerts_topic));
 
     // Create a Lambda function that will forward log events to the SNS topic
     const logForwarderFunction = new lambda.Function(this, 'LogForwarderFunction', {

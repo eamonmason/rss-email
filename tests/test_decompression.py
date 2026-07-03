@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
-"""Test decompression of problematic feeds."""
+"""Test feeds that used to need manual decompression workarounds.
+
+httpx auto-decodes gzip/deflate/br based on the Content-Encoding header, so
+these feeds should now come back as plain XML with no extra handling.
+"""
 
 import logging
 import sys
 from datetime import datetime, timedelta
 
 
-from rss_email.retrieve_articles import detect_and_decompress, get_feed_items
+from rss_email.retrieve_articles import get_feed_items
 
 # Configure logging
 logging.basicConfig(
@@ -86,31 +90,18 @@ def test_problematic_feeds():
                     feed_name,
                     format(len(feed_content), ","),
                 )
+                failed_feeds.append(feed_name)
 
-                # Try our specialized decompression function again
-                decompressed = detect_and_decompress(feed_content, feed_url)
+                # Show content preview for debugging
+                try:
+                    preview = feed_content[:100].decode("utf-8", errors="replace")
+                    logger.debug("Content preview: %s", preview)
+                except (UnicodeDecodeError, TypeError):
+                    pass
 
-                if (
-                    b"<rss" in decompressed[:500]
-                    or b"<feed" in decompressed[:500]
-                    or b"<?xml" in decompressed[:500]
-                    or b"<xml" in decompressed[:500]
-                ):
-                    logger.info("✅ Success after extra decompression: %s", feed_name)
-                    success_count += 1
-                else:
-                    failed_feeds.append(feed_name)
-
-                    # Show content preview for debugging
-                    try:
-                        preview = feed_content[:100].decode("utf-8", errors="replace")
-                        logger.debug("Content preview: %s", preview)
-                    except (UnicodeDecodeError, TypeError):
-                        pass
-
-                    # Show hex dump of first bytes
-                    hex_preview = " ".join(f"{b:02x}" for b in feed_content[:32])
-                    logger.debug("First 32 bytes as hex: %s", hex_preview)
+                # Show hex dump of first bytes
+                hex_preview = " ".join(f"{b:02x}" for b in feed_content[:32])
+                logger.debug("First 32 bytes as hex: %s", hex_preview)
         except (IOError, ValueError, TypeError, KeyError, AttributeError) as e:
             logger.error("❌ Error testing %s: %s", feed_name, str(e))
             failed_feeds.append(feed_name)

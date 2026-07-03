@@ -1,29 +1,25 @@
 """Unit tests for the retrieve_articles module.
 
 This module contains test cases for RSS feed retrieval, parsing, and processing
-functionality including S3 integration tests using moto mock.
+functionality.
 
 Some code duplication with test_article_data.py is intentional for test isolation.
 # pylint: disable=duplicate-code,R0801
 """
 
-import os
-import ssl
+import json
 import unittest
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
-from urllib.error import HTTPError
 
-import boto3
-from moto import mock_aws
+import httpx
 from pydantic import HttpUrl
 
 import rss_email.retrieve_articles
 from rss_email.models import FeedConfig
 from rss_email.retrieve_articles import (
     Article,
-    create_rss,
-    generate_rss,
+    generate_articles_json,
     get_feed,
     get_feed_items,
     get_feed_limits,
@@ -35,18 +31,17 @@ from rss_email.retrieve_articles import (
     _throttle_host,
 )
 
-EXAMPLE_RSS_FILE = "example_rss_file.xml"
-
 
 class TestRetrieveArticles(unittest.TestCase):
     """Test suite for RSS feed retrieval and processing functionality."""
 
-    @patch("rss_email.retrieve_articles.urllib.request.urlopen")
-    def test_get_feed_items(self, mock_urlopen):
-        """Test retrieval of feed items from a URL with mocked urllib."""
-        mock_context = MagicMock()
-        mock_context.__enter__.return_value.read.return_value = b"feed data"
-        mock_urlopen.return_value = mock_context
+    @patch("rss_email.retrieve_articles.httpx.get")
+    def test_get_feed_items(self, mock_get):
+        """Test retrieval of feed items from a URL with mocked httpx."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.content = b"feed data"
+        mock_get.return_value = mock_response
 
         url = "http://example.com/rss"
         timestamp = datetime.now() - timedelta(days=3)
@@ -87,29 +82,46 @@ class TestRetrieveArticles(unittest.TestCase):
         self.assertLessEqual(waited, interval)
 
     @patch("rss_email.retrieve_articles.time.sleep")
-    @patch("rss_email.retrieve_articles.urllib.request.urlopen")
-    def test_get_feed_items_429_skips_without_retry(self, mock_urlopen, mock_sleep):
+    @patch("rss_email.retrieve_articles.httpx.get")
+    def test_get_feed_items_429_skips_without_retry(self, mock_get, mock_sleep):
         """A 429 is skipped without retrying or firing fallback requests."""
-        mock_urlopen.side_effect = HTTPError(
-            "https://example.com/rss", 429, "Too Many Requests", {}, None
-        )
+        mock_response = MagicMock()
+        mock_response.status_code = 429
+        mock_response.headers = {"Retry-After": "60"}
+        mock_get.return_value = mock_response
 
         url = "https://example.com/rss"
         timestamp = datetime.now() - timedelta(days=3)
         result = get_feed_items(url, timestamp)
 
-        # No content, a single request (no SSL fallback, no retry), no backoff sleep.
+        # No content, a single request (no retry), no backoff sleep.
         self.assertEqual(result, b"")
-        self.assertEqual(mock_urlopen.call_count, 1)
+        self.assertEqual(mock_get.call_count, 1)
         mock_sleep.assert_not_called()
 
-    @patch("rss_email.retrieve_articles.urllib.request.urlopen")
-    def test_get_feed(self, mock_urlopen):
-        """Test feed parsing and processing with mocked URL response."""
-        mock_context = MagicMock()
-        mock_context.__enter__.return_value.read.return_value = b"feed data"
-        mock_urlopen.return_value = mock_context
+    @patch("rss_email.retrieve_articles.httpx.get")
+    def test_get_feed_items_403_logged_at_info_not_warning(self, mock_get):
+        """A 403 is expected/routine for scraper-blocking sites.
 
+        It must not log at WARNING (which feeds the ErrorWarningCount metric
+        filter and pages on-call for a single blocked feed), matching the
+        429 treatment which was already downgraded for the same reason.
+        """
+        mock_response = MagicMock()
+        mock_response.status_code = 403
+        mock_get.return_value = mock_response
+
+        url = "https://example.com/rss"
+        timestamp = datetime.now() - timedelta(days=3)
+
+        with self.assertLogs("rss_email.retrieve_articles", level="INFO") as captured:
+            get_feed_items(url, timestamp)
+
+        self.assertTrue(any("403" in message for message in captured.output))
+        self.assertFalse(any(record.levelname == "WARNING" for record in captured.records))
+
+    def test_get_feed(self):
+        """Test feed parsing and processing from raw feed bytes."""
         feed_url = "http://example.com/feed"
         feed_data = b"feed data"
         update_date = datetime.now()
@@ -172,8 +184,8 @@ class TestRetrieveArticles(unittest.TestCase):
         result = get_update_date(3)
         self.assertTrue(isinstance(result, datetime))
 
-    def test_generate_rss(self):
-        """Test RSS XML generation from Article objects."""
+    def test_generate_articles_json(self):
+        """Test JSON generation from Article objects."""
         articles = [
             Article(
                 title="Article 1",
@@ -182,11 +194,13 @@ class TestRetrieveArticles(unittest.TestCase):
                 description="Description 1",
             )
         ]
-        result = generate_rss(articles)
-        self.assertIn("<title>Article 1</title>", result)
+        result = generate_articles_json(articles)
+        parsed = json.loads(result)
+        self.assertEqual(len(parsed), 1)
+        self.assertEqual(parsed[0]["title"], "Article 1")
 
-    def test_generate_rss_emits_source_element(self):
-        """Articles with source_name/source_url surface as a <source> element."""
+    def test_generate_articles_json_emits_source_fields(self):
+        """Articles with source_name/source_url surface as sourceName/sourceUrl."""
         articles = [
             Article(
                 title="Article 1",
@@ -198,13 +212,14 @@ class TestRetrieveArticles(unittest.TestCase):
             )
         ]
 
-        result = generate_rss(articles)
+        result = generate_articles_json(articles)
+        parsed = json.loads(result)
 
-        self.assertIn('<source url="https://krebsonsecurity.com/feed/">', result)
-        self.assertIn("Krebs on Security</source>", result)
+        self.assertEqual(parsed[0]["sourceUrl"], "https://krebsonsecurity.com/feed/")
+        self.assertEqual(parsed[0]["sourceName"], "Krebs on Security")
 
     def test_source_round_trip_via_filter_items(self):
-        """generate_rss -> filter_items preserves sourceName/sourceUrl."""
+        """generate_articles_json -> filter_items preserves sourceName/sourceUrl."""
         # Local import to avoid load-time coupling with retrieve_articles tests
         # pylint: disable=import-outside-toplevel
         from rss_email.email_articles import filter_items
@@ -220,9 +235,9 @@ class TestRetrieveArticles(unittest.TestCase):
                 source_url=HttpUrl("https://x.example/feed/"),
             )
         ]
-        rss_xml = generate_rss(articles)
+        articles_json = generate_articles_json(articles)
 
-        items = filter_items(rss_xml, datetime.now() - timedelta(hours=2))
+        items = filter_items(articles_json, datetime.now() - timedelta(hours=2))
 
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0]["sourceName"], "Feed X")
@@ -237,12 +252,12 @@ class TestRetrieveArticles(unittest.TestCase):
 
     @patch("rss_email.retrieve_articles.get_feed_urls")
     @patch("rss_email.retrieve_articles.get_feed_items")
-    @patch("rss_email.retrieve_articles.generate_rss")
+    @patch("rss_email.retrieve_articles.generate_articles_json")
     @patch("rss_email.retrieve_articles.is_connected")
     def test_retrieve_rss_feeds(
         self,
         mock_is_connected,
-        mock_generate_rss,
+        mock_generate_articles_json,
         mock_get_feed_items,
         mock_get_feed_urls,
     ):
@@ -250,40 +265,13 @@ class TestRetrieveArticles(unittest.TestCase):
         mock_is_connected.return_value = True
         mock_get_feed_urls.return_value = ["http://example.com/rss"]
         mock_get_feed_items.return_value = "feed data"
-        mock_generate_rss.return_value = "<rss>RSS content</rss>"
+        mock_generate_articles_json.return_value = '[{"title": "Article"}]'
 
         content, counts = retrieve_rss_feeds(
             "feed_file.json", datetime.now() - timedelta(days=3)
         )
-        self.assertIn("<rss>RSS content</rss>", content)
+        self.assertIn('[{"title": "Article"}]', content)
         self.assertIsInstance(counts, dict)
-
-    @mock_aws
-    def test_create_rss(self):
-        """Test RSS file creation and S3 upload using moto mock."""
-        # Set up environment variables
-        os.environ["BUCKET"] = "test-bucket"
-        os.environ["KEY"] = "rss.xml"
-        os.environ["FEED_DEFINITIONS_FILE"] = "test-file"
-
-        # Set up S3 and mock
-        s3 = boto3.client("s3", region_name="us-east-1")
-        s3.create_bucket(Bucket="test-bucket")
-        test_content = "<rss><title>Test RSS</title></rss>"
-        rss_email.retrieve_articles.retrieve_rss_feeds = MagicMock(
-            return_value=(test_content, {})
-        )
-
-        try:
-            create_rss({"blah": "blah2"}, None)
-            response = s3.get_object(Bucket="test-bucket", Key="rss.xml")
-            content = response["Body"].read().decode("utf-8")
-            self.assertEqual(content, test_content)
-        finally:
-            # Clean up environment variables
-            os.environ.pop("BUCKET", None)
-            os.environ.pop("KEY", None)
-            os.environ.pop("FEED_DEFINITIONS_FILE", None)
 
     def test_get_specific_problematic_feed(self):
         """Test the feed URL that was returning 403 Forbidden errors."""
@@ -321,76 +309,30 @@ class TestRetrieveArticles(unittest.TestCase):
                         f"Feed {feed_url} did not return valid RSS/XML content",
                     )
 
-    @patch("rss_email.retrieve_articles.urllib.request.urlopen")
-    def test_ssl_certificate_handling(self, mock_urlopen):
-        """SSL fallback: when verification fails the code retries with an unverified context."""
-        rss_bytes = b"<?xml version='1.0'?><rss version='2.0'><channel/></rss>"
+    @patch("rss_email.retrieve_articles.time.sleep")
+    @patch("rss_email.retrieve_articles.httpx.get")
+    def test_get_feed_items_retries_transient_errors(self, mock_get, mock_sleep):
+        """A transient connection error is retried, and a later success is returned.
 
-        # Simulate the retrieve call returning RSS content via context-manager protocol.
-        mock_conn = MagicMock()
-        mock_conn.__enter__.return_value = mock_conn
-        mock_conn.read.return_value = rss_bytes
+        httpx auto-decodes gzip/deflate/br based on Content-Encoding, so unlike
+        the old urllib implementation there is no separate SSL/HTTP-downgrade
+        fallback path left to test here.
+        """
+        success_response = MagicMock()
+        success_response.status_code = 200
+        success_response.content = b"<?xml version='1.0'?><rss><channel/></rss>"
 
-        # Call 1 (check_new, verified SSL) → raises; calls 2 & 3 (unverified) → succeed.
-        mock_urlopen.side_effect = [
-            ssl.SSLError("certificate verify failed"),
-            MagicMock(),  # check_new unverified (for contextlib.closing)
-            mock_conn,    # retrieve unverified
+        mock_get.side_effect = [
+            httpx.ConnectError("connection reset"),
+            success_response,
         ]
 
         timestamp = datetime.now() - timedelta(days=3)
         result = get_feed_items("https://example.com/feed.xml", timestamp)
 
-        self.assertNotEqual(result, b"")
         self.assertIn(b"<rss", result)
-        # SSL fallback triggered a second urlopen call with an unverified context.
-        self.assertGreater(mock_urlopen.call_count, 1)
-
-    EXAMPLE_RSS_FILE = """
-    {
-            "feeds": [
-                {
-                    "name": "Test Feed A",
-                    "url": "https://foo.com/feed/"
-                },
-                {
-                    "name": "Test Feed B",
-                    "url": "https://bar.com/posts.atom"
-                },
-                {
-                    "name": "Test Feed C",
-                    "_url": "https://acme.com/feed.xml"
-                }
-            ]
-        }
-    """
-
-    @mock_aws
-    def test_create_rss2(self):
-        """Test RSS file creation and S3 upload with different test conditions."""
-        # Set up mock S3 bucket
-        bucket_name = "test-bucket"
-        key = "test-key"
-        content = "test"
-        s3 = boto3.client("s3", region_name="us-east-1")
-        s3.create_bucket(Bucket=bucket_name)
-        rss_email.retrieve_articles.retrieve_rss_feeds = MagicMock(return_value=(content, {}))
-
-        try:
-            # Call create_rss function, with appropriate env variables
-            os.environ["BUCKET"] = bucket_name
-            os.environ["KEY"] = key
-            os.environ["FEED_DEFINITIONS_FILE"] = "test-file"
-            create_rss({"test": "blah"}, None)
-
-            # Check that the file was uploaded to S3
-            obj = s3.get_object(Bucket=bucket_name, Key=key)
-            self.assertEqual(obj["Body"].read().decode("ASCII"), content)
-        finally:
-            # Clean up environment variables
-            os.environ.pop("BUCKET", None)
-            os.environ.pop("KEY", None)
-            os.environ.pop("FEED_DEFINITIONS_FILE", None)
+        self.assertEqual(mock_get.call_count, 2)
+        mock_sleep.assert_called_once()
 
 
 class TestFeedParseIsolation(unittest.TestCase):

@@ -30,11 +30,13 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
                 "errored": int,
                 "canceled": int,
                 "expired": int
-            }
+            },
+            "poll_count": int
         }
     """
     try:
         batch_id = event["batch_id"]
+        poll_count = event.get("poll_count", 0) + 1
 
         if batch_id is None:
             logger.info("No podcast batch to check (no articles to process)")
@@ -48,6 +50,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
                     "canceled": 0,
                     "expired": 0,
                 },
+                "poll_count": poll_count,
             }
 
         # Get API key from Parameter Store
@@ -79,6 +82,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
                 "canceled": message_batch.request_counts.canceled,
                 "expired": message_batch.request_counts.expired,
             },
+            "poll_count": poll_count,
         }
 
     except Exception as e:

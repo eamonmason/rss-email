@@ -13,9 +13,9 @@ Requirements:
 - Proper environment variables set (see CLAUDE.md)
 """
 
+import json
 import os
 import sys
-import xml.etree.ElementTree as ET  # noqa: N817
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -50,9 +50,9 @@ class FunctionalWorkflowTest:
         # Configuration
         self.ssm_parameter_name = "rss-email-lastrun"
         self.s3_bucket = "cd-rssemailstack-rssbucket91adb797-1ds7r89g7wdoo"
-        self.s3_key = "rss.xml"
+        self.s3_key = "articles.json"
         self.output_file = "functional_test_output.html"
-        self.downloaded_rss_file = "downloaded_rss.xml"
+        self.downloaded_rss_file = "downloaded_articles.json"
 
         # Test configuration options
         self.fast_mode = os.environ.get("FAST_MODE", "false").lower() == "true"
@@ -128,30 +128,29 @@ class FunctionalWorkflowTest:
             raise
 
     def download_rss_file(self):
-        """Download the current RSS file from S3."""
-        print("📥 Downloading RSS file from S3...")
+        """Download the current aggregated articles JSON from S3."""
+        print("📥 Downloading articles JSON from S3...")
 
         try:
             response = self.s3_client.get_object(Bucket=self.s3_bucket, Key=self.s3_key)
-            rss_content = response["Body"].read().decode("utf-8")
+            articles_content = response["Body"].read().decode("utf-8")
 
             # Write to local file
             with open(self.downloaded_rss_file, "w", encoding="utf-8") as file:
-                file.write(rss_content)
+                file.write(articles_content)
 
-            print(f"   ✅ Downloaded RSS file to: {self.downloaded_rss_file}")
-            print(f"   📊 File size: {len(rss_content)} characters")
+            print(f"   ✅ Downloaded articles JSON to: {self.downloaded_rss_file}")
+            print(f"   📊 File size: {len(articles_content)} characters")
 
-            # Show some basic stats about the RSS content
+            # Show some basic stats about the articles
             try:
-                root = ET.fromstring(rss_content)
-                items = root.findall(".//item")
-                print(f"   📰 Found {len(items)} articles in RSS feed")
-            except ET.ParseError as error:
-                print(f"   ⚠️  RSS parsing error (content may be compressed): {error}")
+                items = json.loads(articles_content)
+                print(f"   📰 Found {len(items)} articles")
+            except json.JSONDecodeError as error:
+                print(f"   ⚠️  Articles JSON parsing error: {error}")
 
         except ClientError as error:
-            print(f"   ❌ Failed to download RSS file: {error}")
+            print(f"   ❌ Failed to download articles JSON: {error}")
             raise
 
     def run_email_generation(self):
@@ -228,42 +227,25 @@ class FunctionalWorkflowTest:
             print(f"      {status} {description}")
 
     def _create_limited_rss_file(self):
-        """Create a limited RSS file for faster testing."""
+        """Create a limited articles JSON file for faster testing."""
 
-        limited_file = "limited_rss.xml"
+        limited_file = "limited_articles.json"
 
         try:
-            # Parse the original RSS file
             with open(self.downloaded_rss_file, "r", encoding="utf-8") as file:
-                rss_content = file.read()
+                items = json.loads(file.read())
 
-            root = ET.fromstring(rss_content)
-            items = root.findall(".//item")
+            print(f"   ⚡ Limiting articles from {len(items)} to {self.max_test_articles} for faster testing")
 
-            print(f"   ⚡ Limiting RSS from {len(items)} to {self.max_test_articles} articles for faster testing")
-
-            # Keep only the first N items
-            channel = root.find(".//channel")
-            if channel is not None:
-                # Remove existing items
-                for item in items:
-                    channel.remove(item)
-
-                # Add back only the first N items
-                for item in items[:self.max_test_articles]:
-                    channel.append(item)
-
-            # Write the limited RSS file
-            limited_content = ET.tostring(root, encoding="unicode")
             with open(limited_file, "w", encoding="utf-8") as file:
-                file.write(limited_content)
+                json.dump(items[:self.max_test_articles], file)
 
-            print(f"   📝 Created limited RSS file: {limited_file}")
+            print(f"   📝 Created limited articles JSON file: {limited_file}")
             return limited_file
 
-        except (ET.ParseError, OSError, ValueError) as exc:
-            print(f"   ⚠️  Failed to create limited RSS file: {exc}")
-            print("   🔄 Falling back to original RSS file")
+        except (json.JSONDecodeError, OSError, ValueError) as exc:
+            print(f"   ⚠️  Failed to create limited articles JSON file: {exc}")
+            print("   🔄 Falling back to original articles JSON file")
             return self.downloaded_rss_file
 
     def cleanup(self):
@@ -289,7 +271,7 @@ class FunctionalWorkflowTest:
             print(f"   ⚠️  Failed to restore SSM parameter: {error}")
 
         # Clean up downloaded files (optional)
-        files_to_clean = [self.downloaded_rss_file, "limited_rss.xml"]
+        files_to_clean = [self.downloaded_rss_file, "limited_articles.json"]
         for file_path in files_to_clean:
             try:
                 if Path(file_path).exists():

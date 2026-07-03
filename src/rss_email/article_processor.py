@@ -19,7 +19,7 @@ from rss_email.json_repair import (
     repair_truncated_json,
 )  # Move this import to the top level
 
-from .models import ArticleSource
+from .models import ArticleSource, DEFAULT_CLAUDE_MODEL
 
 # Add to the top imports section
 
@@ -452,7 +452,7 @@ def _summarize_groups_with_claude(
         "total_batches": (len(groups) + batch_size - 1) // batch_size,
         "batches_failed": 0,
         "tokens_used": 0,
-        "model": os.environ.get("CLAUDE_MODEL", "claude-haiku-4-5-20251001"),
+        "model": os.environ.get("CLAUDE_MODEL", DEFAULT_CLAUDE_MODEL),
         "processing_time_seconds": 0,
     }
     start_time = datetime.now()
@@ -567,11 +567,10 @@ def _call_claude_with_prompt(
         # Get timeout from environment variable or default to 120 seconds (2 minutes)
         api_timeout = int(os.environ.get("CLAUDE_API_TIMEOUT", "120"))
 
-        # Use environment variable CLAUDE_MODEL without default
         model_name = os.environ.get("CLAUDE_MODEL")
         if not model_name:
             logger.warning("CLAUDE_MODEL not set, using default model")
-            model_name = "claude-3-7-sonnet-latest"  # Updated default model
+            model_name = DEFAULT_CLAUDE_MODEL
 
         # Debug to check what's being used
         logger.debug("Using environment model: %s", model_name)
@@ -694,26 +693,8 @@ def _get_max_tokens_for_model(model_name: str) -> int:
     if "claude-sonnet-4" in model_name:
         return 8000  # Conservative limit to prevent truncation
 
-    if "claude-3-7-sonnet" in model_name:
-        return 8000  # Conservative limit to prevent truncation
-
-    if "claude-3-5-sonnet" in model_name:
-        return 4000  # More conservative to avoid truncation issues
-
-    if "claude-3-opus" in model_name:
-        return 8000  # Conservative limit
-
-    if "claude-3-haiku" in model_name:
-        return 4000  # Conservative limit for haiku models
-
-    if "claude-3-5-haiku" in model_name:
-        return 4000  # Conservative limit for haiku models
-
     if "claude-haiku-4" in model_name:
         return 8192  # Increased to prevent truncation - supports up to 30 articles
-
-    if "claude-2" in model_name:
-        return 8000  # Conservative even for Claude 2
 
     if "claude-sonnet" in model_name:
         return 4000

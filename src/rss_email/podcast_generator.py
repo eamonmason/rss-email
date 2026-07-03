@@ -19,6 +19,8 @@ try:
 except ImportError:
     anthropic = None
 
+from .models import DEFAULT_CLAUDE_MODEL
+
 # Imports removed: get_feed_file, filter_items, get_last_run, set_last_run
 # These are now used in the Message Batches workflow functions instead
 
@@ -329,7 +331,7 @@ def generate_script(articles: List[Dict[str, Any]]) -> Optional[str]:
 
     try:
         message = client.messages.create(
-            model=os.environ.get("CLAUDE_MODEL", "claude-haiku-4-5-20251001"),
+            model=os.environ.get("CLAUDE_MODEL", DEFAULT_CLAUDE_MODEL),
             max_tokens=int(os.environ.get("CLAUDE_MAX_TOKENS", "4000")),
             messages=[
                 {"role": "user", "content": prompt}

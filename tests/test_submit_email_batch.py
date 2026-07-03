@@ -81,6 +81,8 @@ def test_lambda_handler_success(
     assert result["request_count"] == 1  # 2 articles fit in 1 batch
     assert result["articles_count"] == 2
     assert "submitted_at" in result
+    # poll_count seeds the Step Functions poll-backoff loop at 0
+    assert result["poll_count"] == 0
 
     # Verify API calls
     mock_anthropic.return_value.messages.batches.create.assert_called_once()

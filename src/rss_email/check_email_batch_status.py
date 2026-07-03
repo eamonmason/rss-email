@@ -32,12 +32,14 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
                 "canceled": int,
                 "expired": int
             },
+            "poll_count": int,
             "metadata_key": str (optional, preserved from input)
         }
     """
     try:
         batch_id = event["batch_id"]
         metadata_key = event.get("metadata_key")
+        poll_count = event.get("poll_count", 0) + 1
 
         if batch_id is None:
             logger.info("No batch to check (no articles to process)")
@@ -51,6 +53,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
                     "canceled": 0,
                     "expired": 0,
                 },
+                "poll_count": poll_count,
             }
             if metadata_key:
                 result["metadata_key"] = metadata_key
@@ -85,6 +88,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
                 "canceled": message_batch.request_counts.canceled,
                 "expired": message_batch.request_counts.expired,
             },
+            "poll_count": poll_count,
         }
         # Preserve metadata_key for downstream tasks
         if metadata_key:

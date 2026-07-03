@@ -21,8 +21,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
     Retrieve RSS feeds and store aggregated results in S3.
 
     Environment Variables:
-        BUCKET: S3 bucket name for storing RSS data
-        KEY: S3 key for RSS data file (e.g., 'rss.xml')
+        BUCKET: S3 bucket name for storing aggregated article data
+        KEY: S3 key for the aggregated articles JSON file (e.g., 'articles.json')
         FEED_URLS_BUCKET: S3 bucket containing feed_urls.json
         FEED_URLS_KEY: S3 key for feed_urls.json
 
@@ -61,7 +61,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
 
         # Get update date and retrieve RSS feeds
         update_date = get_update_date(DAYS_OF_NEWS)
-        rss_content, per_url_counts = retrieve_rss_feeds(temp_feeds_path, update_date)
+        articles_content, per_url_counts = retrieve_rss_feeds(temp_feeds_path, update_date)
 
         # Clean up temp file
         os.unlink(temp_feeds_path)
@@ -83,13 +83,11 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
         )
         logger.info("Stored feed stats for %d feeds", len(feed_stats_sorted))
 
-        # Count articles in RSS feed
-        import xml.etree.ElementTree as ET  # pylint: disable=C0415  # noqa: N817
+        # Count articles in the stored JSON array
         try:
-            root = ET.fromstring(rss_content)
-            article_count = len(root.findall(".//item"))
-        except ET.ParseError:
-            logger.warning("Could not parse RSS to count articles, assuming 0")
+            article_count = len(json.loads(articles_content))
+        except json.JSONDecodeError:
+            logger.warning("Could not parse articles JSON to count articles, assuming 0")
             article_count = 0
 
         logger.info(
@@ -100,12 +98,11 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
         s3.put_object(
             Bucket=bucket,
             Key=key,
-            Body=rss_content,
-            ContentType="application/rss+xml; charset=utf-8",
-            ContentEncoding="utf-8",
+            Body=articles_content,
+            ContentType="application/json",
         )
 
-        logger.info("Successfully processed and stored RSS feed")
+        logger.info("Successfully processed and stored articles")
 
         return {
             "article_count": article_count,

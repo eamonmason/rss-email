@@ -879,12 +879,6 @@ wheels = [
 ]
 
 [[package]]
-name = "pyrss2gen"
-version = "1.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/6d/01/fd610d5fc86f7dbdbefc4baa8f7fe15a2e5484244c41dcf363ca7e89f60c/PyRSS2Gen-1.1.tar.gz", hash = "sha256:7960aed7e998d2482bf58716c316509786f596426f879b05f8d84e98b82c6ee7", size = 6854, upload-time = "2013-02-21T03:23:02.807Z" }
-
-[[package]]
 name = "pytest"
 version = "9.0.3"
 source = { registry = "https://pypi.org/simple" }
@@ -1095,8 +1089,8 @@ dependencies = [
     { name = "boto3" },
     { name = "brotli" },
     { name = "feedparser" },
+    { name = "httpx" },
     { name = "pydantic" },
-    { name = "pyrss2gen" },
     { name = "python-dotenv" },
     { name = "regex" },
 ]
@@ -1130,11 +1124,11 @@ requires-dist = [
     { name = "brotli", specifier = ">=1.2.0" },
     { name = "feedparser", specifier = ">=6.0.10" },
     { name = "flake8", marker = "extra == 'dev'", specifier = ">=6.1.0" },
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "moto", marker = "extra == 'dev'", specifier = ">=4.2.7" },
     { name = "prospector", marker = "extra == 'dev'", specifier = ">=0.12.2" },
     { name = "pydantic", specifier = ">=2.10.6" },
     { name = "pylint", marker = "extra == 'dev'", specifier = ">=3.0.2" },
-    { name = "pyrss2gen", specifier = ">=1.1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.4.1" },
     { name = "python-dotenv", specifier = ">=1.1.1" },
     { name = "python-dotenv", marker = "extra == 'dev'", specifier = ">=0.9.9" },

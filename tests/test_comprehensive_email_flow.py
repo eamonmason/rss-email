@@ -7,7 +7,7 @@ import unittest
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
-from rss_email.email_articles import send_email, generate_html
+from rss_email.email_articles import generate_html
 from rss_email.article_processor import process_articles_with_claude, ClaudeRateLimiter
 
 
@@ -22,30 +22,29 @@ class TestComprehensiveEmailFlow(unittest.TestCase):
         recent_date2 = now - timedelta(minutes=45)
         recent_date3 = now - timedelta(minutes=60)
 
-        self.sample_rss = f"""<?xml version="1.0" encoding="UTF-8" ?>
-            <rss version="2.0">
-            <channel>
-                <title>Test Feed</title>
-                <item>
-                    <title>AI Breakthrough: New Machine Learning Model</title>
-                    <link>https://example.com/ai-breakthrough</link>
-                    <description>New ML model shows promising NLP results.</description>
-                    <pubDate>{recent_date1.strftime('%a, %d %b %Y %H:%M:%S GMT')}</pubDate>
-                </item>
-                <item>
-                    <title>Cybersecurity Alert: New Vulnerability Discovered</title>
-                    <link>https://example.com/security-alert</link>
-                    <description>Critical vulnerability found in web frameworks.</description>
-                    <pubDate>{recent_date2.strftime('%a, %d %b %Y %H:%M:%S GMT')}</pubDate>
-                </item>
-                <item>
-                    <title>Tech News: Python 3.13 Released</title>
-                    <link>https://example.com/python-release</link>
-                    <description>Python latest version has performance improvements.</description>
-                    <pubDate>{recent_date3.strftime('%a, %d %b %Y %H:%M:%S GMT')}</pubDate>
-                </item>
-            </channel>
-            </rss>"""
+        self.sample_rss = json.dumps([
+            {
+                "title": "AI Breakthrough: New Machine Learning Model",
+                "link": "https://example.com/ai-breakthrough",
+                "description": "New ML model shows promising NLP results.",
+                "pubDate": recent_date1.strftime("%a, %d %b %Y %H:%M:%S GMT"),
+                "sortDate": recent_date1.timestamp(),
+            },
+            {
+                "title": "Cybersecurity Alert: New Vulnerability Discovered",
+                "link": "https://example.com/security-alert",
+                "description": "Critical vulnerability found in web frameworks.",
+                "pubDate": recent_date2.strftime("%a, %d %b %Y %H:%M:%S GMT"),
+                "sortDate": recent_date2.timestamp(),
+            },
+            {
+                "title": "Tech News: Python 3.13 Released",
+                "link": "https://example.com/python-release",
+                "description": "Python latest version has performance improvements.",
+                "pubDate": recent_date3.strftime("%a, %d %b %Y %H:%M:%S GMT"),
+                "sortDate": recent_date3.timestamp(),
+            },
+        ])
 
         # Stage 1: grouping response (each article in its own group)
         self.mock_grouping_response = {
@@ -106,240 +105,10 @@ class TestComprehensiveEmailFlow(unittest.TestCase):
 
         return [grouping, summary]
 
-    @patch("rss_email.email_articles.boto3.client")
-    @patch.dict(
-        "os.environ",
-        {
-            "BUCKET": "test-bucket",
-            "KEY": "test-key",
-            "SOURCE_EMAIL_ADDRESS": "sender@example.com",
-            "TO_EMAIL_ADDRESS": "recipient@example.com",
-            "LAST_RUN_PARAMETER": "test-parameter",
-            "CLAUDE_ENABLED": "true",
-            "CLAUDE_MODEL": "claude-haiku-4-5-20251001",
-            "ANTHROPIC_API_KEY": "test-key"
-        },
-    )
-    def test_full_email_flow_with_claude_success(self, mock_boto3_client):
-        """Test the complete email flow with successful Claude processing."""
-        # Mock SSM client with timestamp older than articles
-        mock_ssm_client = MagicMock()
-        mock_ssm_client.get_parameter.return_value = {
-            "Parameter": {"Value": (datetime.now() - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%S.%f")}
-        }
-
-        # Mock S3 client
-        mock_s3_client = MagicMock()
-        mock_s3_response = {"Body": MagicMock()}
-        mock_s3_response["Body"].read.return_value = self.sample_rss.encode("utf-8")
-        mock_s3_client.get_object.return_value = mock_s3_response
-
-        # Mock SES client
-        mock_ses_client = MagicMock()
-        mock_ses_client.send_email.return_value = {"MessageId": "test-message-id"}
-
-        # Configure boto3 client
-        def mock_client(service_name):
-            if service_name == "ssm":
-                return mock_ssm_client
-            if service_name == "ses":
-                return mock_ses_client
-            if service_name == "s3":
-                return mock_s3_client
-            return MagicMock()
-
-        mock_boto3_client.side_effect = mock_client
-
-        # Mock Claude API call - one client used for grouping AND summarize
-        with patch("rss_email.article_processor.anthropic.Anthropic") as mock_proc_anthropic, \
-             patch("rss_email.article_grouper.anthropic.Anthropic") as mock_grp_anthropic:
-            mock_client_instance = MagicMock()
-            mock_proc_anthropic.return_value = mock_client_instance
-            mock_grp_anthropic.return_value = mock_client_instance
-            mock_client_instance.messages.create.side_effect = (
-                self._make_two_stage_side_effect(
-                    self.mock_grouping_response, self.mock_claude_response
-                )
-            )
-
-            # Create test event
-            event = {
-                "Records": [
-                    {"Sns": {"Message": '{"mail": {"source": "recipient@example.com"}}'}}
-                ]
-            }
-
-            # Call the function
-            send_email(event, None)
-
-            # Verify S3 was called
-            mock_s3_client.get_object.assert_called_once_with(Bucket="test-bucket", Key="test-key")
-
-            # Verify Claude was called twice (grouping + summarize)
-            self.assertEqual(mock_client_instance.messages.create.call_count, 2)
-
-            # Verify email was sent
-            mock_ses_client.send_email.assert_called_once()
-
-            # Verify the email content includes Claude-processed content
-            call_args = mock_ses_client.send_email.call_args
-            email_body = call_args[1]["Message"]["Body"]["Html"]["Data"]
-            self.assertIn("AI/ML", email_body)
-            self.assertIn("Cybersecurity", email_body)
-            self.assertIn("Technology", email_body)
-            self.assertIn("AI Breakthrough", email_body)
-
-    @patch("rss_email.email_articles.boto3.client")
-    @patch.dict(
-        "os.environ",
-        {
-            "BUCKET": "test-bucket",
-            "KEY": "test-key",
-            "SOURCE_EMAIL_ADDRESS": "sender@example.com",
-            "TO_EMAIL_ADDRESS": "recipient@example.com",
-            "LAST_RUN_PARAMETER": "test-parameter",
-            "CLAUDE_ENABLED": "true",
-            "CLAUDE_MODEL": "claude-haiku-4-5-20251001",
-            "ANTHROPIC_API_KEY": "test-key"
-        },
-    )
-    def test_full_email_flow_with_claude_json_error_fallback(self, mock_boto3_client):
-        """Test the complete email flow with Claude JSON errors and fallback."""
-        # Mock SSM client with timestamp older than articles
-        mock_ssm_client = MagicMock()
-        mock_ssm_client.get_parameter.return_value = {
-            "Parameter": {"Value": (datetime.now() - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%S.%f")}
-        }
-
-        # Mock S3 client
-        mock_s3_client = MagicMock()
-        mock_s3_response = {"Body": MagicMock()}
-        mock_s3_response["Body"].read.return_value = self.sample_rss.encode("utf-8")
-        mock_s3_client.get_object.return_value = mock_s3_response
-
-        # Mock SES client
-        mock_ses_client = MagicMock()
-        mock_ses_client.send_email.return_value = {"MessageId": "test-message-id"}
-
-        # Configure boto3 client
-        def mock_client(service_name):
-            if service_name == "ssm":
-                return mock_ssm_client
-            if service_name == "ses":
-                return mock_ses_client
-            if service_name == "s3":
-                return mock_s3_client
-            return MagicMock()
-
-        mock_boto3_client.side_effect = mock_client
-
-        # Mock both Claude calls with malformed JSON so we exercise fallback
-        with patch("rss_email.article_processor.anthropic.Anthropic") as mock_proc_anthropic, \
-             patch("rss_email.article_grouper.anthropic.Anthropic") as mock_grp_anthropic:
-            mock_client_instance = MagicMock()
-            mock_proc_anthropic.return_value = mock_client_instance
-            mock_grp_anthropic.return_value = mock_client_instance
-
-            malformed_json = '{"categories": {"AI/ML": [{"id": "article_0", "tit'
-            mock_response = MagicMock()
-            mock_response.content = [MagicMock()]
-            mock_response.content[0].text = malformed_json
-            mock_response.usage.input_tokens = 1000
-            mock_response.usage.output_tokens = 500
-            mock_client_instance.messages.create.return_value = mock_response
-
-            # Create test event
-            event = {
-                "Records": [
-                    {"Sns": {"Message": '{"mail": {"source": "recipient@example.com"}}'}}
-                ]
-            }
-
-            # Call the function
-            send_email(event, None)
-
-            # Verify S3 was called
-            mock_s3_client.get_object.assert_called_once()
-
-            # Verify Claude API was called at least once (grouping)
-            self.assertGreaterEqual(mock_client_instance.messages.create.call_count, 1)
-
-            # Verify email was sent (fallback to Uncategorized)
-            mock_ses_client.send_email.assert_called_once()
-
-            # Verify the email still contains the article titles
-            call_args = mock_ses_client.send_email.call_args
-            email_body = call_args[1]["Message"]["Body"]["Html"]["Data"]
-            self.assertIn("AI Breakthrough", email_body)
-
-    @patch("rss_email.email_articles.boto3.client")
-    @patch.dict(
-        "os.environ",
-        {
-            "BUCKET": "test-bucket",
-            "KEY": "test-key",
-            "SOURCE_EMAIL_ADDRESS": "sender@example.com",
-            "TO_EMAIL_ADDRESS": "recipient@example.com",
-            "LAST_RUN_PARAMETER": "test-parameter",
-            "CLAUDE_ENABLED": "false"
-        },
-    )
-    def test_full_email_flow_with_claude_disabled(self, mock_boto3_client):
-        """Test the complete email flow with Claude disabled."""
-        # Mock SSM client with timestamp older than articles
-        mock_ssm_client = MagicMock()
-        mock_ssm_client.get_parameter.return_value = {
-            "Parameter": {"Value": (datetime.now() - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%S.%f")}
-        }
-
-        # Mock S3 client
-        mock_s3_client = MagicMock()
-        mock_s3_response = {"Body": MagicMock()}
-        mock_s3_response["Body"].read.return_value = self.sample_rss.encode("utf-8")
-        mock_s3_client.get_object.return_value = mock_s3_response
-
-        # Mock SES client
-        mock_ses_client = MagicMock()
-        mock_ses_client.send_email.return_value = {"MessageId": "test-message-id"}
-
-        # Configure boto3 client
-        def mock_client(service_name):
-            if service_name == "ssm":
-                return mock_ssm_client
-            if service_name == "ses":
-                return mock_ses_client
-            if service_name == "s3":
-                return mock_s3_client
-            return MagicMock()
-
-        mock_boto3_client.side_effect = mock_client
-
-        # Create test event
-        event = {
-            "Records": [
-                {"Sns": {"Message": '{"mail": {"source": "recipient@example.com"}}'}}
-            ]
-        }
-
-        # Call the function
-        send_email(event, None)
-
-        # Verify S3 was called
-        mock_s3_client.get_object.assert_called_once()
-
-        # Verify email was sent
-        mock_ses_client.send_email.assert_called_once()
-
-        # Verify the email content uses original format
-        call_args = mock_ses_client.send_email.call_args
-        email_body = call_args[1]["Message"]["Body"]["Html"]["Data"]
-        self.assertNotIn("AI/ML", email_body)  # No categories
-        self.assertIn("AI Breakthrough", email_body)  # Still has articles
-
     def test_generate_html_with_local_file(self):
         """Test HTML generation with local file instead of S3."""
         # Create a temporary RSS file
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.xml', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
             f.write(self.sample_rss)
             temp_file = f.name
 

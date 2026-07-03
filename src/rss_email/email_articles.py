@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Lambda function to convert an RSS XML file in S3 to an email, and send it."""
+"""Lambda function to convert stored articles JSON in S3 to an email, and send it."""
 
 from __future__ import annotations
 
@@ -9,13 +9,10 @@ import json
 import logging
 import os
 import sys
-import time
 
-import calendar
 from datetime import datetime, timedelta
 from importlib.resources import files
 from typing import Any, Dict, List, Optional
-from xml.etree import ElementTree
 
 import boto3
 import pydantic
@@ -26,6 +23,8 @@ try:
     import anthropic
 except ImportError:
     anthropic = None
+
+from .models import DEFAULT_CLAUDE_MODEL
 
 try:
     from .article_processor import (
@@ -107,26 +106,6 @@ def set_last_run(parameter_name: str) -> None:
     )
 
 
-def add_attribute_to_dict(
-    item: ElementTree.Element, name: str, target_dict: Dict[str, str]
-) -> None:
-    """Add an attribute to a dictionary."""
-    tmp_attribute = item.find(name)
-    if tmp_attribute is not None:
-        if name == "description":
-            target_dict[name] = get_description_body(tmp_attribute.text)
-        elif name == "source":
-            # Standard RSS 2.0 <source url="feed_url">Feed Name</source>
-            url_attr = tmp_attribute.get("url")
-            if url_attr:
-                target_dict["sourceUrl"] = url_attr
-            if tmp_attribute.text:
-                target_dict["sourceName"] = tmp_attribute.text
-        else:
-            if tmp_attribute.text is not None:
-                target_dict[name] = tmp_attribute.text
-
-
 @pydantic.validate_call(validate_return=True)
 def read_s3_file(bucket_name: str, s3_key: str) -> str:
     """Read a file from S3."""
@@ -155,75 +134,44 @@ def get_feed_file(
 
 
 @pydantic.validate_call(validate_return=True)
-def filter_items(rss_file: str, last_run_date: datetime):
-    """Filter items based on the last run date."""
+def filter_items(articles_json: str, last_run_date: datetime):
+    """Filter stored articles based on the last run date.
+
+    Storage is a JSON array of RSSItem-shaped dicts (title/link/description/
+    pubDate/sortDate/comments/sourceName/sourceUrl). sortDate is the epoch the
+    writer already computed at fetch time, so filtering never has to re-parse
+    a date string (the source of several date-handling bugs in the old
+    RSS-XML round trip).
+    """
+    try:
+        items = json.loads(articles_json)
+    except json.JSONDecodeError as e:
+        logger.error("Failed to parse stored articles JSON: %s", e)
+        return []
+
     all_items = []
-    logger.debug("Retrieved RSS file. Last run date: %s", last_run_date)
-    for item in ElementTree.fromstring(rss_file).findall(".//item"):
-        item_dict = {}
-        for name in ["title", "link", "description", "pubDate", "comments", "source"]:
-            add_attribute_to_dict(item, name, item_dict)
-
-        # Skip items without pubDate
-        if "pubDate" not in item_dict:
+    logger.debug("Retrieved %d stored articles. Last run date: %s", len(items), last_run_date)
+    for item_dict in items:
+        sort_date = item_dict.get("sortDate")
+        if sort_date is None:
             logger.debug(
-                "Skipping item without pubDate: %s", item_dict.get("title", "Unknown")
+                "Skipping item without sortDate: %s", item_dict.get("title", "Unknown")
             )
             continue
 
-        try:
-            # Try multiple date formats to handle different RSS feeds
-            date_formats = [
-                "%a, %d %b %Y %H:%M:%S %Z",  # Standard RFC 822 format
-                "%a, %d %b %Y %H:%M:%S GMT",  # GMT specifically
-                "%a, %d %b %Y %H:%M:%S",  # Without timezone
-            ]
-
-            published_date = None
-            for fmt in date_formats:
-                try:
-                    parsed_dt = datetime.strptime(str(item_dict["pubDate"]), fmt)
-                    # If the format includes GMT, treat it as UTC time
-                    if "GMT" in str(item_dict["pubDate"]) or "%Z" in fmt:
-                        # Convert to local time for comparison
-                        published_date = calendar.timegm(parsed_dt.timetuple())
-                    else:
-                        # Local time
-                        published_date = time.mktime(parsed_dt.timetuple())
-                    break
-                except ValueError:
-                    continue
-
-            if published_date is None:
-                logger.warning(
-                    "Failed to parse pubDate '%s' with any format", item_dict["pubDate"]
-                )
-                continue
-
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            logger.warning(
-                "Unexpected error parsing pubDate '%s': %s",
-                item_dict["pubDate"],
-                str(e),
-            )
-            continue
-
-        item_dict["sortDate"] = published_date
-
-        # Create RSSItem with proper datetime conversion
-        pubdate_dt = datetime.fromtimestamp(published_date)
+        pubdate_dt = datetime.fromtimestamp(sort_date)
         logger.debug(
             "Comparing article date %s with last_run_date %s", pubdate_dt, last_run_date
         )
-        if pubdate_dt > last_run_date:
-            # Always use dictionary format for compatibility with HTML generation
-            item_dict["sortDate"] = published_date
-            all_items.append(item_dict)
-            logger.debug("Added article: %s", item_dict.get("title", "Unknown"))
-        else:
+        if pubdate_dt <= last_run_date:
             logger.debug(
                 "Skipped article (too old): %s", item_dict.get("title", "Unknown")
             )
+            continue
+
+        item_dict["description"] = get_description_body(item_dict.get("description"))
+        all_items.append(item_dict)
+        logger.debug("Added article: %s", item_dict.get("title", "Unknown"))
 
     logger.debug("Total filtered items: %d", len(all_items))
     return all_items
@@ -435,7 +383,7 @@ def _generate_claude_enhanced_html(
                 total_articles=len(filtered_items),
                 total_categories=len(ordered_categories),
                 categorized_content=categorized_content,
-                ai_model=os.environ.get("CLAUDE_MODEL", "claude-haiku-4-5-20251001"),
+                ai_model=os.environ.get("CLAUDE_MODEL", DEFAULT_CLAUDE_MODEL),
             )
 
         logger.warning(
@@ -506,25 +454,6 @@ def generate_html(
 
     html_template = files("rss_email").joinpath("email_body.html").read_text()
     return html_template.format(subject=EMAIL_SUBJECT, articles=list_output)
-
-
-@pydantic.validate_call(validate_return=True)
-def is_valid_email(event_dict: Dict[str, Any], valid_emails: List[str]) -> bool:
-    """Check if the email address is valid."""
-    if (
-        "Records" in event_dict
-        and len(event_dict["Records"]) > 0
-        and "Sns" in event_dict["Records"][0]
-    ):
-        ses_notification = event_dict["Records"][0]["Sns"]["Message"]
-        json_ses = json.loads(ses_notification)
-        if json_ses["mail"]["source"].lower() not in [
-            email.lower() for email in valid_emails
-        ]:
-            logger.warning("Invalid email address: %s", json_ses["mail"]["source"])
-            return False
-
-    return True
 
 
 @pydantic.validate_call
@@ -627,7 +556,7 @@ def create_html(
         total_articles=article_counter,
         total_categories=len(categories),
         categorized_content=categorized_content,
-        ai_model=os.environ.get("CLAUDE_MODEL", "claude-haiku-4-5-20251001"),
+        ai_model=os.environ.get("CLAUDE_MODEL", DEFAULT_CLAUDE_MODEL),
     )
 
     if feed_stats:
@@ -635,25 +564,6 @@ def create_html(
         email_html = email_html.replace("</body>", f"{summary_html}\n  </body>")
 
     return email_html
-
-
-def send_email(event: Dict[str, Any], context: Optional[Any] = None) -> None:  # pylint: disable=W0613
-    """Send the email."""
-    logger.debug("Event body: %s", event)
-
-    bucket = os.environ["BUCKET"]
-    key = os.environ["KEY"]
-    source_email_address = os.environ["SOURCE_EMAIL_ADDRESS"]
-    to_email_address = os.environ["TO_EMAIL_ADDRESS"]
-    parameter_name = os.environ["LAST_RUN_PARAMETER"]
-    if not is_valid_email(event, [to_email_address]):
-        return
-    run_date = get_last_run(parameter_name)
-
-    body = generate_html(run_date, bucket, key)
-
-    send_via_ses(to_email_address, source_email_address, EMAIL_SUBJECT, body)
-    set_last_run(parameter_name)
 
 
 @pydantic.validate_call(validate_return=True)

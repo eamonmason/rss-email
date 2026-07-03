@@ -11,6 +11,7 @@ from anthropic.types.message_create_params import MessageCreateParamsNonStreamin
 from anthropic.types.messages.batch_create_params import Request
 
 from .email_articles import get_feed_file, filter_items, get_last_run
+from .models import DEFAULT_CLAUDE_MODEL
 from .podcast_generator import create_podcast_script_prompt
 
 logger = logging.getLogger(__name__)
@@ -34,7 +35,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
         key = os.environ["RSS_KEY"]
         last_run_param = os.environ["PODCAST_LAST_RUN_PARAMETER"]
         api_key_param = os.environ["ANTHROPIC_API_KEY_PARAMETER"]
-        model = os.environ.get("CLAUDE_MODEL", "claude-haiku-4-5-20251001")
+        model = os.environ.get("CLAUDE_MODEL", DEFAULT_CLAUDE_MODEL)
 
         # Get API key from Parameter Store
         ssm = boto3.client("ssm")
@@ -96,6 +97,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
             "request_count": len(requests),
             "submitted_at": datetime.now(UTC).isoformat(),
             "articles_count": len(filtered_items),
+            "poll_count": 0,
         }
 
     except Exception as e:

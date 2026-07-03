@@ -23,6 +23,7 @@ from .article_processor import (
     optimize_articles_for_claude,
 )
 from .json_utils import extract_json_from_text
+from .models import DEFAULT_CLAUDE_MODEL
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -153,7 +154,7 @@ def group_articles_with_claude(
         client = anthropic.Anthropic(api_key=get_anthropic_api_key())
         prompt = create_grouping_prompt(articles)
 
-        model_name = os.environ.get("CLAUDE_MODEL", "claude-haiku-4-5-20251001")
+        model_name = os.environ.get("CLAUDE_MODEL", DEFAULT_CLAUDE_MODEL)
         api_timeout = int(os.environ.get("CLAUDE_API_TIMEOUT", "120"))
 
         response = client.messages.create(

@@ -1,4 +1,5 @@
 """Tests for retrieve_rss_articles module."""
+# pylint: disable=redefined-outer-name,unused-argument
 
 import json
 from unittest.mock import MagicMock, patch

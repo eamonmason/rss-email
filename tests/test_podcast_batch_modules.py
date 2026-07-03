@@ -75,6 +75,7 @@ def test_submit_podcast_success(
     assert result["request_count"] == 1  # Single podcast script request
     assert result["articles_count"] == 2
     assert "submitted_at" in result
+    assert result["poll_count"] == 0
 
 
 @patch("rss_email.submit_podcast_batch.filter_items")
@@ -170,6 +171,30 @@ def test_check_podcast_ended(mock_boto3_client, mock_anthropic, check_mock_env):
     assert result["batch_id"] == "podcast-batch-456"
     assert result["processing_status"] == "ended"
     assert result["request_counts"]["succeeded"] == 1
+
+
+@patch("rss_email.check_podcast_batch_status.anthropic.Anthropic")
+@patch("rss_email.check_podcast_batch_status.boto3.client")
+def test_check_podcast_increments_poll_count(
+    mock_boto3_client, mock_anthropic, check_mock_env
+):
+    """poll_count defaults to 0 and increments, driving the Wait backoff."""
+    mock_ssm = MagicMock()
+    mock_ssm.get_parameter.return_value = {"Parameter": {"Value": "test-api-key"}}
+    mock_boto3_client.return_value = mock_ssm
+
+    mock_batch = MagicMock()
+    mock_batch.id = "podcast-batch-123"
+    mock_batch.processing_status = "in_progress"
+    mock_batch.request_counts = MagicMock(
+        processing=1, succeeded=0, errored=0, canceled=0, expired=0
+    )
+    mock_anthropic.return_value.messages.batches.retrieve.return_value = mock_batch
+
+    event = {"batch_id": "podcast-batch-123", "request_count": 1, "poll_count": 5}
+    result = check_handler(event, None)
+
+    assert result["poll_count"] == 6
 
 
 def test_check_podcast_null_batch_id(check_mock_env):

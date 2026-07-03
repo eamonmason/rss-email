@@ -218,6 +218,59 @@ def test_lambda_handler_canceling_status(
     assert result["request_counts"]["canceled"] == 3
 
 
+@patch("rss_email.check_email_batch_status.anthropic.Anthropic")
+@patch("rss_email.check_email_batch_status.boto3.client")
+def test_lambda_handler_increments_poll_count_from_default(
+    mock_boto3_client, mock_anthropic, mock_env
+):
+    """poll_count defaults to 0 when absent from the input and increments by 1.
+
+    The Step Functions poll loop uses poll_count to back off the Wait
+    interval after a few iterations, so it must be threaded through every
+    check regardless of whether the caller supplied it.
+    """
+    mock_ssm = MagicMock()
+    mock_ssm.get_parameter.return_value = {"Parameter": {"Value": "test-api-key"}}
+    mock_boto3_client.return_value = mock_ssm
+
+    mock_batch = MagicMock()
+    mock_batch.id = "batch-123"
+    mock_batch.processing_status = "in_progress"
+    mock_batch.request_counts = MagicMock(
+        processing=5, succeeded=0, errored=0, canceled=0, expired=0
+    )
+    mock_anthropic.return_value.messages.batches.retrieve.return_value = mock_batch
+
+    event = {"batch_id": "batch-123", "request_count": 10}
+    result = lambda_handler(event, None)
+
+    assert result["poll_count"] == 1
+
+
+@patch("rss_email.check_email_batch_status.anthropic.Anthropic")
+@patch("rss_email.check_email_batch_status.boto3.client")
+def test_lambda_handler_increments_existing_poll_count(
+    mock_boto3_client, mock_anthropic, mock_env
+):
+    """An existing poll_count is incremented, not reset."""
+    mock_ssm = MagicMock()
+    mock_ssm.get_parameter.return_value = {"Parameter": {"Value": "test-api-key"}}
+    mock_boto3_client.return_value = mock_ssm
+
+    mock_batch = MagicMock()
+    mock_batch.id = "batch-123"
+    mock_batch.processing_status = "in_progress"
+    mock_batch.request_counts = MagicMock(
+        processing=5, succeeded=0, errored=0, canceled=0, expired=0
+    )
+    mock_anthropic.return_value.messages.batches.retrieve.return_value = mock_batch
+
+    event = {"batch_id": "batch-123", "request_count": 10, "poll_count": 3}
+    result = lambda_handler(event, None)
+
+    assert result["poll_count"] == 4
+
+
 def test_lambda_handler_missing_env_vars():
     """Test handler when environment variables are missing."""
     # Clear env var

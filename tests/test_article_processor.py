@@ -24,7 +24,6 @@ from rss_email.article_processor import (  # noqa: E402
     group_articles_by_priority,
     process_articles_with_claude,
 )
-from rss_email.compression_utils import compress_json, decompress_json  # noqa: E402
 
 
 def create_sample_articles() -> List[Dict[str, Any]]:
@@ -139,27 +138,6 @@ def test_fallback_behavior():
 
     os.environ["CLAUDE_ENABLED"] = "true"
     assert process_articles_with_claude([], rate_limiter) is None
-
-
-def test_json_compression():
-    """compress/decompress round-trips ProcessedArticle-shaped data."""
-    test_data = {
-        "categories": {
-            "Technology": [
-                {
-                    "group_id": "group_0",
-                    "title": "Test Article",
-                    "summary": "This is a test summary.",
-                    "category": "Technology",
-                }
-            ]
-        }
-    }
-
-    compressed = compress_json(test_data)
-    decompressed = decompress_json(compressed)
-
-    assert decompressed == test_data
 
 
 def test_priority_grouping_orders_categories():
