@@ -4,7 +4,10 @@
 
 # Rename this file to test_email_articles.py to ensure pytest discovers it
 
+import subprocess
+import sys
 import unittest
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from botocore.exceptions import ClientError
@@ -168,6 +171,35 @@ class TestRawBatchDictFallback(unittest.TestCase):
 
         self.assertIn("Untitled Story", html)
         self.assertIn("A summary with no source attribution.", html)
+
+
+class TestStandaloneScriptInvocation(unittest.TestCase):
+    """email_articles.py is documented (CLAUDE.md) to run as a bare script:
+    `python src/rss_email/email_articles.py <bucket> <key> --local-file <f>`.
+    Run that way, `from .models import X` is a relative import with no parent
+    package and always raises ImportError, so any such import at module level
+    must be wrapped in a try/except fallback like the other optional imports
+    in this file, or the module can't even be imported.
+    """
+
+    def test_module_imports_without_a_parent_package(self):
+        """Running the file as a script must not crash at import time."""
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import runpy; runpy.run_path("
+                "'src/rss_email/email_articles.py', run_name='loaded_as_script')",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).resolve().parent.parent,
+            check=False,
+        )
+        self.assertEqual(
+            completed.returncode, 0,
+            f"stdout={completed.stdout!r} stderr={completed.stderr!r}",
+        )
 
 
 if __name__ == "__main__":

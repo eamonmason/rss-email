@@ -1,7 +1,10 @@
 """Tests for podcast batch processing modules."""
 # pylint: disable=redefined-outer-name,unused-argument,too-many-positional-arguments
 
+import subprocess
+import sys
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -433,3 +436,26 @@ def test_retrieve_podcast_feed_update_failure(
 
     with pytest.raises(RuntimeError, match="Failed to update podcast RSS feed"):
         retrieve_handler(event, None)
+
+
+def test_podcast_generator_module_imports_without_a_parent_package():
+    """podcast_generator.py has an `if __name__ == "__main__":` block, so it
+    can be (and per its own comment, is meant to be) run as a bare script.
+    That makes `from .models import X` a relative import with no parent
+    package, which always raises ImportError, so any such import at module
+    level must be wrapped in a try/except fallback or the module can't even
+    be imported this way.
+    """
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import runpy; runpy.run_path("
+            "'src/rss_email/podcast_generator.py', run_name='loaded_as_script')",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=Path(__file__).resolve().parent.parent,
+        check=False,
+    )
+    assert completed.returncode == 0, f"stdout={completed.stdout!r} stderr={completed.stderr!r}"

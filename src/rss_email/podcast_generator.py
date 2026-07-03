@@ -19,7 +19,11 @@ try:
 except ImportError:
     anthropic = None
 
-from .models import DEFAULT_CLAUDE_MODEL
+try:
+    from .models import DEFAULT_CLAUDE_MODEL
+except ImportError:
+    # For local testing or when models module is not available
+    DEFAULT_CLAUDE_MODEL = "claude-haiku-4-5-20251001"
 
 # Imports removed: get_feed_file, filter_items, get_last_run, set_last_run
 # These are now used in the Message Batches workflow functions instead

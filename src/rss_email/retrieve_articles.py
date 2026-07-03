@@ -275,6 +275,9 @@ else:
         link: HttpUrl
         description: Optional[str] = ""
         pubdate: datetime
+        comments: Optional[HttpUrl] = None
+        source_name: Optional[str] = None
+        source_url: Optional[HttpUrl] = None
 
         def __lt__(self, other):
             return self.pubdate < other.pubdate
@@ -371,8 +374,9 @@ def generate_articles_json(articles: List[Article]) -> str:
             "pubDate": article.pubdate.strftime("%a, %d %b %Y %H:%M:%S GMT"),
             "sortDate": getattr(article, "sort_date", None) or article.pubdate.timestamp(),
         }
-        if article.comments:
-            item["comments"] = str(article.comments)
+        comments = getattr(article, "comments", None)
+        if comments:
+            item["comments"] = str(comments)
         source_name = getattr(article, "source_name", None)
         source_url = getattr(article, "source_url", None)
         if source_name and source_url:

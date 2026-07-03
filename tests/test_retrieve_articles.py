@@ -8,8 +8,11 @@ Some code duplication with test_article_data.py is intentional for test isolatio
 """
 
 import json
+import subprocess
+import sys
 import unittest
 from datetime import datetime, timedelta
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -198,6 +201,56 @@ class TestRetrieveArticles(unittest.TestCase):
         parsed = json.loads(result)
         self.assertEqual(len(parsed), 1)
         self.assertEqual(parsed[0]["title"], "Article 1")
+
+    def test_generate_articles_json_with_fallback_article_class(self):
+        """generate_articles_json must not crash when models.py isn't importable.
+
+        Running retrieve_articles.py directly as a script (the documented local
+        CLI usage) makes `from .models import RSSItem` a relative import with no
+        parent package, which always raises ImportError; the module then falls
+        back to a local, more limited Article class. That class previously had
+        no comments/source_name/source_url fields, and generate_articles_json
+        accessed article.comments directly, so any feed item with a <comments>
+        link crashed the whole run under exactly this (documented) invocation.
+
+        Reproduced via a subprocess (rather than importlib.reload) since
+        reloading rss_email.retrieve_articles in-process rebinds Article/
+        generate_articles_json and corrupts every other test's pydantic
+        validators for the rest of the pytest session.
+        """
+        script = (
+            "import runpy\n"
+            # run_name != '__main__' skips the argparse __main__ block but
+            # otherwise executes the file exactly as `python retrieve_articles.py`
+            # would: no parent package, so `from .models import RSSItem` fails.
+            "ns = runpy.run_path('src/rss_email/retrieve_articles.py', run_name='loaded_as_script')\n"
+            "assert ns['RSSItem'] is None\n"
+            "from datetime import datetime\n"
+            "article = ns['Article'](\n"
+            "    title='No Models Fallback',\n"
+            "    link='https://example.com/x',\n"
+            "    pubdate=datetime.now(),\n"
+            "    description='d',\n"
+            ")\n"
+            "result = ns['generate_articles_json']([article])\n"
+            "import json\n"
+            "parsed = json.loads(result)\n"
+            "assert parsed[0]['title'] == 'No Models Fallback'\n"
+            "assert 'comments' not in parsed[0]\n"
+            "print('OK')\n"
+        )
+        completed = subprocess.run(
+            [sys.executable, "-c", script],
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).resolve().parent.parent,
+            check=False,
+        )
+        self.assertEqual(
+            completed.returncode, 0,
+            f"stdout={completed.stdout!r} stderr={completed.stderr!r}",
+        )
+        self.assertIn("OK", completed.stdout)
 
     def test_generate_articles_json_emits_source_fields(self):
         """Articles with source_name/source_url surface as sourceName/sourceUrl."""
