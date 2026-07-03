@@ -117,6 +117,41 @@ class TestRetrieveArticles(unittest.TestCase):
 
         self.assertIsInstance(result, list)
 
+    def test_get_feed_skips_undated_entry_but_keeps_later_ones(self):
+        """An entry with no published/updated date must not truncate the feed.
+
+        get_feed() used to `break` on the first entry lacking a parseable
+        date, discarding every entry after it in document order. It should
+        skip just that one entry and keep processing the rest.
+        """
+        rss_data = b"""<?xml version="1.0" encoding="UTF-8"?>
+        <rss version="2.0">
+        <channel>
+            <item>
+                <title>Dated First</title>
+                <link>http://example.com/first</link>
+                <pubDate>Mon, 12 May 2025 10:00:00 GMT</pubDate>
+            </item>
+            <item>
+                <title>Undated Middle</title>
+                <link>http://example.com/middle</link>
+            </item>
+            <item>
+                <title>Dated Last</title>
+                <link>http://example.com/last</link>
+                <pubDate>Mon, 12 May 2025 12:00:00 GMT</pubDate>
+            </item>
+        </channel>
+        </rss>"""
+
+        update_date = datetime(2025, 1, 1)
+        result = get_feed("http://example.com/feed", rss_data, update_date)
+
+        titles = [article.title for article in result]
+        self.assertIn("Dated First", titles)
+        self.assertIn("Dated Last", titles)
+        self.assertNotIn("Undated Middle", titles)
+
     @patch("rss_email.retrieve_articles.boto3.client")
     @patch("rss_email.retrieve_articles.files")
     def test_get_feed_urls(self, mock_files, mock_boto3_client):

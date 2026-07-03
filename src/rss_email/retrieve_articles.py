@@ -759,7 +759,7 @@ def get_feed(
         elif hasattr(article, "updated_parsed") and article.updated_parsed is not None:
             feed_date = article.updated_parsed
         else:
-            break
+            continue
         feed_datetime = datetime.fromtimestamp(mktime(feed_date))
         if feed_datetime > update_date:
             # Create article with proper fields based on model type

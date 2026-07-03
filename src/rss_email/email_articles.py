@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import logging
 import os
@@ -14,7 +15,6 @@ import calendar
 from datetime import datetime, timedelta
 from importlib.resources import files
 from typing import Any, Dict, List, Optional
-from urllib.error import HTTPError
 from xml.etree import ElementTree
 
 import boto3
@@ -52,11 +52,11 @@ logger.setLevel(logging.INFO)
 
 
 @pydantic.validate_call(validate_return=True)
-def get_description_body(html: Optional[str]) -> str:
+def get_description_body(html_content: Optional[str]) -> str:
     """Return the body of the description, without any iframes."""
-    if html is None:
+    if html_content is None:
         return ""
-    parsed_html = BeautifulSoup(html, features="html.parser")
+    parsed_html = BeautifulSoup(html_content, features="html.parser")
     for s in parsed_html.select("iframe"):
         s.decompose()
 
@@ -83,10 +83,8 @@ def get_last_run(parameter_name: str) -> datetime:
     try:
         ssm = boto3.client("ssm")
         parameter = ssm.get_parameter(Name=parameter_name)
-        return datetime.strptime(
-            parameter["Parameter"]["Value"], "%Y-%m-%dT%H:%M:%S.%f"
-        )
-    except ClientError as e:
+        return datetime.fromisoformat(parameter["Parameter"]["Value"])
+    except (ClientError, ValueError) as e:
         logger.warning(
             "Error retrieving parameter '%s' from parameter store: %s. Using default days.",
             parameter_name,
@@ -150,9 +148,9 @@ def get_feed_file(
     else:
         try:
             rss_file = read_s3_file(s3_bucket, s3_prefix)
-        except HTTPError:
+        except ClientError:
             logger.error("Error retrieving RSS file: %s/%s", s3_bucket, s3_prefix)
-            return "Internal error retrieving RSS file."
+            raise
     return rss_file
 
 
@@ -246,8 +244,8 @@ def _render_sources_html(sources: List[Any]) -> str:
             return ""
         if not link.startswith(("http://", "https://")):
             link = "https://" + link
-        label = name or link
-        return f'<a href="{link}" style="color: #0066cc;">{label}</a>'
+        label = html.escape(name or link)
+        return f'<a href="{html.escape(link)}" style="color: #0066cc;">{label}</a>'
 
     links = [link_html for link_html in (_source_link(s) for s in sources) if link_html]
     if not links:
@@ -309,7 +307,7 @@ def generate_enhanced_html_content(
                             <td>
                                 <h2 style="color: #ffffff; margin: 0; font-size: 1.25em;
                                     font-weight: bold; line-height: 1.3;">
-                                    {category}
+                                    {html.escape(category)}
                                 </h2>
                             </td>
                         </tr>
@@ -324,20 +322,20 @@ def generate_enhanced_html_content(
 
             # Ensure the link is properly formatted with protocol
             # Handle both dict and object attribute access
-            article_link = article.get('link') if isinstance(article, dict) else article.link
-            if not article_link.startswith(("http://", "https://")):
+            article_link = (article.get('link') if isinstance(article, dict) else article.link) or ""
+            if article_link and not article_link.startswith(("http://", "https://")):
                 article_link = "https://" + article_link
 
             # Get article attributes (compatible with both dict and object)
             article_title = (
                 article.get('title') if isinstance(article, dict) else article.title
-            )
+            ) or "Untitled"
             article_pubdate = (
                 article.get('pubdate') if isinstance(article, dict) else article.pubdate
-            )
+            ) or ""
             article_summary = (
                 article.get('summary') if isinstance(article, dict) else article.summary
-            )
+            ) or ""
             article_comments = (
                 article.get('comments') if isinstance(article, dict)
                 else getattr(article, "comments", None)
@@ -348,6 +346,12 @@ def generate_enhanced_html_content(
             )
             sources_html = _render_sources_html(sources)
 
+            safe_link = html.escape(article_link)
+            safe_title = html.escape(article_title)
+            safe_pubdate = html.escape(article_pubdate)
+            safe_summary = html.escape(article_summary)
+            safe_comments = html.escape(article_comments) if article_comments else None
+
             content_parts.append(f'''
             <tr>
                 <td>
@@ -357,20 +361,20 @@ def generate_enhanced_html_content(
                         <tr>
                             <td>
                                 <h3 style="margin: 0 0 10px 0; line-height: 1.4; font-size: 1.1em;">
-                                    <a href="{article_link}" target="_blank"
+                                    <a href="{safe_link}" target="_blank"
                                     style="color: #0066cc; text-decoration: underline;">
-                                    {article_title}</a>
+                                    {safe_title}</a>
                                 </h3>
                                 <p style="margin: 0 0 12px 0; font-size: 0.875em; color: #666;">
-                                    {article_pubdate}
+                                    {safe_pubdate}
                                     {
-                                        f' | <a href="{article_comments}" target="_blank" '
+                                        f' | <a href="{safe_comments}" target="_blank" '
                                         'style="color: #666; text-decoration: underline;">Comments</a>'
-                                        if article_comments else ''
+                                        if safe_comments else ''
                                     }
                                 </p>
                                 <p style="margin: 0 0 12px 0; font-size: 1em; color: #555; line-height: 1.6;">
-                                {article_summary}</p>
+                                {safe_summary}</p>
                                 {sources_html}
                             </td>
                         </tr>
@@ -500,8 +504,8 @@ def generate_html(
             </div>\n
             <section class="longdescription">{item["description"]}</section>\n"""
 
-    html = files("rss_email").joinpath("email_body.html").read_text()
-    return html.format(subject=EMAIL_SUBJECT, articles=list_output)
+    html_template = files("rss_email").joinpath("email_body.html").read_text()
+    return html_template.format(subject=EMAIL_SUBJECT, articles=list_output)
 
 
 @pydantic.validate_call(validate_return=True)
@@ -617,7 +621,7 @@ def create_html(
         template_path = files("rss_email").joinpath("email_body_enhanced.html")
         html_template = template_path.read_text()
 
-    html = html_template.format(
+    email_html = html_template.format(
         subject=EMAIL_SUBJECT,
         generation_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         total_articles=article_counter,
@@ -628,9 +632,9 @@ def create_html(
 
     if feed_stats:
         summary_html = _generate_feed_summary_html(feed_stats)
-        html = html.replace("</body>", f"{summary_html}\n  </body>")
+        email_html = email_html.replace("</body>", f"{summary_html}\n  </body>")
 
-    return html
+    return email_html
 
 
 def send_email(event: Dict[str, Any], context: Optional[Any] = None) -> None:  # pylint: disable=W0613

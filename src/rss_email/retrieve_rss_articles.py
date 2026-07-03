@@ -9,6 +9,7 @@ from typing import Any, Dict
 import boto3
 from botocore.exceptions import ClientError
 
+from .models import FeedList
 from .retrieve_articles import get_update_date, retrieve_rss_feeds, DAYS_OF_NEWS
 
 logger = logging.getLogger(__name__)
@@ -67,7 +68,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
 
         # Build feed name → article count mapping and store as sidecar
         feed_data = json.loads(feed_urls_content)
-        url_to_name = {feed["url"]: feed["name"] for feed in feed_data.get("feeds", [])}
+        feed_list = FeedList.from_json_data(feed_data)
+        url_to_name = {str(feed.url): feed.name for feed in feed_list.feeds if feed.enabled}
         feed_stats = {
             url_to_name.get(url, url): count
             for url, count in per_url_counts.items()

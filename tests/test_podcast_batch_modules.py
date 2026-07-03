@@ -287,11 +287,11 @@ def test_retrieve_podcast_failed_batch(
         "batch_id": "podcast-batch-123",
         "request_counts": {"succeeded": 0, "errored": 1},
     }
-    result = retrieve_handler(event, None)
 
-    # Verify
-    assert result["status"] == "failed"
-    assert result["audio_generated"] is False
+    # A failed batch must raise so Step Functions/alarms see it, not return
+    # {"status": "failed"} silently (that reports as a successful execution).
+    with pytest.raises(RuntimeError, match="Failed to retrieve podcast script"):
+        retrieve_handler(event, None)
 
 
 @patch("rss_email.retrieve_and_generate_podcast.synthesize_speech")
@@ -325,11 +325,9 @@ def test_retrieve_podcast_synthesis_failure(
         "batch_id": "podcast-batch-123",
         "request_counts": {"succeeded": 1, "errored": 0},
     }
-    result = retrieve_handler(event, None)
 
-    # Verify
-    assert result["status"] == "failed"
-    assert result["audio_generated"] is False
+    with pytest.raises(RuntimeError, match="Failed to synthesize podcast audio"):
+        retrieve_handler(event, None)
 
 
 @patch("rss_email.retrieve_and_generate_podcast.update_podcast_feed")
@@ -368,8 +366,45 @@ def test_retrieve_podcast_upload_failure(
         "batch_id": "podcast-batch-123",
         "request_counts": {"succeeded": 1, "errored": 0},
     }
-    result = retrieve_handler(event, None)
 
-    # Verify
-    assert result["status"] == "failed"
-    assert result["audio_generated"] is True  # Audio was generated but upload failed
+    with pytest.raises(RuntimeError, match="Failed to upload podcast to S3"):
+        retrieve_handler(event, None)
+
+
+@patch("rss_email.retrieve_and_generate_podcast.update_podcast_feed")
+@patch("rss_email.retrieve_and_generate_podcast.upload_to_s3")
+@patch("rss_email.retrieve_and_generate_podcast.synthesize_speech")
+@patch("rss_email.retrieve_and_generate_podcast.anthropic.Anthropic")
+@patch("rss_email.retrieve_and_generate_podcast.boto3.client")
+def test_retrieve_podcast_feed_update_failure(
+    mock_boto3_client,
+    mock_anthropic,
+    mock_synthesize,
+    mock_upload,
+    mock_update_feed,
+    retrieve_mock_env,
+):
+    """A failed RSS feed update must also raise, not return status: failed."""
+    mock_ssm = MagicMock()
+    mock_ssm.get_parameter.side_effect = [
+        {"Parameter": {"Value": "test-api-key"}},
+        {"Parameter": {"Value": "d123.cloudfront.net"}},
+    ]
+    mock_boto3_client.return_value = mock_ssm
+
+    mock_result = MagicMock()
+    mock_result.result.type = "succeeded"
+    mock_result.result.message.content = [MagicMock(text="Marco: Hello!")]
+    mock_anthropic.return_value.messages.batches.results.return_value = [mock_result]
+
+    mock_synthesize.return_value = b"audio data"
+    mock_upload.return_value = True
+    mock_update_feed.return_value = False  # Feed update fails
+
+    event = {
+        "batch_id": "podcast-batch-123",
+        "request_counts": {"succeeded": 1, "errored": 0},
+    }
+
+    with pytest.raises(RuntimeError, match="Failed to update podcast RSS feed"):
+        retrieve_handler(event, None)

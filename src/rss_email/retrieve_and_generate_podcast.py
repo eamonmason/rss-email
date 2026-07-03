@@ -63,13 +63,13 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
 
         if script is None:
             logger.error("Failed to retrieve podcast script from batch")
-            return {"status": "failed", "audio_generated": False}
+            raise RuntimeError("Failed to retrieve podcast script from batch")
 
         # Generate audio from script
         audio_data = synthesize_speech(script)
         if audio_data is None:
             logger.error("Failed to synthesize podcast audio")
-            return {"status": "failed", "audio_generated": False}
+            raise RuntimeError("Failed to synthesize podcast audio")
 
         # Upload to S3
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -78,7 +78,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
         upload_result = upload_to_s3(bucket, s3_key, audio_data, "audio/mpeg")
         if not upload_result:
             logger.error("Failed to upload podcast to S3")
-            return {"status": "failed", "audio_generated": True}
+            raise RuntimeError("Failed to upload podcast to S3")
 
         # Generate CloudFront URL
         cloudfront_domain_param = os.environ.get("PODCAST_CLOUDFRONT_DOMAIN_PARAMETER")
@@ -107,7 +107,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
 
         if not update_result:
             logger.error("Failed to update podcast RSS feed")
-            return {"status": "failed", "audio_generated": True}
+            raise RuntimeError("Failed to update podcast RSS feed")
 
         # Update last_run parameter
         set_last_run(last_run_param)
