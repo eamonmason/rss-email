@@ -12,14 +12,18 @@ providers:
     label: rss-brief
 
 # Grader used by llm-rubric assertions. temperature: 0 prevents the grader
-# from returning non-JSON prose, which causes "Could not extract JSON from
-# llm-rubric response" failures unrelated to brief quality.
+# from returning non-JSON prose. max_tokens is raised from promptfoo's 1024
+# default because the faithfulness rubric audits the full digest (~10k
+# prompt tokens) and can exceed 1024 output tokens, truncating the JSON
+# verdict mid-object — this also causes "Could not extract JSON from
+# llm-rubric response" and is not transient.
 defaultTest:
   options:
     provider:
       id: anthropic:messages:claude-sonnet-4-6
       config:
         temperature: 0
+        max_tokens: 4096
   assert:
     - type: is-json
     - type: javascript
