@@ -16,12 +16,12 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@aws-sdk/client-sns": "^3.1085.0",
-    "aws-cdk": "^2.1130.0",
+    "@aws-sdk/client-sns": "^3.1090.0",
+    "aws-cdk": "^2.1132.0",
     "aws-cdk-lib": "^2.261.0",
     "constructs": "^10.x",
     "dotenv": "^17.x",
-    "fast-xml-parser": "^5.10.0",
+    "fast-xml-parser": "^5.10.1",
     "source-map-support": "^0.x",
     "ts-node": "^10.x"
   },
