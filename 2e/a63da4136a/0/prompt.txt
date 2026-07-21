@@ -1,0 +1,97 @@
+Also investigate logs:
+
+Aggregated log events:
+
+=== ERRORS (14) ===
+
+Time: 2026-06-17T07:30:29.673Z
+Log Group: /aws/lambda/REDACTED
+Log Stream: 2026/06/17/[$LATEST]e29978f0d825453a9305708a8e69d76b
+Message: [ERROR]	2026-06-17T07:30:29.673Z	deb53d1d-5a85-4d78-a3c7-b0990384a131	URL: https://www.reddit.com/r/netsec/top/.rss?t=month, data not retrieved because HTTP Error 429: Too Many Requests
+
+
+Time: 2026-06-17T07:30:29.810Z
+Log Group: /aws/lambda/REDACTED
+Log Stream: 2026/06/17/[$LATEST]e29978f0d825453a9305708a8e69d76b
+Message: [ERROR]	2026-06-17T07:30:29.810Z	deb53d1d-5a85-4d78-a3c7-b0990384a131	URL: https://netflixtechblog.com/feed, url error <urlopen error [Errno 111] Connection refused>
+
+
+Time: 2026-06-17T07:30:31.392Z
+Log Group: /aws/lambda/REDACTED
+Log Stream: 2026/06/17/[$LATEST]e29978f0d825453a9305708a8e69d76b
+Message: [ERROR]	2026-06-17T07:30:31.392Z	deb53d1d-5a85-4d78-a3c7-b0990384a131	URL: https://www.reddit.com/r/aws/top/.rss?t=month, data not retrieved because HTTP Error 429: Too Many Requests
+
+
+Time: 2026-06-17T07:30:31.961Z
+Log Group: /aws/lambda/REDACTED
+Log Stream: 2026/06/17/[$LATEST]e29978f0d825453a9305708a8e69d76b
+Message: [ERROR]	2026-06-17T07:30:31.961Z	deb53d1d-5a85-4d78-a3c7-b0990384a131	URL: https://www.reddit.com/r/netsec/top/.rss?t=month, data not retrieved because HTTP Error 429: Too Many Requests
+
+
+Time: 2026-06-17T07:30:32.192Z
+Log Group: /aws/lambda/REDACTED
+Log Stream: 2026/06/17/[$LATEST]e29978f0d825453a9305708a8e69d76b
+Message: [ERROR]	2026-06-17T07:30:32.192Z	deb53d1d-5a85-4d78-a3c7-b0990384a131	URL: https://www.reddit.com/r/cycling/top/.rss?t=month, data not retrieved because HTTP Error 429: Too Many Requests
+
+
+Time: 2026-06-17T07:30:33.683Z
+Log Group: /aws/lambda/REDACTED
+Log Stream: 2026/06/17/[$LATEST]e29978f0d825453a9305708a8e69d76b
+Message: [ERROR]	2026-06-17T07:30:33.682Z	deb53d1d-5a85-4d78-a3c7-b0990384a131	URL: https://www.reddit.com/r/aws/top/.rss?t=month, data not retrieved because HTTP Error 429: Too Many Requests
+
+
+Time: 2026-06-17T07:30:34.248Z
+Log Group: /aws/lambda/REDACTED
+Log Stream: 2026/06/17/[$LATEST]e29978f0d825453a9305708a8e69d76b
+Message: [ERROR]	2026-06-17T07:30:34.248Z	deb53d1d-5a85-4d78-a3c7-b0990384a131	URL: https://www.reddit.com/r/netsec/top/.rss?t=month, data not retrieved because HTTP Error 429: Too Many Requests
+
+
+Time: 2026-06-17T07:30:34.291Z
+Log Group: /aws/lambda/REDACTED
+Log Stream: 2026/06/17/[$LATEST]e29978f0d825453a9305708a8e69d76b
+Message: [ERROR]	2026-06-17T07:30:34.291Z	deb53d1d-5a85-4d78-a3c7-b0990384a131	URL: https://netflixtechblog.com/feed, url error <urlopen error [Errno 111] Connection refused>
+
+
+Time: 2026-06-17T07:30:34.479Z
+Log Group: /aws/lambda/REDACTED
+Log Stream: 2026/06/17/[$LATEST]e29978f0d825453a9305708a8e69d76b
+Message: [ERROR]	2026-06-17T07:30:34.479Z	deb53d1d-5a85-4d78-a3c7-b0990384a131	URL: https://www.reddit.com/r/cycling/top/.rss?t=month, data not retrieved because HTTP Error 429: Too Many Requests
+
+
+Time: 2026-06-17T07:30:34.534Z
+Log Group: /aws/lambda/REDACTED
+Log Stream: 2026/06/17/[$LATEST]e29978f0d825453a9305708a8e69d76b
+Message: [ERROR]	2026-06-17T07:30:34.534Z	deb53d1d-5a85-4d78-a3c7-b0990384a131	URL: https://www.reddit.com/r/Zwift/top/.rss?t=month, data not retrieved because HTTP Error 429: Too Many Requests
+
+
+Time: 2026-06-17T07:30:35.969Z
+Log Group: /aws/lambda/REDACTED
+Log Stream: 2026/06/17/[$LATEST]e29978f0d825453a9305708a8e69d76b
+Message: [ERROR]	2026-06-17T07:30:35.968Z	deb53d1d-5a85-4d78-a3c7-b0990384a131	URL: https://www.reddit.com/r/aws/top/.rss?t=month, data not retrieved because HTTP Error 429: Too Many Requests
+
+
+Time: 2026-06-17T07:30:36.764Z
+Log Group: /aws/lambda/REDACTED
+Log Stream: 2026/06/17/[$LATEST]e29978f0d825453a9305708a8e69d76b
+Message: [ERROR]	2026-06-17T07:30:36.764Z	deb53d1d-5a85-4d78-a3c7-b0990384a131	URL: https://www.reddit.com/r/cycling/top/.rss?t=month, data not retrieved because HTTP Error 429: Too Many Requests
+
+
+Time: 2026-06-17T07:30:36.821Z
+Log Group: /aws/lambda/REDACTED
+Log Stream: 2026/06/17/[$LATEST]e29978f0d825453a9305708a8e69d76b
+Message: [ERROR]	2026-06-17T07:30:36.821Z	deb53d1d-5a85-4d78-a3c7-b0990384a131	URL: https://www.reddit.com/r/Zwift/top/.rss?t=month, data not retrieved because HTTP Error 429: Too Many Requests
+
+
+Time: 2026-06-17T07:30:37.780Z
+Log Group: /aws/lambda/REDACTED
+Log Stream: 2026/06/17/[$LATEST]e29978f0d825453a9305708a8e69d76b
+Message: [ERROR]	2026-06-17T07:30:37.780Z	deb53d1d-5a85-4d78-a3c7-b0990384a131	URL: https://www.reddit.com/r/softwaretesting/top/.rss?t=month, data not retrieved because HTTP Error 429: Too Many Requests
+
+
+
+
+--
+If you wish to stop receiving notifications from this topic, please click or visit the link below to unsubscribe:
+https://sns.eu-west-1.amazonaws.com/unsubscribe.html?SubscriptionArn=arn:aws:sns:eu-west-1:002681522526:REDACTED:c8ab3877-e837-4f36-bf5d-cbd510c2efee&Endpoint=eamon.mason@gmail.com
+
+Please do not reply directly to this email. If you have any questions or comments regarding this email, please contact us at https://aws.amazon.com/support
