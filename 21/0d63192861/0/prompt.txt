@@ -1,0 +1,155 @@
+Base directory for this skill: /Users/eamon/.claude/skills/rss-feeds
+
+# RSS Feed Manager
+
+## Current feeds
+
+65 feeds:
+  Krebs on Security — https://krebsonsecurity.com/feed/
+  The Netflix Tech Blog — https://netflixtechblog.com/feed
+  O'Reilly Radar — https://www.oreilly.com/radar/feed/
+  Hacker News — https://hnrss.org/frontpage?points=100 {'max_articles': 10}
+  AWS Developer Blog — https://aws.amazon.com/blogs/developer/feed/
+  xkcd.com — http://xkcd.com/rss.xml
+  Martin Fowler — http://martinfowler.com/bliki/bliki.atom
+  Top News - MIT Technology Review — https://www.technologyreview.com/feed/
+  Highly Scalable Blog — http://highlyscalable.wordpress.com/feed/
+  ACM Queue - All Queue Content — https://queue.acm.org/rss/feeds/queuecontent.xml
+  Stevey's Blog Rants — https://medium.com/feed/@steve.yegge
+  ongoing by Tim Bray — https://www.tbray.org/ongoing/ongoing.atom
+  AWS Architecture Blog — https://aws.amazon.com/blogs/architecture/feed/
+  Acolyer — https://blog.acolyer.org/feed/
+  Reddit netsec — https://www.reddit.com/r/netsec/top/.rss?t=month
+  Stratechery — https://stratechery.passport.online/feed/rss/S4nwHuhEnykTmJfDZVx4Ui
+  DC Rainmaker — https://www.dcrainmaker.com/feed/
+  Pragmatic Engineer — https://blog.pragmaticengineer.com/rss/
+  Martin Heinz — https://martinheinz.dev/rss/
+  Towards Data Science — https://towardsdatascience.com/feed
+  GitHub Blog — https://github.blog/feed/
+  Reddit AWS — https://www.reddit.com/r/aws/top/.rss?t=month
+  Reddit Cycling — https://www.reddit.com/r/cycling/top/.rss?t=month
+  Reddit Zwift — https://www.reddit.com/r/Zwift/top/.rss?t=month
+  Inner Ring — https://inrng.com/feed/
+  Escape Collective — https://escapecollective.com/feed/
+  Reddit Software Testing — https://www.reddit.com/r/softwaretesting/top/.rss?t=month
+  The Unofficial Google Data Science Blog — http://www.unofficialgoogledatascience.com/feeds/posts/default
+  BBC News - Technology — http://feeds.bbci.co.uk/news/technology/rss.xml
+  Speaking of Clouds — http://www.speakingofclouds.com/?feed=rss2
+  Technology — http://www.npr.org/rss/rss.php?id=1019
+  Stevey's Blog Rants — http://steve-yegge.blogspot.com/feeds/posts/default
+  The Register — https://www.theregister.com/feed/ {'max_articles': 20, 'lookback_days': 1}
+  Slashdot — http://rss.slashdot.org/Slashdot/slashdot {'max_articles': 10}
+  The New Yorker — http://www.newyorker.com/services/mrss/feeds/everything.xml {'max_articles': 5}
+  what-if.xkcd.com/feed.atom — http://what-if.xkcd.com/feed.atom
+  www.lastwordonnothing.com/feed/ — http://www.lastwordonnothing.com/feed/
+  www.npr.org/rss/podcast.php?id=510289 — http://www.npr.org/rss/podcast.php?id=510289
+  a16z — https://a16z.news/feed
+  Meta Engineering — https://engineering.fb.com/feed/
+  ZwiftHacks — https://zwifthacks.com/feed/
+  Morning Cup of Coding — https://www.reddit.com/r/MorningCupOfCoding/.rss
+  Lifehacker — https://lifehacker.com/rss/regular/ {'max_articles': 20, 'lookback_days': 1}
+  AWS News Blog — https://aws.amazon.com/blogs/aws/feed/
+  Spotify Engineering Blog — https://engineering.atspotify.com/feed/
+  OpenAI News — https://openai.com/news/rss.xml
+  Google Gemini Blog — https://blog.google/products/gemini/rss/
+  Google DeepMind Blog — https://deepmind.google/blog/rss.xml
+  Google Cloud Blog — https://blog.google/innovation-and-ai/infrastructure-and-cloud/google-cloud/rss/
+  Aphyr: Posts — https://aphyr.com/posts.atom
+  Aphyr: Jepsen — https://jepsen.io/blog.atom
+  Techmeme — https://www.techmeme.com/feed.xml
+  Simon Willison's Blog — https://simonwillison.net/atom/everything/
+  Cloudflare Blog — https://blog.cloudflare.com/rss/
+  Lobsters — https://lobste.rs/rss {'max_articles': 10}
+  Import AI — https://jack-clark.net/feed/
+  The Gradient — https://thegradient.pub/rss/
+  Hugging Face Blog — https://huggingface.co/blog/feed.xml
+  Dan Luu — https://danluu.com/atom.xml
+  Martin Kleppmann — https://martinkl.substack.com/feed
+  A-Team Insight — https://a-teaminsight.com/feed/
+  The Trade News — https://www.thetradenews.com/feed/
+  FCA News — https://www.fca.org.uk/news/rss.xml
+  ESMA News — https://www.esma.europa.eu/rss.xml
+  Trail of Bits Blog — https://blog.trailofbits.com/feed/
+
+## Paths
+
+- **feed_urls.json**: `/Users/eamon/code/rss-email/feed_urls.json`
+- **privategeneralproject copy**: `/Users/eamon/code/privategeneralproject/rss/rss-python/feed_urls.json`
+- **S3**: `s3://cd-rssemailstack-rssbucket91adb797-1ds7r89g7wdoo/feed_urls.json`
+
+Note: `feed_urls.json` is gitignored in rss-email (contains private subscription URLs). Only versioned in privategeneralproject.
+
+## Instructions
+
+User request: replace the Netflix Tech Blog feed URL https://netflixtechblog.com/feed with https://netflixtechblog.medium.com/feed (the .com host refuses connections from the Lambda; the .medium.com host returns 200)
+
+### Add
+
+1. Edit `feed_urls.json` to add the entry/entries. Use `max_articles` for high-frequency feeds (>10/day; typical 5–20).
+2. Test the new feeds (see Testing).
+3. Fix any failures before keeping them.
+4. Sync.
+
+### Remove
+
+1. Remove the entry/entries from `feed_urls.json`.
+2. Sync.
+
+### Test
+
+Run this script via `uv run python - <<'EOF' ... EOF`, replacing `names` with the feeds to test (or all feeds if testing everything):
+
+```python
+import json, sys, urllib.request
+
+names = {"Feed Name"}  # replace or set to None to test all
+
+with open("/Users/eamon/code/rss-email/feed_urls.json") as f:
+    all_feeds = json.load(f)["feeds"]
+
+feeds = all_feeds if names is None else [x for x in all_feeds if x["name"] in names]
+headers = {"User-Agent": "Mozilla/5.0 (compatible; RSS reader)"}
+ok, warn, fail = [], [], []
+
+for feed in feeds:
+    name, url = feed["name"], feed["url"]
+    try:
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=10) as r:
+            data = r.read(512)
+        is_xml = any(t in data[:300] for t in [b"<rss", b"<feed", b"<?xml"])
+        if is_xml:
+            print(f"  ✅ {name}")
+            ok.append(name)
+        else:
+            print(f"  ⚠️  {name} — not XML: {data[:100]}")
+            warn.append(name)
+    except Exception as e:
+        print(f"  ❌ {name} — {e}")
+        fail.append(name)
+
+print(f"\n{len(ok)} ok, {len(warn)} warning, {len(fail)} failed")
+sys.exit(1 if fail or warn else 0)
+```
+
+**Failure patterns and fixes:**
+
+- **404**: Feed moved — try `/feed`, `/rss`, `/atom.xml`; check for Substack/Ghost migration; look for `<link rel="alternate">` on homepage
+- **403 / "Just a moment..."**: Cloudflare bot protection — feed inaccessible, remove it
+- **200 but HTML**: Wrong URL or login wall — search for the real feed path
+
+### List
+
+Display a clean table of all feeds from the current `feed_urls.json`.
+
+### Sync (always after any change)
+
+```bash
+cp /Users/eamon/code/rss-email/feed_urls.json \
+   /Users/eamon/code/privategeneralproject/rss/rss-python/feed_urls.json \
+  && git -C /Users/eamon/code/privategeneralproject add rss/rss-python/feed_urls.json \
+  && git -C /Users/eamon/code/privategeneralproject commit -m "rss: <describe change>" \
+  && git -C /Users/eamon/code/privategeneralproject push \
+  && aws s3 cp /Users/eamon/code/rss-email/feed_urls.json \
+       s3://cd-rssemailstack-rssbucket91adb797-1ds7r89g7wdoo/feed_urls.json
+```
