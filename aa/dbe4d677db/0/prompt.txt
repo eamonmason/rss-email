@@ -1,0 +1,1 @@
+the font size on mobile devices does not seem to respect system settings. review how the emails are formatted and ensure they render appropriately on iphones
