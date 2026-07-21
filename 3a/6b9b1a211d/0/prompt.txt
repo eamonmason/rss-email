@@ -1,0 +1,1 @@
+watch deployment. once completed, generate today's brief again
