@@ -1,0 +1,225 @@
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Summary:
+1. Primary Request and Intent:
+
+   The session continued from a prior conversation where the RSS Brief companion email was fully implemented. The main new requests were:
+
+   a. **Evaluate the first live brief vs digest** (2026-06-15 emails pulled from Gmail): check factual accuracy and what was missed.
+   b. **Broaden brief scope** — it was too job-centric; must also serve as a personal tech-interest feed and never drop genuinely major news stories.
+   c. **Source-aware ranking** — HN/Reddit/blogs should be ranked higher than Techmeme/Slashdot/aggregators.
+   d. **Fix AI/ML rendering bug** — the model returns `AI_ML` (underscore) as the JSON key; this caused the category to render last and be labeled "AI_ML" instead of "AI/ML".
+   e. **Open source eval framework** — implement continuous fidelity checking of the brief vs the digest. User chose **promptfoo** when given options.
+
+   The user also issued monitoring requests: check pipeline status (GitHub Actions + AWS CodePipeline) and when the next RSS email run was scheduled.
+
+2. Key Technical Concepts:
+   - RSS Brief companion email: daily synthesis of categorised articles via a single Claude (claude-sonnet-4-6) call
+   - `ProcessedArticle` (Pydantic model) with `sources: List[ArticleSource]` — each source has `feed_name`
+   - `synthesize(synthesis_input, config, client)` — config-based signature (W1-W3 changed from positional reader_profile/model)
+   - `_canonical_category(key, known)` — normalises AI_ML → AI/ML by stripping non-alphanumeric chars
+   - `_article_source(article)` — reads feed name from `ProcessedArticle.sources[0].feed_name` or dict `sourceName`
+   - `source_tier(name, config) -> "high"|"medium"|"low"` — case-insensitive substring match against config lists
+   - `_TIER_ORDER = {"high": 0, "medium": 1, "low": 2}` — used for sorting articles in prompt
+   - Major-story floor: prompt-driven rule to surface genuinely major news even when work-irrelevant
+   - promptfoo eval: custom Python provider + deterministic JS (`.cjs`) assertions + llm-rubric assertions
+   - `"type": "module"` in package.json means `.js` files are ES modules; assertions must be `.cjs` for CommonJS `require`/`module.exports`
+   - `PROMPTFOO_PYTHON=.venv/bin/python` baked into npm script so the provider uses the uv venv
+   - AWS CodePipeline `RSSPipeline` in eu-west-1 with stages: Source→Build→UpdatePipeline→Assets→cd
+   - EventBridge rule `cron(30 7 ? * 2-6 *)` = 7:30 AM UTC Mon–Fri
+   - Gmail MCP tool used to fetch email content; HTML stripping via Python re/html for plaintext extraction
+   - Fixture-based eval: `digest_articles.json` (categories → [{title, url, summary, source}]), `expected_major.json` (must-cover list), `digest_text.txt` (grader context)
+   - promptfoo 0.121.15
+
+3. Files and Code Sections:
+
+   - **`src/rss_email/brief_config.json`** (modified)
+     - Added `personal_interests`, `major_story_floor`, `prioritised_sources`, `deprioritised_sources`
+     ```json
+     {
+       "enabled": true,
+       "model": "claude-sonnet-4-6",
+       "reader_profile": "Head of Architecture (Assets, Data & Tooling) at S&P Global...",
+       "personal_interests": "This is also a personal tech-interest feed, not only a work feed. The reader is a curious technologist who enjoys indie/hacker culture, programming languages and language design, retro and low-level computing, self-hosting and open source, and follows pro cycling closely. Surface things that are genuinely interesting to that person even when they have no bearing on the job.",
+       "major_story_floor": true,
+       "themed_categories": ["AI/ML", "Technology", "Cybersecurity", "Business", "Programming", "Politics"],
+       "personal_categories": ["Cycling"],
+       "prioritised_sources": ["Hacker News", "Reddit", "Lobsters", "Blog", "Simon Willison", "Substack"],
+       "deprioritised_sources": ["Techmeme", "Slashdot", "Google News", "Yahoo", "MSN"]
+     }
+     ```
+
+   - **`src/rss_email/brief_generator.py`** (modified — major rewrite of several functions)
+     - Added `_TIER_ORDER = {"high": 0, "medium": 1, "low": 2}`
+     - Revised `PROMPT_TEMPLATE` with placeholders `{PERSONAL_INTERESTS}`, `{MAJOR_STORY_RULE}`, `{SOURCE_RULE}`, plus instruction to use category keys exactly (with slashes)
+     - Added constants `MAJOR_STORY_RULE`, `RUTHLESS_RULE`, `SOURCE_RULE`
+     - `load_brief_config()` — added setdefaults for new keys
+     - New `_article_source(article)` helper:
+       ```python
+       def _article_source(article: Any) -> str:
+           sources = _article_field(article, "sources")
+           if sources:
+               first = sources[0]
+               name = (first.get("feed_name") if isinstance(first, dict)
+                       else getattr(first, "feed_name", None))
+               if name:
+                   return str(name)
+           if isinstance(article, dict):
+               return str(article.get("sourceName") or "")
+           return str(getattr(article, "source_name", "") or "")
+       ```
+     - New `source_tier(name, config) -> str` helper (case-insensitive substring match)
+     - `build_synthesis_input` now emits `"source": _article_source(article)` in each item
+     - `build_prompt(synthesis_input, config)` — config-based signature, sorts items by tier, adds `[source]` prefix:
+       ```python
+       def build_prompt(synthesis_input, config):
+           for category, items in synthesis_input.items():
+               ranked = sorted(items, key=lambda item: _TIER_ORDER[source_tier(item.get("source",""), config)])
+               for item in ranked:
+                   source = item.get("source") or "Unknown"
+                   lines.append(f"- [{source}] {item['title']}")
+       ```
+     - New `_normalise_key(text)` — `re.sub(r"[^a-z0-9]", "", text.lower())`
+     - New `_canonical_category(key, known)` — exact match → normalised match → passthrough:
+       ```python
+       def _canonical_category(key: str, known: List[str]) -> str:
+           if not known or key in known:
+               return key
+           target = _normalise_key(key)
+           for candidate in known:
+               if _normalise_key(candidate) == target:
+                   return candidate
+           return key
+       ```
+     - `_parse_synthesis(response_text, known_categories=None)` — rewrites payload keys through `_canonical_category`
+     - `synthesize(synthesis_input, config, client=None)` — config-based (model and known_categories derived from config):
+       ```python
+       def synthesize(synthesis_input, config, client=None):
+           model = config.get("model", DEFAULT_SYNTHESIS_MODEL)
+           known_categories = list(config.get("themed_categories", [])) + list(config.get("personal_categories", []))
+           prompt = build_prompt(synthesis_input, config)
+           # ... two-attempt loop as before, passing known_categories to _parse_synthesis
+       ```
+     - `generate_brief` — simplified: `brief = synthesize(synthesis_input, config, client=client)`
+
+   - **`tests/test_brief_generator.py`** (modified — 41 tests, was 26)
+     - Added `SYNTH_CONFIG` dict constant for all synthesize/build_prompt tests
+     - Added imports: `build_prompt`, `source_tier`, `_canonical_category`
+     - Updated `synthesize()` calls from positional `"profile", "model"` to `SYNTH_CONFIG`
+     - Updated `test_build_synthesis_input_filters_categories` expected dict to include `"source": ""`
+     - New `test_build_synthesis_input_extracts_source`
+     - New `test_source_tier` (parametrized, 6 cases)
+     - New `test_build_prompt_includes_source_and_rules` — verifies `[Hacker News]` prefix, ordering, rules present
+     - New `test_build_prompt_floor_can_be_disabled`
+     - New `test_canonical_category_variants` (parametrized: AI_ML, ai/ml, "AI / ML", ai-ml → "AI/ML")
+     - New `test_canonical_category_unknown_passthrough`
+     - New `test_synthesize_canonicalises_and_orders_ai_ml` — full regression test: AI_ML response → AI/ML header appears before Technology in HTML
+
+   - **`eval/provider.py`** (new)
+     - promptfoo custom Python provider
+     - Loads fixture JSON, calls real `synthesize(synthesis_input, config)`, returns `brief.model_dump_json()`
+     - `sys.path.insert(0, "../src")` for rss_email imports
+     - `PROMPTFOO_PYTHON=.venv/bin/python` env var ensures uv venv is used
+
+   - **`eval/promptfooconfig.yaml`** (new)
+     - Provider: `file://eval/provider.py`
+     - Default assertions: `is-json`, `schema.cjs`, `major_coverage.cjs`, `source_ranking.cjs`, 2x `llm-rubric`
+     - One test: 2026-06-15 fixture with vars `fixture`, `expected_major`, `digest_text`
+
+   - **`eval/assertions/schema.cjs`** (new)
+     - Reads `brief_config.json` for known categories
+     - Checks: no `AI_ML` key, `AI/ML` present, all signal_strength values valid
+
+   - **`eval/assertions/major_coverage.cjs`** (new)
+     - Reads `expected_major.json` must_cover list
+     - Checks: every major title appears in brief's `top_articles` or `personal.top_stories` (normalised substring)
+
+   - **`eval/assertions/source_ranking.cjs`** (new)
+     - Reads fixture and `brief_config.json` tiers
+     - Checks: high-tier share among surfaced articles ≥ high-tier share in digest minus 5% tolerance
+
+   - **`eval/fixtures/2026-06-15/digest_articles.json`** (new)
+     - 69 articles across 7 categories, extracted from the real 2026-06-15 digest email HTML
+     - Shape: `{"AI/ML": [{"title": ..., "url": ..., "summary": ..., "source": "GitHub Blog"}, ...], ...}`
+
+   - **`eval/fixtures/2026-06-15/expected_major.json`** (new)
+     - 4 must-cover titles: AI Deepfakes/Nudify, SpaceX IPO, Google Cloud fire, Fable 5/Mythos 5 suspension
+
+   - **`eval/fixtures/2026-06-15/digest_text.txt`** (new)
+     - `## Category\n- [source] title\n  summary` format for faithfulness grader context
+
+   - **`eval/README.md`** (new)
+     - How to run: `uv sync --dev && npm install && ANTHROPIC_API_KEY=... npm run eval`
+     - Table of 6 assertions and their types
+     - How to add fixtures
+
+   - **`.github/workflows/eval.yml`** (new)
+     - `workflow_dispatch` + `cron: '0 6 * * 1'` (weekly Mon 06:00 UTC)
+     - Python 3.13 + uv + Node 20 setup
+     - `ANTHROPIC_API_KEY` from secrets, `PROMPTFOO_PYTHON=.venv/bin/python`
+     - Uploads `eval-results.json` as artifact
+
+   - **`package.json`** (modified)
+     - Added `"eval": "PROMPTFOO_PYTHON=.venv/bin/python promptfoo eval -c eval/promptfooconfig.yaml"` and `"eval:view": "promptfoo view"` scripts
+     - Added `"promptfoo": "^0.121.0"` to devDependencies
+
+   - **`package-lock.json`** (modified — regenerated via `npm install`)
+
+4. Errors and Fixes:
+   - **`.js` assertions treated as ES modules** — `package.json` has `"type": "module"`, so `.js` files cannot use CommonJS `require`/`module.exports`. The assertion logic is CommonJS. Fixed by renaming all assertion files from `.js` to `.cjs` (e.g., `schema.js` → `schema.cjs`) and updating `promptfooconfig.yaml` references accordingly.
+   - **`_TIER_ORDER` lookup requires all tiers to be present** — `source_tier` returns exactly "high"/"medium"/"low" matching `_TIER_ORDER` keys, so sort works correctly.
+   - **`synthesize` call sites in tests** — 4 existing test calls used positional `"profile", "model"` signature. Fixed by replacing all occurrences with `SYNTH_CONFIG` dict using `str.replace` via Python script.
+
+5. Problem Solving:
+   - **Evaluation of first brief**: Extracted both emails from Gmail via MCP, stripped HTML to plaintext, and systematically cross-checked every specific claim in the brief against the digest summaries. Confirmed zero fabrications. Identified coverage gaps (major non-work stories dropped) and the AI/ML key bug.
+   - **AI/ML ordering bug root cause**: The model normalises `AI/ML` → `AI_ML` in JSON keys. The ordering in `render_brief_html` iterates `themed_order` first, but `"AI/ML"` != `"AI_ML"` so no match; the category falls through to the end. Fixed with `_canonical_category` that strips non-alphanumeric chars for comparison.
+   - **Source field availability**: `ProcessedArticle.sources[0].feed_name` carries feed name but `build_synthesis_input` previously discarded it. Added `_article_source()` helper that handles both ProcessedArticle objects (via `.sources` list) and raw dicts (via `sourceName` key).
+   - **Promptfoo Python provider venv**: `npm run eval` would use system Python which lacks `anthropic`/`pydantic`. Fixed by setting `PROMPTFOO_PYTHON=.venv/bin/python` in the npm script and the CI workflow.
+   - **Assertion logic validation**: Built hand-crafted good and bad brief JSON objects and ran all three `.cjs` assertions against them offline (no API call) — confirmed correct pass/fail behaviour. Good brief: all pass. Bad brief (AI_ML key, no majors, low-tier only): all fail with descriptive reasons.
+
+6. All User Messages:
+   - "checked sample. commit and push to main (this will trigger cdk updates)"
+   - "check pipeline status"
+   - "can you check the aws code pipeline status?"
+   - "when does the next rss email run?"
+   - "analyze the two rss emails in my gmail inbox. Perform an evaluation of what was correctly summarized and what was missed by the brief email compared to the full digest email."
+   - "This is meant to be a feed for my personal tech interests too, not just for the job. Ensure major news stories are not missed, and blogs/hackernews/reddit should be ranked higher. Address the AI/ML issue too. Finally implement an open source eval framework, so i can continuously check the fidelity of the brief vs the digest"
+   - (AskUserQuestion answer): Selected "promptfoo" for the eval framework
+   - (ExitPlanMode): Approved the plan
+
+7. Pending Tasks:
+   - **Commit and push** the current changes (W1-W4: scope broadening, source ranking, AI/ML fix, promptfoo eval). This is the logical next step — all code is complete and validated but not yet committed.
+   - **First live eval run**: User needs to run `ANTHROPIC_API_KEY=... npm run eval` once to get the first live scorecard (no API key was available during this session).
+   - **Trigger `eval.yml` workflow_dispatch** in GitHub Actions to confirm the CI eval workflow works with the `ANTHROPIC_API_KEY` secret.
+   - **Live end-to-end verification**: Next daily run (Monday 07:30 UTC) will be the first brief with the new scope/source ordering and AI/ML fix.
+
+8. Current Work:
+   All four workstreams were fully implemented and verified:
+
+   **W1 (scope)**: `brief_config.json` expanded with `personal_interests`, `major_story_floor`, `prioritised_sources`, `deprioritised_sources`. `PROMPT_TEMPLATE` rewritten with two-tier noise rule and personal interests block.
+
+   **W2 (source ranking)**: `_article_source()`, `source_tier()`, `build_synthesis_input` (+source field), `build_prompt` (tier-sorted, `[source]` prefix) — all in `brief_generator.py`.
+
+   **W3 (AI/ML fix)**: `_normalise_key()`, `_canonical_category()`, updated `_parse_synthesis()` and `synthesize()` with `known_categories` threading — all in `brief_generator.py`.
+
+   **W4 (promptfoo eval)**: `eval/` directory created with `provider.py`, `promptfooconfig.yaml`, `assertions/schema.cjs`, `assertions/major_coverage.cjs`, `assertions/source_ranking.cjs`, `fixtures/2026-06-15/` (digest_articles.json, expected_major.json, digest_text.txt), `README.md`; `package.json` updated with promptfoo devDep + eval scripts; `.github/workflows/eval.yml` created.
+
+   **Test results**: 164 tests pass (was 149), flake8 clean project-wide, pylint 10.00/10 on changed files.
+
+   Assertion logic validated offline:
+   - Good brief → schema PASS, major_coverage PASS (4/4), source_ranking PASS (56% vs 30% high-tier)
+   - Bad brief (AI_ML key, no majors) → all three FAIL with descriptive messages
+
+   The implementation is complete but **not yet committed or pushed**.
+
+9. Optional Next Step:
+   The immediately logical next step is to commit and push the changes to trigger the CDK pipeline, exactly as was done at the start of this session for the initial brief implementation:
+
+   From the session: "commit and push to main (this will trigger cdk updates)"
+
+   All 10 new/modified files need to be staged and committed:
+   - Modified: `src/rss_email/brief_config.json`, `src/rss_email/brief_generator.py`, `tests/test_brief_generator.py`, `package.json`, `package-lock.json`
+   - New: `eval/provider.py`, `eval/promptfooconfig.yaml`, `eval/README.md`, `eval/assertions/schema.cjs`, `eval/assertions/major_coverage.cjs`, `eval/assertions/source_ranking.cjs`, `eval/fixtures/2026-06-15/digest_articles.json`, `eval/fixtures/2026-06-15/expected_major.json`, `eval/fixtures/2026-06-15/digest_text.txt`, `.github/workflows/eval.yml`
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/eamon/.claude/projects/-Users-eamon-code-rss-email/19194ef2-5b27-4d24-a7b3-f7f6d6e1d3bd.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
