@@ -1,0 +1,171 @@
+# RSS Email — Bug Audit Findings & Remediation Plan
+
+## Context
+
+Full audit of the rss-email codebase (all Python Lambda modules, shared models, JSON
+utilities, CDK stack) hunting for undiscovered bugs and lurking issues, plus an
+architecture review. The findings below are ordered by severity; the plan proposes
+fixing the correctness bugs first, then hardening the workflow, then cleanup.
+
+## Findings
+
+### Critical — can silently or permanently break the daily email
+
+1. **`last_run` poison-pill** — [email_articles.py:81](src/rss_email/email_articles.py:81) / [:101](src/rss_email/email_articles.py:101).
+   `set_last_run` stores `datetime.now().isoformat()`; when `microsecond == 0`
+   (verified: `datetime(2026,1,1,7,30,0).isoformat() == '2026-01-01T07:30:00'`)
+   the string has no `.%f` part, but `get_last_run` parses with
+   `"%Y-%m-%dT%H:%M:%S.%f"` and only catches `ClientError`. The resulting
+   `ValueError` escapes → `submit_email_batch` and `submit_podcast_batch` crash.
+   Because the bad value is *persisted*, **every subsequent run fails** until the
+   SSM parameter is fixed by hand.
+
+2. **Fallback path in the email sender crashes instead of degrading** —
+   [retrieve_and_send_email.py:234](src/rss_email/retrieve_and_send_email.py:234).
+   When batch metadata is missing, raw Claude response dicts (keys: `group_id`,
+   `title`, `summary`, `category`) are merged and passed to
+   `generate_enhanced_html_content`, which does `article.get('link')` → `None` →
+   `None.startswith(...)` → `AttributeError` → handler raises → **no email at all**.
+   The "no attribution" fallback has never worked.
+
+3. **`get_feed` truncates feeds on one undated entry** —
+   [retrieve_articles.py:762](src/rss_email/retrieve_articles.py:762). `break`
+   instead of `continue` when an entry lacks `published_parsed`/`updated_parsed`
+   drops *all remaining entries* of that feed.
+
+4. **Disabling a feed the documented way crashes the workflow** —
+   [retrieve_rss_articles.py:70](src/rss_email/retrieve_rss_articles.py:70).
+   `{feed["url"]: feed["name"]}` raises `KeyError` for feeds using the `_url`
+   disabled convention that `FeedConfig.from_dict` explicitly supports. Latent
+   (no `_url` entries in feed_urls.json today), fires the first time a feed is
+   disabled.
+
+5. **Wrong exception type in `get_feed_file`** —
+   [email_articles.py:153](src/rss_email/email_articles.py:153). Catches urllib's
+   `HTTPError`, but `read_s3_file` raises botocore `ClientError`. And if it did
+   catch, it returns the literal string `"Internal error retrieving RSS file."`
+   which then goes to `ElementTree.fromstring` → `ParseError`.
+
+### High — reliability / security
+
+6. **Every feed fetched twice per attempt** —
+   [retrieve_articles.py:169](src/rss_email/retrieve_articles.py:169). The
+   If-Modified-Since "check" request downloads the full body, discards it, then a
+   second full GET runs. Doubles traffic; both hit Reddit inside one 8s throttle
+   slot, undermining the 429 mitigation.
+
+7. **HTML injection into the digest email** —
+   [email_articles.py:287-383](src/rss_email/email_articles.py:287). Feed titles,
+   descriptions, comments URLs, and Claude summaries are interpolated into email
+   HTML unescaped (`brief_generator` escapes; the digest does not). A malicious
+   feed can inject markup into the email.
+
+8. **Step Functions has no error handling** — [rss_lambda_stack.ts:359-453](lib/rss_lambda_stack.ts:359).
+   No `Retry`/`Catch` on any task; the `Parallel` state fails fast, so a podcast
+   failure kills the email branch mid-flight (and vice versa). State-machine
+   timeout is 12h but the Message Batches SLA window is 24h — a slow batch times
+   the execution out and the paid-for results are never retrieved.
+
+9. **Unvalidated manual trigger, no concurrency guard** —
+   [rss_lambda_stack.ts:483](lib/rss_lambda_stack.ts:483). Any email hitting the
+   SES receipt rule starts an execution (the old `is_valid_email` sender check is
+   bypassed in the new flow). Concurrent executions can double-send the digest and
+   double Claude spend.
+
+10. **Podcast failures are silent** —
+    [retrieve_and_generate_podcast.py:66](src/rss_email/retrieve_and_generate_podcast.py:66).
+    Returns `{"status": "failed"}` without raising, so Step Functions records
+    success and no alarm fires.
+
+11. **Deliberate SSL bypass + HTTPS→HTTP downgrade** —
+    [retrieve_articles.py:191](src/rss_email/retrieve_articles.py:191) and
+    [:303](src/rss_email/retrieve_articles.py:303). Documented trade-off, but
+    combined with (7) it widens the injection surface.
+
+### Medium — operational / observability
+
+12. **Alarm noise**: metric filter alarms on any `WARNING` (a single 403 feed =
+    daily alert email). 429 was already downgraded to INFO for this reason; 403
+    wasn't.
+13. **INFO logs from key orchestrators likely suppressed**:
+    `retrieve_and_send_email.py`, `check_*_batch_status.py`, `brief_generator.py`
+    never call `logger.setLevel` (all other modules do).
+14. **IAM**: `s3:ListBucket` granted on `bucket/*` (needs the bucket ARN);
+    `s3:ListObjects` is not a real action; one shared role gives every Lambda
+    Polly + SES + CloudFront + all SSM params.
+15. **`is_connected`** catches only `socket.timeout` — `gaierror` etc. crash the
+    retrieval Lambda; `sys.exit(0)` inside a Lambda handler; socket leaked.
+16. **Timezone fragility**: `mktime()` on feedparser's UTC struct_time and naive
+    `datetime.now()` comparisons are only correct because Lambda runs in UTC.
+
+### Low — hygiene
+
+17. **Dead code**: `create_rss`/`__main__` legacy path in retrieve_articles.py,
+    `compression_utils.py` (unused), `send_email` legacy handler,
+    duplicated `Article` fallback model.
+18. **~400 lines of per-URL decompression hacks** in `detect_and_decompress` are
+    a symptom: the code sends `Accept-Encoding: gzip, deflate, br` but urllib
+    never auto-decodes. Using `httpx`/`requests` removes nearly all of it.
+19. Model IDs hardcoded in ~7 places (incl. stale `claude-3-7-sonnet-latest`
+    fallback and a stale per-model max_tokens table); `ApplicationSettings`
+    exists for exactly this and is unused.
+20. SES `Text` body is the raw HTML; feed_stats window (3-day retrieval) doesn't
+    match the email window (since last_run).
+
+## Remediation Plan (recommended approach)
+
+### Phase 1 — correctness fixes (small, test-first per CLAUDE.md)
+
+Each fix gets a failing test first in the matching `tests/test_*.py` (moto/pytest
+patterns already in place):
+
+1. `email_articles.get_last_run`/`set_last_run`: parse with
+   `datetime.fromisoformat()` and catch `ValueError` alongside `ClientError`
+   (self-heals an already-poisoned parameter). → verify: new test with a
+   no-microseconds value.
+2. `retrieve_articles.get_feed`: `break` → `continue`. → verify: test feed with an
+   undated entry mid-list keeps later entries.
+3. `email_articles.generate_enhanced_html_content`: guard `None`/missing
+   `link`/`pubdate`/`summary` so the no-metadata fallback degrades instead of
+   crashing. → verify: test rendering raw batch-response dicts.
+4. `retrieve_rss_articles`: build `url_to_name` tolerant of `_url` entries (reuse
+   `FeedList.from_json_data`). → verify: test with a disabled feed present.
+5. `email_articles.get_feed_file`: catch `ClientError` and re-raise or return
+   `None` (stop returning an error *string* that gets XML-parsed).
+6. Escape article/summary text with `html.escape()` in digest rendering
+   (mirror `brief_generator`).
+7. `retrieve_and_generate_podcast`: raise on failure (or add a Step Functions
+   Choice on `status`) so failures alarm.
+
+### Phase 2 — workflow hardening (CDK)
+
+- Add `Retry` (backoff) to all `LambdaInvoke` tasks and `Catch` → SNS
+  error-alerts topic per branch so email and podcast fail independently.
+- Raise state-machine timeout to ≥25h; back off the poll `Wait` (60s → 5m after
+  first few polls).
+- Restore sender validation in `manualTriggerFunction` and skip start if an
+  execution is already running (`ListExecutions` guard).
+- Fix IAM: `ListBucket` on bucket ARN, drop `s3:ListObjects`; optionally split
+  roles per function.
+- Downgrade 403 feed log to INFO (match the 429 treatment) or alarm on the Step
+  Functions `ExecutionsFailed` metric instead of log-grep.
+
+### Phase 3 — simplification (separate PR)
+
+- Replace the urllib retrieval stack with `httpx` (auto content-decoding, proper
+  conditional GET, one request per feed) and delete `detect_and_decompress`'s
+  per-site hacks; keep the per-host throttle.
+- Delete dead code: `create_rss` path, `compression_utils.py`, legacy
+  `send_email`.
+- Centralise model IDs / settings via the existing `ApplicationSettings`.
+- (Optional, larger) Store the aggregated articles as JSON (list of `RSSItem`)
+  instead of round-tripping through RSS XML — removes PyRSS2Gen + ElementTree +
+  string-date reparsing, the source of several date bugs.
+
+## Verification
+
+- `uv run python -m pytest tests` (new failing-tests-first per fix)
+- `uv run pylint --fail-under=9.9 $(git ls-files '*.py') && uv run flake8`
+- `npx cdk synth` after stack changes; `cdk diff` to review workflow changes
+- Local end-to-end: `uv run python src/rss_email/retrieve_articles.py feed_urls.json`
+  and `uv run python src/rss_email/email_articles.py <bucket> rss.xml --local-file <file>`
