@@ -1,0 +1,19 @@
+get the root caues of the following issue:
+
+Aggregated log events:
+
+=== ERRORS (1) ===
+
+Time: 2026-06-25T07:41:50.968Z
+Log Group: /aws/lambda/REDACTED
+Log Stream: 2026/06/25/[$LATEST]10218c7138404662a8e9a375e59624fe
+Message: [ERROR]    2026-06-25T07:41:50.968Z    9f303292-68ee-4b74-93e3-e24e927e4924    Brief synthesis call failed (attempt 1): Request timed out or interrupted. This could be due to a network timeout, dropped connection, or request cancellation. See https://docs.anthropic.com/en/api/errors#long-requests for more details.
+
+
+
+
+--
+If you wish to stop receiving notifications from this topic, please click or visit the link below to unsubscribe:
+https://sns.eu-west-1.amazonaws.com/unsubscribe.html?SubscriptionArn=arn:aws:sns:eu-west-1:002681522526:REDACTED:c8ab3877-e837-4f36-bf5d-cbd510c2efee&Endpoint=eamon.mason@gmail.com
+
+Please do not reply directly to this email. If you have any questions or comments regarding this email, please contact us at https://aws.amazon.com/support
