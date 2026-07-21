@@ -1,0 +1,1 @@
+the deployment is in aws eu-west-1 check pipeline status there
