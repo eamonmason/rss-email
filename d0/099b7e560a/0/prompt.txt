@@ -1,0 +1,1 @@
+Carefully exmine the rss-email project and identify any undiscovered bugs and lurking issues. Examine the architecture and make a recommendation for improvements.
