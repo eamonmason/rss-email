@@ -1,0 +1,3 @@
+This is meant to be a feed for my personal tech interests too, not just for the job. Ensure major news stories are not missed, and blogs/hackernews/reddit should be ranked higher. Address the AI/ML issue too.
+
+Finally implement an open source eval framework, so i can continuously check the fidelity of the brief vs the digest
