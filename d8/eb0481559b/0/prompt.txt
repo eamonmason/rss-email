@@ -1,0 +1,3 @@
+evaluate and recommend approach to resolve eval workflow failure:
+
+https://github.com/eamonmason/rss-email/actions/runs/29237222532?email_source=notifications&REDACTED
