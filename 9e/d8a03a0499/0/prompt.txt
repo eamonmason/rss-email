@@ -1,0 +1,7 @@
+<task-notification>
+<task-id>bwrq5ti4e</task-id>
+<tool-use-id>toolu_014KnSpFY8ye1U2unJuH24Mp</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-eamon-code-rss-email/2e5a551c-45b4-4cd3-a34a-11ac3d235ac3/tasks/bwrq5ti4e.output</output-file>
+<status>completed</status>
+<summary>Background command "Generate today's brief with correct model set" completed (exit code 0)</summary>
+</task-notification>
