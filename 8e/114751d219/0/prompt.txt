@@ -1,0 +1,7 @@
+<task-notification>
+<task-id>bhw7hzmyf</task-id>
+<tool-use-id>toolu_01JiLzZtHuaKqsLEBRuyv5Kq</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-eamon-code-rss-email/19194ef2-5b27-4d24-a7b3-f7f6d6e1d3bd/tasks/bhw7hzmyf.output</output-file>
+<status>failed</status>
+<summary>Background command "Push the CI fix" failed with exit code 1</summary>
+</task-notification>
