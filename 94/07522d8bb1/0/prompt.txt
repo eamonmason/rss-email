@@ -1,0 +1,124 @@
+RSS Brief — Companion Email Generator
+A plan to hand to Claude Code. It adds a second email to the existing daily RSS pipeline: a synthesised brief that distils the full digest into themes, signal ratings, and reader-specific relevance. Sent right after the existing digest, through the same delivery path.
+The chat prototype this is based on grouped ~729 articles/week into 3–5 themes per category, each tagged HIGH / STRATEGIC / GENERAL, with a one-line "why this matters to me" note and a set of cross-category signals. Reproduce that output as an email.
+1. Discover before coding
+The generator's source isn't in this plan — find it first.
+
+* Locate the existing digest generator (sends from `rss@tobiasmasonvanes.com`). Identify the language, where article objects are assembled, and the send step.
+* Capture the article data model that already exists at generation time. Minimum fields needed downstream: `{ category, title, url, summary }`. Reuse this — do not re-parse the already-sent HTML email.
+* Read the existing email template and note its conventions (inline styles, table layout, the summary `<p>` style `font-size:16px; color:#555`, etc.). The brief email should match them so the two emails feel like one system.
+Preferred hook: insert a synthesis stage after categorisation, then emit a second MIME email after the digest is sent.
+2. Pipeline
+
+1. Collect categorised articles (existing step).
+2. Build synthesis input: per category, a list of `{ title, url, summary }`.
+3. One Claude API call → structured JSON (schema in §4).
+4. Map each theme's `top_articles` back to its URL from the source list (exact title match first, then a normalised/lowercased match, then a word-overlap fallback ≥ 0.75; if still unmatched, render the title as plain text).
+5. Render email-safe HTML from the JSON (§5).
+6. Send as the companion email.
+Runtime: one API call per daily run, roughly 28K tokens in / 4K out. Cheap.
+3. Reader profile (config, not code)
+The "why this matters to me" relevance is reader-specific. Keep it as a config string injected into the prompt so the synthesis code stays generic and reusable.
+Current value:
+
+```
+Head of Architecture (Assets, Data & Tooling) at S&P Global, recently joined from
+Thomson Reuters (Distinguished Engineer, Platform/DevEx). Focus: developer
+experience, platform engineering, internal developer portals, AI/data tooling,
+cloud infrastructure economics, DORA metrics. Currently onboarding and building a
+strategic view of the industry.
+
+```
+
+4. Synthesis call
+
+* Model: a current Sonnet-class model (e.g. `claude-sonnet-4-6` — verify the string).
+* API key from env/secret store, never committed.
+* Prompt = a generic template with the reader profile and article list injected.
+* Parse the response as JSON. On parse failure, strip ````json` fences and retry once; on second failure, skip the brief for that run and log (don't block the main digest).
+Prompt template
+
+```
+You are synthesising a day's RSS digest articles for a specific reader.
+
+READER PROFILE:
+{READER_PROFILE}
+
+For each professional category below, identify 3-5 key themes. Return ONLY valid
+JSON, no markdown, no backticks, matching this schema:
+
+{
+  "<CATEGORY_KEY>": {
+    "week_verdict": "one crisp sentence on what this category's day signals",
+    "themes": [
+      {
+        "theme": "5-8 words",
+        "signal_strength": "HIGH | STRATEGIC | GENERAL",
+        "tldr": "2-3 sentences",
+        "top_articles": ["exact article title 1", "title 2", "title 3"],
+        "relevance_to_reader": "one sentence tied to the reader profile, or null"
+      }
+    ]
+  },
+  ... one object per category ...,
+  "cross_cutting": [
+    { "signal": "...", "categories_involved": ["c1","c2"], "implication": "..." }
+  ],
+  "personal": { "top_stories": ["title 1","title 2","title 3"], "summary": "1-2 sentences" }
+}
+
+Signal strength:
+- HIGH      = paradigm shift, affects the reader's decisions now
+- STRATEGIC = watch-list item, 6-18 month horizon
+- GENERAL   = awareness only, no action
+
+Be ruthless with noise: ignore incremental patch notes, repetitive market
+commentary, and minor funding rounds. Use the reader's exact article titles in
+top_articles so they can be linked. relevance_to_reader must be null when a theme
+has no real bearing on the profile — do not invent relevance.
+
+ARTICLES:
+{ARTICLES_BY_CATEGORY}
+
+```
+
+`{ARTICLES_BY_CATEGORY}` = each category as a header followed by its article titles (titles are enough; include summaries only if token budget allows and they improve theme quality).
+5. Category handling (config)
+
+* Themed (full synthesis + relevance): AI/ML, Technology, Cybersecurity, Business, Programming, Politics.
+* Personal (digest treatment, relevance forced null): Cycling → the `personal` block in the schema.
+* Excluded or one-line: Science, Health, Entertainment, Gaming, Media/TV/Film, Other, Environment. Make the set configurable; default to excluded to keep the brief tight.
+6. Email HTML constraints (the part most likely to break)
+The chat prototype uses flexbox, sticky positioning, CSS classes, and JS click-to- expand. None of that renders in email clients. The email build must:
+
+* Use tables for layout and inline styles only (no reliance on a `<style>` block, no external CSS, no fl/grid).
+* Use no JavaScript — render every theme fully expanded; there's no collapse in email.
+* Render the signal badge as an inline-styled `<span>`: HIGH = red, STRATEGIC = amber, GENERAL = green (light tinted background, matching border, dark text — pick web-safe hexes consistent with the existing template).
+* Use plain `<a href>` for article links (they open in the browser).
+* Match the existing digest template's width, fonts, and spacing so the two emails read as a pair.
+* Light theme: white background, dark slate body text — same as the latest prototype.
+* Test in the real targets (Gmail web + Gmail mobile) before trusting it.
+Email structure
+
+* Header: title + date + article count.
+* Per themed category, in order:
+   * category name
+   * week verdict (one line)
+   * each theme: signal badge + theme name, then tldr, then the relevance line (only if non-null), then the linked top-article list.
+* Cross-cutting signals section (signal + involved categories + implication).
+* Personal digest (Cycling): short summary + linked top stories.
+7. Build order
+
+1. Discovery + confirm the article data model (§1).
+2. Synthesis module: prompt assembly, API call, JSON validation, one retry.
+3. URL back-mapping with the fallback chain (§2.4).
+4. Email renderer: themed categories, cross-cutting, personal digest — email-safe HTML.
+5. Wire into the pipeline as a second email after the digest.
+6. Add a `--dry-run` flag that writes the HTML to a file instead of sending, for iteration without spamming the inbox.
+8. Decisions I made
+
+* Separate email
+* Subject line —  `RSS Brief — {date}`.
+* Always send, regardless of signal level
+* Keep the cross-cutting section
+* Daily cadence to match the digest
