@@ -1,0 +1,7 @@
+<task-notification>
+<task-id>ba32pz4ch</task-id>
+<tool-use-id>toolu_01UcTNestrJAtmcv1tZHh9Ky</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-eamon-code-rss-email/57214025-e1c9-401d-a495-28df94512c77/tasks/ba32pz4ch.output</output-file>
+<status>failed</status>
+<summary>Background command "Push to origin/main" failed with exit code 1</summary>
+</task-notification>
