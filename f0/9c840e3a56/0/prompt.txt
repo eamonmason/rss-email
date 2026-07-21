@@ -1,0 +1,265 @@
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Summary:
+1. Primary Request and Intent:
+   The user provided a detailed design document titled "RSS Brief — Companion Email Generator" and approved a plan to implement it. The goal is to add a second daily email — the "RSS Brief" — sent immediately after the existing digest, through the same delivery path. The brief distils the day's categorised articles into 3–5 themes per professional category, each tagged HIGH / STRATEGIC / GENERAL, with a reader-specific "why this matters to me" note and a set of cross-category signals.
+
+   Key design decisions (from the user's plan, confirmed via two clarifying questions):
+   - **Model**: `claude-sonnet-4-6` for synthesis (one extra API call per daily run, ~28K in / 4K out)
+   - **Reader profile storage**: shipped `brief_config.json` config file (mirrors `feed_urls.json` convention), editable without code changes
+   - **Email**: separate email with subject `RSS Brief — {date}`, always sent, daily cadence
+   - **No new Lambda, no new IAM**: wire into the existing `retrieve_and_send_email.lambda_handler` as a best-effort second send; brief failure must never block the digest or `last_run`
+   - **Email HTML**: tables + inline styles only, no JS, no flexbox/grid, no `<style>` blocks, fully expanded themes
+
+2. Key Technical Concepts:
+   - AWS Lambda (Python 3.13) + CDK (TypeScript)
+   - Claude Anthropic batch API (`messages.batches.results`) for categorisation; single synchronous call for brief synthesis
+   - `claude-sonnet-4-6` model for synthesis; `claude-haiku-4-5-20251001` for the digest categorisation
+   - Pydantic v2 models with `@pydantic.validate_call` decorators
+   - `importlib.resources.files("rss_email").joinpath(...)` for shipping resources (HTML templates, JSON config) with the package
+   - `extract_json_from_text()` from `json_utils.py` for fence-tolerant JSON parsing
+   - `ProcessedArticle` objects AND raw dicts both handled via `isinstance(article, dict)` pattern
+   - Title-to-URL back-mapping chain: exact → normalised/lowercased → Jaccard word-overlap ≥ 0.75 → None (plain text)
+   - Email-safe HTML: 600px table layout, inline styles, light theme (`#fff` bg, `#2c3e50` text, `#555` summaries)
+   - Signal badge colours: HIGH red (`#fdecea/#f44336/#b71c1c`), STRATEGIC amber (`#fff8e1/#ff9800/#e65100`), GENERAL green (`#eafaf1/#4caf50/#1b5e20`)
+   - `contextlib.ExitStack` for clean multi-patch in tests
+   - MagicMock (not moto) for Anthropic client mocking
+   - `uv` / `uv run` for all Python execution
+   - flake8 (max-line-length=120) + pylint (min 9.9 score) CI checks
+   - `pytest` with `pythonpath = "src"` in pyproject.toml
+
+3. Files and Code Sections:
+
+   **`src/rss_email/brief_config.json`** (new)
+   - Shipped config for the brief feature; controls enabled state, model, reader profile, and category lists
+   ```json
+   {
+     "enabled": true,
+     "model": "claude-sonnet-4-6",
+     "reader_profile": "Head of Architecture (Assets, Data & Tooling) at S&P Global, recently joined from Thomson Reuters (Distinguished Engineer, Platform/DevEx). Focus: developer experience, platform engineering, internal developer portals, AI/data tooling, cloud infrastructure economics, DORA metrics. Currently onboarding and building a strategic view of the industry.",
+     "themed_categories": ["AI/ML", "Technology", "Cybersecurity", "Business", "Programming", "Politics"],
+     "personal_categories": ["Cycling"]
+   }
+   ```
+
+   **`src/rss_email/models.py`** (modified)
+   - Added `Literal` to imports
+   - Appended five new Pydantic models (all fields have lenient defaults to prevent one malformed optional from dropping the whole brief):
+   ```python
+   class BriefTheme(BaseModel):
+       theme: str
+       signal_strength: Literal["HIGH", "STRATEGIC", "GENERAL"]
+       tldr: str = ""
+       top_articles: List[str] = Field(default_factory=list)
+       relevance_to_reader: Optional[str] = None
+
+   class BriefCategory(BaseModel):
+       week_verdict: str = ""
+       themes: List[BriefTheme] = Field(default_factory=list)
+
+   class CrossCuttingSignal(BaseModel):
+       signal: str = ""
+       categories_involved: List[str] = Field(default_factory=list)
+       implication: str = ""
+
+   class PersonalBlock(BaseModel):
+       top_stories: List[str] = Field(default_factory=list)
+       summary: str = ""
+
+   class BriefSynthesis(BaseModel):
+       categories: Dict[str, BriefCategory] = Field(default_factory=dict)
+       cross_cutting: List[CrossCuttingSignal] = Field(default_factory=list)
+       personal: Optional[PersonalBlock] = None
+   ```
+
+   **`src/rss_email/email_articles.py`** (modified)
+   - Extracted inline category colour logic into a standalone shared function before `generate_enhanced_html_content`:
+   ```python
+   def category_color(category: str) -> str:
+       """Return the header background colour hex for a given category name."""
+       name = category.lower()
+       if "technology" in name:
+           return "#2196F3"
+       if "ai" in name or "ml" in name:
+           return "#9C27B0"
+       if "cybersecurity" in name:
+           return "#F44336"
+       if "programming" in name:
+           return "#4CAF50"
+       if "science" in name:
+           return "#FF9800"
+       return "#667eea"
+   ```
+   - Updated `generate_enhanced_html_content` to call `category_color(category)` instead of the inline if-chain; renamed local variable from `category_color` to `header_color` to avoid shadowing the new function name.
+
+   **`src/rss_email/brief_body.html`** (new)
+   - Email-safe template mirroring `email_body_enhanced_simple.html` exactly (600px table, #f5f5f5 outer bg, #fff inner bg, Arial, same h1/footer chrome)
+   - Placeholders: `{subject}`, `{generation_time}`, `{article_count}`, `{brief_content}`
+   - No `<style>` block, no JS
+
+   **`src/rss_email/brief_generator.py`** (new, ~340 lines)
+   - Imports: `from .article_processor import get_anthropic_api_key`, `from .email_articles import category_color`, `from .json_utils import extract_json_from_text`
+   - PROMPT_TEMPLATE uses `str.replace` (not `str.format`) to preserve JSON braces in the template
+   - Key constants: `DEFAULT_SYNTHESIS_MODEL = "claude-sonnet-4-6"`, `SYNTHESIS_MAX_TOKENS = 8192`, `WORD_OVERLAP_THRESHOLD = 0.75`
+   - Complete function list:
+     - `load_brief_config() -> dict` — loads brief_config.json via `importlib.resources`, applies env overrides (BRIEF_ENABLED, BRIEF_CLAUDE_MODEL, BRIEF_READER_PROFILE)
+     - `_article_field(article, name)` — dict or object attribute access helper
+     - `build_synthesis_input(categories, themed, personal)` — `@pydantic.validate_call(config={"arbitrary_types_allowed": True})`; filters categories, emits `{title, url, summary}` per article
+     - `build_prompt(synthesis_input, reader_profile)` — assembles prompt with category headers + title + summary lines
+     - `_parse_synthesis(response_text) -> Optional[BriefSynthesis]` — calls `extract_json_from_text`, pops `cross_cutting` and `personal` from raw dict before building `BriefSynthesis(categories=payload, ...)`
+     - `synthesize(..., client=None) -> Optional[BriefSynthesis]` — two-attempt loop; `_parse_synthesis` inside `try`; catches `anthropic.APIError, APIConnectionError, pydantic.ValidationError, ValueError, IndexError, AttributeError, TypeError`; returns None on persistent failure, never raises
+     - `build_article_map(synthesis_input) -> Dict[str, str]` — title→url map (only items with non-empty url)
+     - `match_title_to_url(title, article_map) -> Optional[str]` — exact → normalised (strip+collapse whitespace+lower) → Jaccard word-overlap ≥ 0.75 → None
+     - `_signal_badge(signal) -> str` — inline-styled `<span>` from SIGNAL_BADGE_STYLES dict
+     - `_render_article_links(titles, article_map) -> str` — `<ul>` with `<li>` links or plain-text items
+     - `_render_theme(theme, article_map) -> str` — f8f9fa box with blue left border; badge+name, tldr, relevance only if non-null, article links
+     - `_render_category(name, category, article_map) -> str` — colored header via `category_color(name)`, italic verdict, theme blocks
+     - `_render_cross_cutting(signals) -> str` — indigo (#667eea) header section
+     - `_render_personal(personal, article_map) -> str` — teal (#16a085) header section
+     - `render_brief_html(brief, article_map, date, article_count, themed_order=None) -> str` — ordered sections, fills brief_body.html template
+     - `generate_brief(categories, *, date, article_count, client=None) -> Optional[str]` — orchestrator; returns None if disabled, no themed content, or synthesis fails; never raises
+
+   **`src/rss_email/retrieve_and_send_email.py`** (modified)
+   - Added `from datetime import datetime` to imports
+   - Added `from .brief_generator import generate_brief` to imports
+   - Added `_maybe_send_brief(categories, client, to_email, source_email)` function before `lambda_handler`:
+   ```python
+   def _maybe_send_brief(
+       categories: Dict[str, List[Any]],
+       client: anthropic.Anthropic,
+       to_email: str,
+       source_email: str,
+   ) -> None:
+       try:
+           article_count = sum(len(items) for items in categories.values())
+           today = datetime.now().strftime("%Y-%m-%d")
+           brief_html = generate_brief(
+               categories,
+               date=today,
+               article_count=article_count,
+               client=client,
+           )
+           if brief_html:
+               send_via_ses(to_email, source_email, f"RSS Brief — {today}", brief_html)
+               logger.info("Sent companion RSS Brief")
+       except Exception as exc:  # pylint: disable=broad-except
+           logger.error("Brief generation/send failed (digest already sent): %s", exc)
+   ```
+   - Called in `lambda_handler` after `set_last_run(last_run_param)`:
+   ```python
+   # Companion RSS Brief (best-effort; must never block the digest)
+   _maybe_send_brief(all_categories, client, to_email, source_email)
+   ```
+
+   **`src/cli_brief_generator.py`** (new)
+   - Mirrors `cli_article_processor.py` structure
+   - `generate(bucket, key, run_date, *, dry_run, output_file, debug)` — keyword-only for trailing args to satisfy pylint
+   - `--dry-run` flag writes HTML to file (default `brief_output.html`), otherwise sends via SES
+   - `--env-file`, `--days`, `--bucket`, `--key`, `--parameter`, `--output-file`, `--debug` args
+   - Validates ANTHROPIC_API_KEY or ANTHROPIC_API_KEY_PARAMETER is set
+
+   **`lib/rss_lambda_stack.ts`** (modified)
+   - Added two env vars to `RetrieveAndSendEmailFunction` environment block (lines 295+):
+   ```typescript
+   BRIEF_ENABLED: 'true',
+   BRIEF_CLAUDE_MODEL: 'claude-sonnet-4-6',
+   ```
+
+   **`tests/test_brief_generator.py`** (new, 26 tests)
+   - Top-level imports: `import contextlib`, `import json`, `from datetime import datetime`, `from unittest.mock import MagicMock, patch`, `import pydantic`, `import pytest`, `import cli_brief_generator`, all rss_email imports, `from rss_email.retrieve_and_send_email import lambda_handler`
+   - `make_client(texts)` helper — creates mock Anthropic client with side_effect list
+   - `VALID_SYNTHESIS` fixture dict with AI/ML category (HIGH and GENERAL themes), cross_cutting signal, personal Cycling block
+   - Tests cover: `build_synthesis_input` filtering and dual-type handling, `build_article_map`, `match_title_to_url` (exact, normalised, word-overlap, unmatched), `synthesize` (valid, fenced JSON, retry-then-None, empty input), schema validation (bad signal_strength raises, null relevance preserved), `_signal_badge` colours (parametrized), rendering (core sections, links, relevance omission, email-safety), `generate_brief` (disabled, end-to-end, no themed content), handler integration (brief sent after digest, brief failure swallowed), CLI dry-run (ExitStack, writes file, no send call)
+
+4. Errors and Fixes:
+
+   **pylint `too-many-positional-arguments` on `cli_brief_generator.generate`**:
+   - `generate()` had 6 positional args (1 over the 5 limit)
+   - Fixed by making trailing three args keyword-only with `*`:
+     ```python
+     def generate(bucket, key, run_date, *, dry_run, output_file, debug):
+     ```
+   - Updated the call site accordingly with explicit `dry_run=`, `output_file=`, `debug=` keywords
+
+   **flake8 E127 continuation line over-indented on test file (lines 439, 444, 447)**:
+   - The multi-`with` patch block in `test_cli_dry_run_writes_file` used chained `with` statements with visual indent that flake8 flagged
+   - Fixed by replacing with `contextlib.ExitStack`:
+     ```python
+     with contextlib.ExitStack() as stack:
+         stack.enter_context(patch.object(...))
+         ...
+         mock_send = stack.enter_context(patch.object(...))
+     ```
+
+   **pylint `C0415: Import outside toplevel` on test file**:
+   - Tests imported `lambda_handler`, `cli_brief_generator`, and `datetime` inside function bodies
+   - Fixed by moving all imports to module top level: added `import contextlib`, `from datetime import datetime`, `import cli_brief_generator`, `from rss_email.retrieve_and_send_email import lambda_handler` at top
+
+   **`synthesize` robustness**: 
+   - Initially `_parse_synthesis` was called outside the `try` block, meaning a `TypeError` from a MagicMock response attribute access could escape
+   - Fixed by moving the `_parse_synthesis` call inside the `try`, and adding `TypeError` to the caught exception tuple
+
+5. Problem Solving:
+
+   **Correct hook point identification**: The source plan assumed the hook was in `email_articles.send_email`. Exploration revealed the production path is `retrieve_and_send_email.lambda_handler` which uses Claude's batch API. The handler already has `all_categories: Dict[str, List[ProcessedArticle]]` and the `client: anthropic.Anthropic` object available at the hook point — meaning the brief can reuse the already-authenticated client with zero extra credential overhead.
+
+   **Handling dual article types**: `all_categories` in `retrieve_and_send_email.py` can contain either `ProcessedArticle` objects (enriched path) or raw dicts (fallback path). The `_article_field` helper and `isinstance(article, dict)` pattern mirrors the existing approach already used in `generate_enhanced_html_content` in `email_articles.py`.
+
+   **JSON prompt template braces**: The synthesis prompt template contains literal JSON example schema with braces. Using `str.replace` instead of `str.format` prevents `KeyError` or `IndexError` on the curly braces in the schema example.
+
+   **Brief failure isolation**: The `_maybe_send_brief` wrapper catches all exceptions and only logs them, ensuring digest delivery and `last_run` advancement are never affected by brief failures.
+
+   **pylint score**: All new/changed files scored 10.00/10. Project-wide score is 9.98/10, with the 0.02 deduction from pre-existing issues in `test_podcast_local.py` and a pre-existing `cyclic-import` in `article_grouper → article_processor`.
+
+6. All User Messages:
+
+   - **Message 1** (long document): "RSS Brief — Companion Email Generator / A plan to hand to Claude Code. It adds a second email to the existing daily RSS pipeline: a synthesised brief that distils the full digest into themes, signal ratings, and reader-specific relevance. Sent right after the existing digest, through the same delivery path. [full design plan with sections 1-8 including pipeline, reader profile, prompt template, category handling, email HTML constraints, build order, and design decisions]"
+
+   - **Message 2** (answering questions): Selected "Sonnet 4.6 (Recommended)" for synthesis model (`claude-sonnet-4-6`) and "JSON/text config file (Recommended)" for reader profile storage.
+
+   - **Message 3** (plan approval): User approved the plan via ExitPlanMode confirmation (implicit approval action).
+
+   - **Message 4** (tool loaded): "Tool loaded." — System message after ToolSearch loaded TaskCreate/TaskUpdate schemas.
+
+   - **Message 5** (tool loaded): "Tool loaded." — System message after ToolSearch loaded ExitPlanMode schema.
+
+   - **Message 6** (summary request): "CRITICAL: Respond with TEXT ONLY. Do NOT call any tools. [...] Your task is to create a detailed summary of the conversation so far..."
+
+7. Pending Tasks:
+   All seven tasks from the implementation plan are now completed:
+   - ✅ Task 1: brief_config.json + Pydantic models
+   - ✅ Task 2: brief_generator.py core (config load, synthesis input, prompt, synthesize+retry, back-mapping)
+   - ✅ Task 3: brief_body.html + render helpers (extract shared category_color)
+   - ✅ Task 4: generate_brief orchestrator
+   - ✅ Task 5: Wire into retrieve_and_send_email.lambda_handler
+   - ✅ Task 6: cli_brief_generator.py + CDK env var
+   - ✅ Task 7: Tests (26 tests) + lint (flake8 clean, pylint 10.00/10)
+
+   No pending tasks remain from the original plan. The implementation is complete.
+
+8. Current Work:
+   The final task completed was writing `tests/test_brief_generator.py` (26 tests) and running lint checks. The lint cycle involved three rounds:
+   
+   **Round 1**: flake8 caught E127 (continuation line over-indented) in the test file at lines 439, 444, 447; pylint caught `too-many-positional-arguments` in `cli_brief_generator.generate` and `import-outside-toplevel` in tests.
+   
+   **Round 2**: All three issues fixed (keyword-only args, ExitStack, top-level imports). Re-ran both linters.
+   
+   **Final state**: 
+   - `uv run python -m pytest tests -q` → **149 passed, 4 subtests passed**
+   - `uv run flake8` (project-wide) → **clean (no output)**
+   - `uv run pylint --fail-under=9.9` on new/changed files → **10.00/10**
+   - Project-wide pylint → **9.98/10** (pre-existing issues only, passes the 9.9 threshold)
+
+   The sample brief was rendered offline to `/tmp/rss_brief_sample.html` to verify layout. The file confirmed: no `<script>`, no flex/grid, no `<style>` blocks; correct category header colours (AI/ML purple #9C27B0, Cybersecurity red #F44336); HIGH badge red, STRATEGIC amber, GENERAL green; "Why this matters to you:" line present for HIGH theme, absent for GENERAL (null relevance); matched articles linked, unmatched plain text; Cross-Cutting Signals and Personal sections present.
+
+9. Optional Next Step:
+   All tasks in the plan have been completed successfully. The implementation is ready for:
+   - Local dry-run testing: `uv run python src/cli_brief_generator.py --dry-run` with a `.env` file containing bucket/key/API key credentials
+   - Email-client testing: open `brief_output.html` in Gmail web + Gmail mobile (per §6 of the plan)
+   - CDK deployment: `cdk deploy` to wire up the two new env vars (`BRIEF_ENABLED`, `BRIEF_CLAUDE_MODEL`) on the `RetrieveAndSendEmailFunction`
+   - End-to-end validation: confirm two emails arrive on the next daily run (digest then `RSS Brief — <date>`)
+
+   No next coding step is pending unless the user identifies issues during testing or requests adjustments to the reader profile, category configuration, or email layout.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/eamon/.claude/projects/-Users-eamon-code-rss-email/19194ef2-5b27-4d24-a7b3-f7f6d6e1d3bd.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
