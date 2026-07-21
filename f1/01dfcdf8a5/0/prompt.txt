@@ -1,0 +1,7 @@
+<task-notification>
+<task-id>bdfcxgljw</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-eamon-code-rss-email/19194ef2-5b27-4d24-a7b3-f7f6d6e1d3bd/tasks/bdfcxgljw.output</output-file>
+<status>killed</status>
+<summary>Background command "Push to main" was stopped</summary>
+</task-notification>
