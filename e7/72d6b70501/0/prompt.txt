@@ -1,0 +1,294 @@
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Summary:
+## 1. Primary Request and Intent
+
+This session continued from a previous conversation where W1-W4 brief improvements were committed locally but not pushed. The user's requests in this session were:
+
+1. **"push"** — Push the pending brief changes to main
+2. **"retry"** / **"retry"** — Retry after multiple failed pushes
+3. **"today is tuesday. another new set of email was generated. review the emails and check the evals"** — Review the June 16 emails and run evals (first run after code changes, but deploy was wedged)
+4. **"check gh action status and aws codepipeline"** (twice) — Monitor CI/CD pipeline status
+5. **"It is wed 17 and the email digest and brief were emailed to me today. Review the emails in my gmail inbox and check for any issues and evals"** — Review June 17 emails; discovered AI/ML bug still present (wedged deploy)
+6. **Log investigation request** — Paste of SNS error email with 14 errors from the retrieval Lambda
+7. **"i bought more credits. try again"** — Continue probing after rate-limit burn
+8. User answered questions: **"I would like to receive these feeds rather than not at all. look into methods to resolve the cause"** and **"I would like to receive these feeds. look into methods to resolve the cause and ensure not to hammer and get rate limited"**
+
+## 2. Key Technical Concepts
+
+- **CDK Pipelines self-mutation deadlock**: The Synth stage CodeBuild command is baked into the *deployed* pipeline. Fixing that command only takes effect after UpdatePipeline (self-mutate), which runs *after* Synth. If Synth fails, self-mutate never runs → fix never applies → deadlock.
+- **promptfoo dependency isolation**: Moving promptfoo to `eval/package.json` (its own island) keeps the root `package-lock.json` clean of the `mongodb/gcp-metadata` transitive tree that breaks `npm ci` under npm 10.
+- **npm 10 vs npm 11 optional peer dep behaviour**: npm 10 (Node 20 in CodeBuild) fails `npm ci` when `mongodb@7.2.0`'s optional peer `gcp-metadata@^7.0.1` is resolved to `8.x`. npm 11 (local Node 24) tolerates this.
+- **Reddit rate-limiting root cause**: `ThreadPoolExecutor(max_workers=5)` fires 5 Reddit requests concurrently from one IP → instant 429. An HTTPS 429 also triggers the SSL-fallback handler (2 more requests) + outer retry 3× ≈ 9 requests per feed.
+- **Host-aware throttle**: Serialise requests to rate-sensitive hosts using a per-host `threading.Lock` + monotonic timer, spacing starts by at least `RATE_LIMITED_HOSTS[key]` seconds.
+- **promptfoo custom Python provider** running real `brief_generator.synthesize()` against fixture digest JSON.
+- **CDK Pipelines V2** with self-mutate stage; `CodeBuildStep('Synth')` with baked-in `commands`.
+- **RSS Brief companion email**: `BriefSynthesis` Pydantic model, `_canonical_category()` for AI/ML normalisation, `source_tier()` for ranking, Cycling category.
+
+## 3. Files and Code Sections
+
+### `src/rss_email/retrieve_articles.py`
+- **Why important**: Core RSS retrieval Lambda handler; source of Reddit 429 and Netflix connection refused errors.
+- **Changes**: Added `threading`, `urllib.parse` imports. Added `RATE_LIMITED_HOSTS`, `_STATUS_CODES_NO_FALLBACK`, throttle state vars, `_rate_limited_host_key()`, `_throttle_host()`. Called `_throttle_host(url)` before the retry loop. Added early re-raise for status codes inside the SSL-fallback handler. Added 429 `break` branch (logged at INFO):
+
+```python
+RATE_LIMITED_HOSTS = {"reddit.com": 8.0}
+_STATUS_CODES_NO_FALLBACK = (304, 403, 429)
+_throttle_registry_lock = threading.Lock()
+_host_locks: Dict[str, threading.Lock] = {}
+_host_last_start: Dict[str, float] = {}
+
+def _rate_limited_host_key(url: str) -> Optional[str]:
+    host = (urllib.parse.urlsplit(url).hostname or "").lower()
+    for key in RATE_LIMITED_HOSTS:
+        if host == key or host.endswith("." + key):
+            return key
+    return None
+
+def _throttle_host(url: str) -> None:
+    key = _rate_limited_host_key(url)
+    if key is None:
+        return
+    with _throttle_registry_lock:
+        lock = _host_locks.setdefault(key, threading.Lock())
+    with lock:
+        wait = RATE_LIMITED_HOSTS[key] - (time.monotonic() - _host_last_start.get(key, 0.0))
+        if wait > 0:
+            logger.debug("Throttling %s for %.1fs to respect %s rate limit", url, wait, key)
+            time.sleep(wait)
+        _host_last_start[key] = time.monotonic()
+```
+
+Inside `get_feed_items` — before retry loop:
+```python
+_throttle_host(url)
+```
+
+Inside SSL-fallback `except` clause (early re-raise for status codes):
+```python
+if (
+    isinstance(ssl_error, HTTPError)
+    and ssl_error.code in _STATUS_CODES_NO_FALLBACK
+):
+    raise
+```
+
+429 handler in outer `except HTTPError`:
+```python
+if error.code == 429:
+    logger.info(
+        "URL: %s rate-limited (429); skipping without retry to avoid "
+        "hammering (Retry-After=%s)",
+        url,
+        error.headers.get("Retry-After") if error.headers else None,
+    )
+    break
+```
+
+### `tests/test_retrieve_articles.py`
+- **Why important**: Test coverage for the new throttle and 429 logic.
+- **Changes**: Added `from urllib.error import HTTPError` and imports of `_rate_limited_host_key`, `_throttle_host`. Added 3 new test methods:
+
+```python
+def test_rate_limited_host_key(self):
+    self.assertEqual(_rate_limited_host_key("https://www.reddit.com/r/aws/top/.rss?t=month"), "reddit.com")
+    self.assertEqual(_rate_limited_host_key("https://old.reddit.com/r/aws/.rss"), "reddit.com")
+    self.assertIsNone(_rate_limited_host_key("https://example.com/feed"))
+    self.assertIsNone(_rate_limited_host_key("https://notreddit.com.evil.test/x"))
+
+@patch("rss_email.retrieve_articles.time.sleep")
+def test_throttle_spaces_requests(self, mock_sleep):
+    # pylint: disable=protected-access
+    rss_email.retrieve_articles._host_last_start.clear()
+    self.addCleanup(rss_email.retrieve_articles._host_last_start.clear)
+    url = "https://www.reddit.com/r/aws/top/.rss?t=month"
+    _throttle_host(url)
+    mock_sleep.assert_not_called()
+    _throttle_host(url)
+    mock_sleep.assert_called_once()
+    waited = mock_sleep.call_args[0][0]
+    interval = rss_email.retrieve_articles.RATE_LIMITED_HOSTS["reddit.com"]
+    self.assertGreater(waited, 0)
+    self.assertLessEqual(waited, interval)
+
+@patch("rss_email.retrieve_articles.time.sleep")
+@patch("rss_email.retrieve_articles.urllib.request.urlopen")
+def test_get_feed_items_429_skips_without_retry(self, mock_urlopen, mock_sleep):
+    mock_urlopen.side_effect = HTTPError("https://example.com/rss", 429, "Too Many Requests", {}, None)
+    result = get_feed_items("https://example.com/rss", datetime.now() - timedelta(days=3))
+    self.assertEqual(result, b"")
+    self.assertEqual(mock_urlopen.call_count, 1)
+    mock_sleep.assert_not_called()
+```
+
+### `eval/package.json` (NEW)
+- **Why important**: Isolates promptfoo from root tree, breaking CDK pipeline deadlock.
+```json
+{
+  "name": "rss-email-eval",
+  "version": "1.0.0",
+  "description": "promptfoo fidelity eval for the RSS Brief (isolated from the CDK dependency tree)",
+  "private": true,
+  "scripts": {
+    "eval": "PROMPTFOO_PYTHON=../.venv/bin/python promptfoo eval -c promptfooconfig.yaml",
+    "eval:view": "promptfoo view"
+  },
+  "devDependencies": {
+    "promptfoo": "^0.121.0"
+  }
+}
+```
+
+### `eval/package-lock.json` (NEW)
+- Generated by `npm --prefix eval install` from `eval/package.json`.
+
+### `package.json` (root)
+- Removed `"promptfoo": "^0.121.0"` from `devDependencies`.
+- Removed `"eval"` and `"eval:view"` scripts.
+
+### `package-lock.json` (root)
+- Regenerated clean (112 packages vs 799), 0 gcp-metadata/mongodb/promptfoo refs.
+- Plain `npm ci` passes.
+
+### `eval/promptfooconfig.yaml`
+- **Why important**: All paths updated to be relative to `eval/` directory.
+- Changed `file://eval/provider.py` → `file://provider.py`
+- Changed `file://eval/assertions/*.cjs` → `file://assertions/*.cjs`
+- Changed `eval/fixtures/...` → `fixtures/...`
+
+### `eval/assertions/schema.cjs`
+- Changed `fs.readFileSync('src/rss_email/brief_config.json', ...)` → `fs.readFileSync('../src/rss_email/brief_config.json', ...)`
+
+### `eval/assertions/source_ranking.cjs`
+- Same change: `src/rss_email/brief_config.json` → `../src/rss_email/brief_config.json`
+
+### `.github/workflows/eval.yml`
+- Changed install step to `npm --prefix eval ci`
+- Added `working-directory: eval` to run step
+- Changed artifact path to `eval/eval-results.json`
+
+### `.github/workflows/test-cdk.yml`
+- Reverted `npm ci --legacy-peer-deps` → plain `npm ci` (root cause removed)
+
+### `lib/rss_pipeline_stack.ts`
+- Reverted `commands: ['npm ci --legacy-peer-deps', 'npx cdk synth']` → `commands: ['npm ci', 'npx cdk synth']`
+
+### `eval/README.md`
+- Updated run instructions to use `npm --prefix eval ci` and `npm --prefix eval run eval`
+- Added dependency isolation explanation section
+
+### `feed_urls.json` (local, gitignored)
+- Changed Netflix Tech Blog URL: `https://netflixtechblog.com/feed` → `https://netflixtechblog.medium.com/feed`
+- Tested and confirmed valid XML response
+
+## 4. Errors and Fixes
+
+### Push rejected (fetch first)
+- **Error**: `git push` rejected because dependabot had pushed new commits to remote
+- **Fix**: `git pull --rebase origin main` then push. Required for each of several dependabot commits.
+
+### package-lock.json merge conflict during rebase
+- **Error**: `CONFLICT (content): Merge conflict in package-lock.json` when rebasing onto dependabot npm-bump commit
+- **Fix**: `git checkout --theirs package-lock.json && npm install && git rebase --continue`
+
+### CDK Synth `npm ci` failure — gcp-metadata
+- **Error**: `npm error Missing: gcp-metadata@7.0.1 from lock file` in CodeBuild (npm 10 / Node 20). Chain: `promptfoo → natural → mongoose → mongodb@7.2.0 → optional peer gcp-metadata@^7.0.1`
+- **First attempt fix**: Added `--legacy-peer-deps` to `npm ci` in `test-cdk.yml` (commit `4f5692d`) and `rss_pipeline_stack.ts` (commit `7e3f156`)
+- **Why it failed**: CDK Pipelines self-mutation deadlock. The fix to the Synth command is baked into the *deployed* pipeline and can only take effect after UpdatePipeline self-mutate, which runs *after* Synth. Since Synth still fails, self-mutate never runs.
+- **Root fix**: Isolated promptfoo into `eval/package.json`, making the root lockfile clean → plain `npm ci` passes → deployed pipeline's existing Synth command succeeds → deadlock broken.
+
+### Reddit 429 Too Many Requests
+- **Error**: 5 Reddit feeds all got 429 because `ThreadPoolExecutor(max_workers=5)` fired them simultaneously. Additionally, an HTTPS 429 triggered SSL-fallback (~2 more requests) + 3x outer retry ≈ 9 requests per feed.
+- **Fix**: Added `_throttle_host()` (serialises + spaces Reddit requests 8s apart), early re-raise for status codes in SSL-fallback, 429-specific `break` (no retry, logged at INFO not ERROR).
+
+### Netflix Tech Blog Connection Refused
+- **Error**: `netflixtechblog.com/feed` → `[Errno 111] Connection refused` from AWS IPs
+- **Fix**: Changed URL to `netflixtechblog.medium.com/feed` (verified 200/212KB)
+- **Blocker**: S3 upload and privategeneralproject sync were blocked by auto-mode classifier; user must run manually.
+
+### pylint `too-many-locals` (26/25) warning
+- **Fix**: Inlined `retry_after` variable into the `logger.info()` call.
+
+### pylint `protected-access` warning in test
+- **Fix**: Added `# pylint: disable=protected-access` comment to the test method.
+
+## 5. Problem Solving
+
+**CDK Pipeline deadlock** — Diagnosed by checking Lambda `LastModified` (still June 15 after multiple pushes), confirmed all 3 CodePipeline failures were at Synth stage with same npm ci error. Identified that `--legacy-peer-deps` in the pipeline stack TypeScript couldn't self-apply. Solved by removing promptfoo from root so plain npm ci works — the deployed pipeline's unchanged command now passes. Verified: Synth → SelfMutate → Assets → Deploy all Succeeded. Lambda LastModified updated to 2026-06-17T09:12:19.
+
+**Reddit 429 diagnosis** — Probed from residential IP: single browser-UA request = 200, concurrent burst of 5 = 4x 429. Sequential with 2s spacing: still 4x 429 after the first (residential IP quota burned). Root cause was the concurrent ThreadPoolExecutor burst, compounded by the retry/fallback amplification. Fix: serialise with threading.Lock + 8s spacing.
+
+**Netflix fix** — Probed `netflixtechblog.com/feed` (refused) vs `netflixtechblog.medium.com/feed` (200, valid XML). Simple URL change.
+
+## 6. All User Messages
+
+1. "checked sample. commit and push to main (this will trigger cdk updates)" [start of session]
+2. "push"
+3. "retry"
+4. "today is tuesday. another new set of email was generated. review the emails and check the evals"
+5. "check gh action status and aws codepipeline"
+6. "retry" (after push killed)
+7. "check gh action status and aws code pipeline" (second time)
+8. "It is wed 17 and the email digest and brief were emailed to me today. Review the emails in my gmail inbox and check for any issues and evals." [plan mode trigger]
+9. [User approved plan to isolate promptfoo into eval/]
+10. "Also investigate logs: [SNS error email with 14 errors — Reddit 429s and Netflix connection refused]"
+11. User answered AskUserQuestion: "I would like to receive these feeds rather than not at all. look into methods to resolve the cause." (for alert noise question) and "I would like to receive these feeds. look into methods to resolve the cause and ensure not to hammer and get rate limited" (for dead feeds question)
+12. "i bought more credits. try again" [after IP burned by probing; resumed probing]
+
+## 7. Pending Tasks
+
+### Manual sync required for feed_urls.json
+The `feed_urls.json` edit (Netflix URL fix) needs to be synced to two locations that were blocked by auto-mode:
+```bash
+cp /Users/eamon/code/rss-email/feed_urls.json \
+   /Users/eamon/code/privategeneralproject/rss/rss-python/feed_urls.json \
+  && git -C /Users/eamon/code/privategeneralproject add rss/rss-python/feed_urls.json \
+  && git -C /Users/eamon/code/privategeneralproject commit -m "rss: fix Netflix Tech Blog feed URL to medium.com host" \
+  && git -C /Users/eamon/code/privategeneralproject push \
+  && aws s3 cp /Users/eamon/code/rss-email/feed_urls.json \
+       s3://cd-rssemailstack-rssbucket91adb797-1ds7r89g7wdoo/feed_urls.json
+```
+
+### Thursday 07:30 UTC verification
+The first brief run on fully-deployed code (AI/ML fix + scope broadening + source ranking + throttle fix) happens Thursday morning. Expect:
+- AI/ML category renders **first** with slash notation, no `AI_ML` underscore
+- Cycling section present
+- Reddit feeds appearing (via throttle fix) — 5 Reddit subs: netsec, aws, cycling, Zwift, softwaretesting
+- Netflix Tech Blog articles (requires S3 upload above)
+- No error alert email (429s now logged at INFO)
+
+### Optional: promptfoo live eval
+Run when ANTHROPIC_API_KEY available:
+```bash
+uv sync --dev && npm --prefix eval ci
+ANTHROPIC_API_KEY=sk-... npm --prefix eval run eval
+```
+
+## 8. Current Work
+
+Most recent work was investigating and fixing the RSS feed retrieval errors from the SNS log alert containing 14 errors. The last completed task was:
+- Implemented host-aware throttling + 429 no-retry in `src/rss_email/retrieve_articles.py`
+- Added 3 new tests in `tests/test_retrieve_articles.py`
+- Edited `feed_urls.json` locally to fix Netflix Tech Blog URL
+- Committed `21eea17` "Throttle rate-limited feed hosts; skip 429 without hammering" and pushed to `origin/main` (verified via `git log --oneline origin/main -2`)
+
+The S3 sync and privategeneralproject sync for `feed_urls.json` were attempted but blocked by auto-mode classifier.
+
+## 9. Optional Next Step
+
+The immediate pending action is the manual sync of `feed_urls.json` to S3 and privategeneralproject, which was blocked by the auto-mode classifier. The user should run:
+
+```bash
+cp /Users/eamon/code/rss-email/feed_urls.json \
+   /Users/eamon/code/privategeneralproject/rss/rss-python/feed_urls.json \
+  && git -C /Users/eamon/code/privategeneralproject add rss/rss-python/feed_urls.json \
+  && git -C /Users/eamon/code/privategeneralproject commit -m "rss: fix Netflix Tech Blog feed URL to medium.com host" \
+  && git -C /Users/eamon/code/privategeneralproject push \
+  && aws s3 cp /Users/eamon/code/rss-email/feed_urls.json \
+       s3://cd-rssemailstack-rssbucket91adb797-1ds7r89g7wdoo/feed_urls.json
+```
+
+The user most recently said: "i bought more credits. try again" after the probing resumed, and the investigation concluded with: fixing the Netflix feed URL locally and implementing the throttle/429 fix in code. The feed_urls.json sync is the remaining step from that investigation.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/eamon/.claude/projects/-Users-eamon-code-rss-email/19194ef2-5b27-4d24-a7b3-f7f6d6e1d3bd.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
