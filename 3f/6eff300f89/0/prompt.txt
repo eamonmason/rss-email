@@ -1,0 +1,7 @@
+<task-notification>
+<task-id>buzwyqwvn</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-eamon-code-rss-email/19194ef2-5b27-4d24-a7b3-f7f6d6e1d3bd/tasks/buzwyqwvn.output</output-file>
+<status>completed</status>
+<summary>Background command "Rebase and push" completed (exit code 0)</summary>
+</task-notification>
