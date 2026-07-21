@@ -1,0 +1,12 @@
+GitHub
+[eamonmason/rss-email] Brief Fidelity Eval workflow run
+ 
+
+ 
+Brief Fidelity Eval: All jobs have failed
+ 
+ 
+Status    Job    Annotations
+eval    
+Brief Fidelity Eval / eval
+Failed in 3 minutes and 18 seconds
