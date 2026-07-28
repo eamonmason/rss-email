@@ -10,6 +10,18 @@ updates:
         patterns: ["*"]
     open-pull-requests-limit: 10
 
+  # promptfoo's own dependency island (see eval/README.md) - kept as a
+  # separate entry/group so its bumps don't mix with the CDK tree's.
+  - package-ecosystem: "npm"
+    directory: "/eval"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    groups:
+      eval-dependencies:
+        patterns: ["*"]
+    open-pull-requests-limit: 10
+
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
