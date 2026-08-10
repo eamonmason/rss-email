@@ -1,1 +1,5 @@
 /goal migrate deployment from AWS codepipeline to github actions
+
+---
+
+commit please and help me delete the old stack
