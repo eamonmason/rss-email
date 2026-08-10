@@ -1,0 +1,39 @@
+{
+  "cli_version": "0.8.42",
+  "checkpoint_id": "1caf3b0ead96",
+  "strategy": "manual-commit",
+  "branch": "migrate-to-github-actions-deploy",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".github/workflows/deploy.yml",
+    ".github/workflows/lint_and_test.yml",
+    "CLAUDE.md",
+    "README.md",
+    "bin/cdk.ts",
+    "bin/github-oidc-cdk.ts",
+    "bin/pipeline-cdk.ts",
+    "cdk.json",
+    "lib/github_actions_role_stack.ts",
+    "lib/rss_lambda_stack.ts",
+    "lib/rss_pipeline_app_stage.ts",
+    "lib/rss_pipeline_stack.ts",
+    "package.json",
+    "setup.cfg"
+  ],
+  "sessions": [
+    {
+      "metadata": "/1c/af3b0ead96/0/metadata.json",
+      "transcript": "/1c/af3b0ead96/0/full.jsonl",
+      "compact_transcript": "/1c/af3b0ead96/0/transcript.jsonl",
+      "content_hash": "/1c/af3b0ead96/0/content_hash.txt",
+      "prompt": "/1c/af3b0ead96/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 241,
+    "cache_creation_tokens": 184113,
+    "cache_read_tokens": 11819252,
+    "output_tokens": 51994,
+    "api_call_count": 122
+  }
+}

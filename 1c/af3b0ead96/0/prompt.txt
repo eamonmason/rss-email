@@ -1,0 +1,1 @@
+/goal migrate deployment from AWS codepipeline to github actions
