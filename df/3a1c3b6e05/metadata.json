@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.8.42",
+  "checkpoint_id": "df3a1c3b6e05",
+  "strategy": "manual-commit",
+  "branch": "fix/eval-node24-npm11",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".github/workflows/eval.yml"
+  ],
+  "sessions": [
+    {
+      "metadata": "/df/3a1c3b6e05/0/metadata.json",
+      "transcript": "/df/3a1c3b6e05/0/full.jsonl",
+      "compact_transcript": "/df/3a1c3b6e05/0/transcript.jsonl",
+      "content_hash": "/df/3a1c3b6e05/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 13,
+    "cache_creation_tokens": 5273,
+    "cache_read_tokens": 683759,
+    "output_tokens": 3560,
+    "api_call_count": 7
+  }
+}
