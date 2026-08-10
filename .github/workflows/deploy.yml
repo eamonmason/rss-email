@@ -1,0 +1,84 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+# Never run two cdk deploys against the same stack at once. Queue instead of
+# cancelling - cancelling mid-deploy would leave CloudFormation mid-update.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # Same checks that run on every pull request, as the gate in front of deploy.
+  test:
+    uses: ./.github/workflows/lint_and_test.yml
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write  # required to request the OIDC token
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+
+      - name: Install Node.js dependencies
+        run: npm ci
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: rss-email-deploy-${{ github.run_id }}
+
+      # Parameter Store stays the source of truth for deployment config - GitHub
+      # holds no copies. bin/cdk.ts reads these at synth time.
+      - name: Load configuration from Parameter Store
+        env:
+          PARAMETERS: >-
+            rss-email-AWS_ACCOUNT_ID
+            rss-email-AWS_REGION
+            rss-email-EMAIL_RECIPIENTS
+            rss-email-SOURCE_DOMAIN
+            rss-email-SOURCE_EMAIL_ADDRESS
+            rss-email-TO_EMAIL_ADDRESS
+        run: |
+          set -euo pipefail
+          response=$(aws ssm get-parameters --names $PARAMETERS --output json)
+
+          # Fail loudly rather than deploying with blanks - an empty
+          # EMAIL_RECIPIENTS would wipe the SES receipt rule's recipient list.
+          invalid=$(jq -r '.InvalidParameters | join(", ")' <<< "$response")
+          if [ -n "$invalid" ]; then
+            echo "::error::Missing Parameter Store parameters: $invalid"
+            exit 1
+          fi
+
+          while IFS=$'\t' read -r name value; do
+            key=${name#rss-email-}
+            # Account id and region are not sensitive, and masking the region
+            # would garble every ARN in the deploy log.
+            case "$key" in
+              AWS_ACCOUNT_ID|AWS_REGION) ;;
+              *) echo "::add-mask::$value" ;;
+            esac
+            echo "$key=$value" >> "$GITHUB_ENV"
+            echo "Loaded $key"
+          done < <(jq -r '.Parameters[] | [.Name, .Value] | @tsv' <<< "$response")
+
+      # No CDK_DOCKER=false here, unlike the lint/synth workflows: ubuntu-latest
+      # has Docker, so the Lambda layer is built in the real Python 3.13 image.
+      - name: Deploy CDK stack
+        run: npx cdk deploy RSSEmailStack --require-approval never

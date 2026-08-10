@@ -460,35 +460,42 @@ The email functionality will continue to work independently in the Step Function
 
 ## Deployment
 
-### Deploy the Stack
+Deployment is continuous: every push to `main` runs the
+[`Deploy` workflow](.github/workflows/deploy.yml), which runs the lint and test suite
+and then deploys the CloudFormation stack `cd-RSSEmailStack`.
 
-Deploy the stack with CDK by running:
-
-```sh
-cdk deploy
-```
+The workflow authenticates to AWS with GitHub OIDC — there are no long-lived AWS keys
+in GitHub. Deployment config is read from Parameter Store at deploy time, so Parameter
+Store remains the single source of truth and GitHub holds no copies of it.
 
 ### CDK Operations
 
 ```bash
-# Synthesize CDK stack
+# Synthesize the application stack
 npx cdk synth
 
-# Deploy main application stack
-cdk deploy
+# View deployment differences against the deployed stack
+npx cdk diff RSSEmailStack
 
-# Deploy pipeline stack
-cdk deploy --app "npx ts-node bin/pipeline-cdk.ts"
-
-# View deployment differences
-cdk diff
+# Deploy manually (normally left to GitHub Actions)
+npx cdk deploy RSSEmailStack
 ```
 
-### Pipeline Deployment
+The construct id is `RSSEmailStack` but the deployed CloudFormation stack is named
+`cd-RSSEmailStack`, retained from when deployment ran through a CDK Pipelines stage
+named `cd`. Use the construct id on the command line; the CLI resolves it to the
+deployed stack.
 
-Add a GitHub personal token to AWS Secrets Manager, for the github repo, called `github-token`.
+Note that `cdk deploy` requires Docker to build the Lambda layer. Set `CDK_DOCKER=false`
+to fall back to local `pip` bundling — fine for `synth`/`diff`, but it produces
+macOS/ARM wheels, so never use it for a real deploy.
 
-Put the following environment variables in parameter store, with appropriate values (as described above with the `.env` file):
+### One-time Deployment Setup
+
+#### 1. Parameter Store values
+
+Put the following in Parameter Store, with appropriate values (as described above with
+the `.env` file):
 
 - `rss-email-AWS_ACCOUNT_ID`
 - `rss-email-AWS_REGION`
@@ -497,13 +504,33 @@ Put the following environment variables in parameter store, with appropriate val
 - `rss-email-SOURCE_EMAIL_ADDRESS`
 - `rss-email-TO_EMAIL_ADDRESS`
 
-Deploy the pipeline itself:
+#### 2. The GitHub Actions deploy role
+
+`lib/github_actions_role_stack.ts` defines the IAM role that GitHub Actions assumes via
+OIDC. It is scoped to `refs/heads/main` of this repository, and grants only the ability
+to assume the CDK bootstrap roles and read the parameters above.
+
+It imports the account's existing `token.actions.githubusercontent.com` OIDC provider
+rather than creating one — if the account has no provider yet, create it first (see the
+[AWS OIDC documentation](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_create_oidc.html)).
+
+Deploy it once, by hand:
 
 ```sh
-cdk deploy --app "npx ts-node bin/pipeline-cdk.ts"
+npx cdk deploy --app "npx tsx bin/github-oidc-cdk.ts"
 ```
 
-Once the deploy has completed successfully, upload the `feed_urls.json` file to the new S3 bucket, for example:
+#### 3. GitHub repository variables
+
+Under Settings → Secrets and variables → Actions → Variables, set:
+
+- `AWS_DEPLOY_ROLE_ARN` — the `DeployRoleArn` output from the stack above
+- `AWS_REGION` — the deployment region, e.g. `eu-west-1`
+
+#### 4. Feed configuration
+
+Once the first deploy has completed successfully, upload the `feed_urls.json` file to
+the new S3 bucket, for example:
 
 ```json
 {
@@ -519,13 +546,6 @@ Once the deploy has completed successfully, upload the `feed_urls.json` file to 
     ]
 }
 ```
-
-See [https://docs.aws.amazon.com/cdk/v2/guide/cdk_pipeline.html#cdk_pipeline_security](https://docs.aws.amazon.com/cdk/v2/guide/cdk_pipeline.html#cdk_pipeline_security) for more info.
-
-#### Pipeline Parameters
-Store these values in AWS Parameter Store with `rss-email-` prefix:
-- `AWS_ACCOUNT_ID`, `AWS_REGION`
-- `EMAIL_RECIPIENTS`, `SOURCE_DOMAIN`, `SOURCE_EMAIL_ADDRESS`, `TO_EMAIL_ADDRESS`
 
 ## Post-deployment
 

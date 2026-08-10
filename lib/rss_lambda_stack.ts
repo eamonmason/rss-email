@@ -84,7 +84,7 @@ export class RSSEmailStack extends cdk.Stack {
       conditions:
       {
         "StringEquals": {
-          "AWS:SourceAccount": process.env.CDK_DEFAULT_ACCOUNT,
+          "AWS:SourceAccount": process.env.CDK_DEFAULT_ACCOUNT || process.env.AWS_ACCOUNT_ID,
         },
         "StringLike": {
           "AWS:SourceArn": "arn:aws:ses:*"

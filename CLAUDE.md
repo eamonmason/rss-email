@@ -67,19 +67,27 @@ uv run python src/cli_article_processor.py
 ```
 
 ### CDK Operations
+
 ```bash
-# Synthesize CDK stack
+# Synthesize the application stack
 npx cdk synth
 
-# Deploy main application stack
-cdk deploy
+# View deployment differences against the deployed stack
+npx cdk diff RSSEmailStack
 
-# Deploy pipeline stack
-cdk deploy --app "npx ts-node bin/pipeline-cdk.ts"
+# Deploy manually (normally left to GitHub Actions)
+npx cdk deploy RSSEmailStack
 
-# View deployment differences
-cdk diff
+# Deploy the one-time GitHub Actions OIDC role stack
+npx cdk deploy --app "npx tsx bin/github-oidc-cdk.ts"
 ```
+
+The construct id is `RSSEmailStack`, but the deployed CloudFormation stack is named
+`cd-RSSEmailStack` (pinned via `stackName` in `bin/cdk.ts`, retained from the
+now-removed CDK Pipelines stage named `cd`). Use the construct id on the command line.
+
+`cdk deploy` requires Docker for the Lambda layer. `CDK_DOCKER=false` falls back to
+local `pip` bundling — acceptable for `synth`/`diff`, never for a real deploy.
 
 ## Architecture
 
@@ -152,13 +160,24 @@ When making changes to Python code, always follow this workflow:
 
 ## Deployment
 
+Deployment is continuous via GitHub Actions: every push to `main` runs
+`.github/workflows/deploy.yml`, which gates on the lint/test suite (called as a reusable
+workflow) and then deploys `cd-RSSEmailStack`. AWS access uses GitHub OIDC — there are
+no long-lived AWS keys in GitHub.
+
 ### Prerequisites
+
 - Domain configured in SES for sending emails
 - CDK bootstrapped in target AWS account/region: `cdk bootstrap aws://<account-id>/<region>`
-- For pipeline deployment: GitHub token stored in AWS Secrets Manager as `github-token`
+- The OIDC deploy role deployed once from `bin/github-oidc-cdk.ts`
+- GitHub repository variables `AWS_DEPLOY_ROLE_ARN` and `AWS_REGION` set
 
-### Pipeline Parameters
-Store these values in AWS Parameter Store with `rss-email-` prefix:
+### Deployment Parameters
+
+The deploy workflow reads these from AWS Parameter Store at deploy time (with the
+`rss-email-` prefix) and exports them as environment variables for `bin/cdk.ts`.
+Parameter Store is the single source of truth; do not duplicate them into GitHub.
+
 - `AWS_ACCOUNT_ID`, `AWS_REGION`
 - `EMAIL_RECIPIENTS`, `SOURCE_DOMAIN`, `SOURCE_EMAIL_ADDRESS`, `TO_EMAIL_ADDRESS`
 
