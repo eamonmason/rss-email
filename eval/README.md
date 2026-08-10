@@ -24,6 +24,11 @@ googleapis, …) out of the CDK/Lambda deployment build, whose `npm ci` must sta
 Always run the eval from `eval/` — the npm scripts assume that working directory, and the
 config's paths (`provider.py`, `assertions/`, `fixtures/`, `../src/...`) are relative to it.
 
+`package-lock.json` here needs **npm >= 11.5** (Node >= 24.5). Dependabot writes it with a
+current npm, which no longer records optional peer dependencies — so older npm fails
+`npm ci` with `Missing: gcp-metadata@7.0.1 from lock file`, because mongodb declares
+`gcp-metadata` as an optional peer dep and older npm expects it in the lock.
+
 ## Run
 
 ```bash
