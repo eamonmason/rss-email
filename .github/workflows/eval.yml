@@ -30,7 +30,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          # eval/package-lock.json is written by npm 11 (Dependabot and local dev), which
+          # no longer records optional peer deps. Older npm then fails `npm ci` with
+          # "Missing: gcp-metadata@7.0.1" — mongodb declares it as an optional peer.
+          # Needs npm >= 11.5.0 (11.4.0 still fails), i.e. Node >= 24.5. '24' resolves to
+          # the latest 24.x on the runner — do not pin below 24.5.
+          node-version: '24'
 
       - name: Install eval dependencies
         # promptfoo lives in its own dependency island (eval/) so it stays out of
