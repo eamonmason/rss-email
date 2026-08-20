@@ -56,6 +56,12 @@ eval/fixtures/<YYYY-MM-DD>/
   digest_text.txt        # readable digest used as the faithfulness grader's source
 ```
 
+No `id` field is needed in `digest_articles.json` — `provider.py` backfills one via
+`ensure_article_ids` before running synthesis (the same numbering
+`build_synthesis_input` uses in production: dict/list order, counting from 1). The
+`major_coverage.cjs`/`source_ranking.cjs` assertions mirror that same numbering to
+resolve the brief's `top_articles`/`top_stories` ids back to titles/sources.
+
 The quickest way to capture one is from a live run:
 
 ```bash

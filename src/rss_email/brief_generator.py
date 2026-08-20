@@ -70,7 +70,7 @@ backticks, matching this schema:
         "theme": "5-8 words",
         "signal_strength": "HIGH | STRATEGIC | GENERAL",
         "tldr": "2-3 sentences",
-        "top_articles": ["exact article title 1", "title 2", "title 3"],
+        "top_articles": ["<id1>", "<id2>", "<id3>"],
         "relevance_to_reader": "one sentence tied to the reader profile, or null"
       }
     ]
@@ -79,7 +79,7 @@ backticks, matching this schema:
   "cross_cutting": [
     { "signal": "...", "categories_involved": ["c1","c2"], "implication": "..." }
   ],
-  "personal": { "top_stories": ["title 1","title 2","title 3"], "summary": "1-2 sentences" }
+  "personal": { "top_stories": ["<id1>","<id2>","<id3>"], "summary": "1-2 sentences" }
 }
 
 Signal strength:
@@ -91,11 +91,12 @@ Signal strength:
 
 {SOURCE_RULE}
 
-Use the reader's exact article titles in top_articles so they can be linked.
+Each article below is listed as "(ID) [Source] Title", e.g. "(12) [Hacker News] Title".
+In top_articles and top_stories, cite articles ONLY by their numeric ID in parentheses
+(e.g. "12") - never the title or source text, and never include the brackets or
+parentheses themselves.
 relevance_to_reader must be null when a theme has no real bearing on the profile - do not
 invent relevance. A story can still be worth featuring with null relevance.
-
-Each article is prefixed with its source in brackets, e.g. "[Hacker News] Title".
 
 ARTICLES:
 {ARTICLES_BY_CATEGORY}
@@ -194,6 +195,29 @@ def source_tier(name: str, config: Dict[str, Any]) -> str:
     return "medium"
 
 
+def ensure_article_ids(
+    synthesis_input: Dict[str, List[Dict[str, str]]]
+) -> Dict[str, List[Dict[str, str]]]:
+    """Assign a stable numeric string ``id`` to every article that lacks one.
+
+    Ids are assigned by walking ``synthesis_input`` in plain dict/list order
+    (categories in dict-iteration order, articles in each category's list
+    order), counting from 1 - there is no dependency on
+    ``themed_categories``/``personal_categories`` config order, so this is
+    safe to call both on output freshly built by ``build_synthesis_input``
+    and on a ``synthesis_input``-shaped dict loaded straight from disk (e.g.
+    an eval fixture predating the ``id`` field). Existing ids are left
+    untouched, so repeated calls are idempotent. Mutates in place and returns
+    the input for convenience.
+    """
+    counter = 0
+    for items in synthesis_input.values():
+        for item in items:
+            counter += 1
+            item.setdefault("id", str(counter))
+    return synthesis_input
+
+
 @pydantic.validate_call(
     config={"arbitrary_types_allowed": True}, validate_return=True
 )
@@ -202,7 +226,7 @@ def build_synthesis_input(
     themed: List[str],
     personal: List[str],
 ) -> Dict[str, List[Dict[str, str]]]:
-    """Reduce categorised articles to ``{category: [{title, url, summary}]}``.
+    """Reduce categorised articles to ``{category: [{id, title, url, summary}]}``.
 
     Only themed and personal categories are kept; everything else is dropped to
     keep the brief tight. Accepts ``ProcessedArticle`` objects or raw dicts.
@@ -227,7 +251,7 @@ def build_synthesis_input(
             )
         if items:
             synthesis_input[category] = items
-    return synthesis_input
+    return ensure_article_ids(synthesis_input)
 
 
 @pydantic.validate_call(validate_return=True, config={"arbitrary_types_allowed": True})
@@ -248,7 +272,7 @@ def build_prompt(
         lines = [f"## {category}"]
         for item in ranked:
             source = item.get("source") or "Unknown"
-            lines.append(f"- [{source}] {item['title']}")
+            lines.append(f"- ({item['id']}) [{source}] {item['title']}")
             summary = item.get("summary")
             if summary:
                 lines.append(f"  {summary}")
@@ -322,10 +346,17 @@ def synthesize(
     The model, reader profile, personal interests, source tiers, and category
     names are read from ``config``. Returns ``None`` on persistent failure so the
     caller can skip the brief without blocking the main digest. Never raises.
+
+    Assigns article ids via ``ensure_article_ids`` if ``synthesis_input``
+    doesn't already have them (mutates it in place) - ``build_prompt`` cites
+    articles by id, so this guarantees it always has one to cite regardless
+    of how the caller built ``synthesis_input``.
     """
     if not synthesis_input:
         logger.info("No themed articles to synthesise; skipping brief")
         return None
+
+    ensure_article_ids(synthesis_input)
 
     if client is None:
         client = anthropic.Anthropic(api_key=get_anthropic_api_key())
@@ -376,50 +407,68 @@ def _normalise(text: str) -> str:
 
 
 @pydantic.validate_call(validate_return=True)
-def build_article_map(
+def build_article_index(
     synthesis_input: Dict[str, List[Dict[str, str]]]
-) -> Dict[str, str]:
-    """Build a ``title -> url`` map from the synthesis input."""
-    article_map: Dict[str, str] = {}
+) -> Dict[str, Dict[str, str]]:
+    """Build an ``id -> {title, url, source}`` index from the synthesis input.
+
+    Every article is included, even ones with an empty ``url`` - the renderer
+    needs ``title``/``source`` for those too, to compose a correct plain-text
+    (unlinked) citation. Requires ``ensure_article_ids`` to have been called
+    on ``synthesis_input`` first (``build_synthesis_input`` does this).
+    """
+    index: Dict[str, Dict[str, str]] = {}
     for items in synthesis_input.values():
         for item in items:
-            if item.get("url"):
-                article_map[item["title"]] = item["url"]
-    return article_map
+            article_id = item.get("id")
+            if not article_id:
+                continue
+            index[article_id] = {
+                "title": item.get("title", ""),
+                "url": item.get("url", ""),
+                "source": item.get("source", ""),
+            }
+    return index
 
 
-@pydantic.validate_call(validate_return=True)
-def match_title_to_url(title: str, article_map: Dict[str, str]) -> Optional[str]:
-    """Resolve an article title to a URL via the fallback chain.
+def _best_title_match(text: str, candidates: List[str]) -> Optional[str]:
+    """Return the candidate title that best matches ``text``.
 
-    Exact title -> normalised/lowercased -> word-overlap (Jaccard) >= 0.75 ->
-    ``None`` (caller renders plain text).
+    Exact match -> normalised/lowercased -> word-overlap (Jaccard) >= 0.75 ->
+    ``None`` (no confident match).
     """
-    if not title:
+    if not text:
         return None
-    if title in article_map:
-        return article_map[title]
+    if text in candidates:
+        return text
 
-    target = _normalise(title)
-    normalised = {_normalise(key): url for key, url in article_map.items()}
+    target = _normalise(text)
+    normalised = {_normalise(candidate): candidate for candidate in candidates}
     if target in normalised:
         return normalised[target]
 
     target_words = set(target.split())
     if target_words:
-        best_url: Optional[str] = None
+        best_candidate: Optional[str] = None
         best_score = 0.0
-        for original, url in article_map.items():
-            words = set(_normalise(original).split())
+        for candidate in candidates:
+            words = set(_normalise(candidate).split())
             if not words:
                 continue
             overlap = len(target_words & words) / len(target_words | words)
             if overlap > best_score:
                 best_score = overlap
-                best_url = url
+                best_candidate = candidate
         if best_score >= WORD_OVERLAP_THRESHOLD:
-            return best_url
+            return best_candidate
     return None
+
+
+@pydantic.validate_call(validate_return=True)
+def match_title_to_url(title: str, article_map: Dict[str, str]) -> Optional[str]:
+    """Resolve an article title to a URL via ``_best_title_match``."""
+    match = _best_title_match(title, list(article_map.keys()))
+    return article_map.get(match) if match else None
 
 
 def _signal_badge(signal: str) -> str:
@@ -434,12 +483,37 @@ def _signal_badge(signal: str) -> str:
     )
 
 
-def _render_article_links(titles: List[str], article_map: Dict[str, str]) -> str:
-    """Render a list of article titles as links, plain text if unmatched."""
+def _render_article_links(
+    references: List[str], article_index: Dict[str, Dict[str, str]]
+) -> str:
+    """Render a list of article citations (ids) as links, plain text if unlinked.
+
+    ``references`` are expected to be the numeric ids Claude was asked to cite.
+    If a reference isn't a known id (Claude ignored the instruction and
+    returned title-like text instead), fall back to fuzzy-matching it against
+    known titles. Either way, the *displayed* text is always composed by
+    Python from the matched entry's own ``source``/``title`` fields - never
+    Claude's raw string - so a malformed bracket in Claude's output can never
+    reach the email. A reference that resolves neither way is dropped.
+    """
+    title_lookup = {
+        entry["title"]: entry for entry in article_index.values() if entry.get("title")
+    }
     parts = []
-    for title in titles:
-        url = match_title_to_url(title, article_map)
-        safe_title = html.escape(title)
+    for ref in references:
+        entry = article_index.get(ref)
+        if entry is None:
+            match = _best_title_match(ref, list(title_lookup.keys()))
+            entry = title_lookup.get(match) if match else None
+        if entry is None:
+            logger.warning("Brief cited an unresolvable article reference %r; dropping", ref)
+            continue
+
+        title = entry.get("title", "")
+        source = entry.get("source", "")
+        display = f"[{source}] {title}" if source else title
+        safe_title = html.escape(display)
+        url = entry.get("url")
         if url:
             parts.append(
                 f'<li style="margin: 0 0 6px 0;">'
@@ -460,7 +534,7 @@ def _render_article_links(titles: List[str], article_map: Dict[str, str]) -> str
     )
 
 
-def _render_theme(theme: BriefTheme, article_map: Dict[str, str]) -> str:
+def _render_theme(theme: BriefTheme, article_index: Dict[str, Dict[str, str]]) -> str:
     """Render a single theme: badge, name, tldr, relevance, linked articles."""
     parts = [
         '<table width="100%" cellpadding="0" cellspacing="0" border="0" '
@@ -479,13 +553,13 @@ def _render_theme(theme: BriefTheme, article_map: Dict[str, str]) -> str:
             f'line-height: 1.5;"><strong>Why this matters to you:</strong> '
             f"{html.escape(theme.relevance_to_reader)}</p>"
         )
-    parts.append(_render_article_links(theme.top_articles, article_map))
+    parts.append(_render_article_links(theme.top_articles, article_index))
     parts.append("</td></tr></table>")
     return "".join(parts)
 
 
 def _render_category(
-    name: str, category: BriefCategory, article_map: Dict[str, str]
+    name: str, category: BriefCategory, article_index: Dict[str, Dict[str, str]]
 ) -> str:
     """Render a themed category: coloured header, verdict, then themes."""
     header = (
@@ -502,7 +576,7 @@ def _render_category(
             f'<p style="margin: 0 0 14px 0; font-size: 0.95em; color: #2c3e50; '
             f'font-style: italic;">{html.escape(category.week_verdict)}</p>'
         )
-    themes = "".join(_render_theme(theme, article_map) for theme in category.themes)
+    themes = "".join(_render_theme(theme, article_index) for theme in category.themes)
     return (
         '<table width="100%" cellpadding="0" cellspacing="0" border="0" '
         'style="margin: 0 0 30px 0;"><tr><td>' + header + verdict + themes + "</td></tr></table>"
@@ -542,7 +616,7 @@ def _render_cross_cutting(signals: List[CrossCuttingSignal]) -> str:
 
 
 def _render_personal(
-    personal: Optional[PersonalBlock], article_map: Dict[str, str]
+    personal: Optional[PersonalBlock], article_index: Dict[str, Dict[str, str]]
 ) -> str:
     """Render the personal-interest digest block (e.g. Cycling)."""
     if personal is None:
@@ -560,7 +634,7 @@ def _render_personal(
             f'<p style="margin: 0 0 10px 0; font-size: 1em; color: #555; '
             f'line-height: 1.6;">{html.escape(personal.summary)}</p>'
         )
-    links = _render_article_links(personal.top_stories, article_map)
+    links = _render_article_links(personal.top_stories, article_index)
     return (
         '<table width="100%" cellpadding="0" cellspacing="0" border="0" '
         'style="margin: 0 0 30px 0;"><tr><td>' + header + summary + links + "</td></tr></table>"
@@ -570,7 +644,7 @@ def _render_personal(
 @pydantic.validate_call(validate_return=True)
 def render_brief_html(
     brief: BriefSynthesis,
-    article_map: Dict[str, str],
+    article_index: Dict[str, Dict[str, str]],
     date: str,
     article_count: int,
     themed_order: Optional[List[str]] = None,
@@ -582,10 +656,10 @@ def render_brief_html(
             ordered.append(name)
 
     sections = [
-        _render_category(name, brief.categories[name], article_map) for name in ordered
+        _render_category(name, brief.categories[name], article_index) for name in ordered
     ]
     sections.append(_render_cross_cutting(brief.cross_cutting))
-    sections.append(_render_personal(brief.personal, article_map))
+    sections.append(_render_personal(brief.personal, article_index))
     brief_content = "\n".join(section for section in sections if section)
 
     template = files("rss_email").joinpath("brief_body.html").read_text(encoding="utf-8")
@@ -627,10 +701,10 @@ def generate_brief(
     if brief is None:
         return None
 
-    article_map = build_article_map(synthesis_input)
+    article_index = build_article_index(synthesis_input)
     return render_brief_html(
         brief,
-        article_map,
+        article_index,
         date,
         article_count,
         themed_order=config.get("themed_categories", []),
