@@ -37,6 +37,10 @@ const ANTHROPIC_API_KEY_PARAMETER = 'rss-email-anthropic-api-key';
 const DEFAULT_CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
 const BRIEF_SYNTHESIS_CLAUDE_MODEL = 'claude-sonnet-4-6';
 
+// Keep in sync with DEFAULT_MEMORY_KEY/DEFAULT_WINDOW_DAYS in src/rss_email/brief_memory.py
+const BRIEF_MEMORY_KEY = 'brief-memory/memory.json';
+const BRIEF_MEMORY_DAYS = '14';
+
 export class RSSEmailStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
@@ -311,6 +315,8 @@ export class RSSEmailStack extends cdk.Stack {
         BRIEF_CLAUDE_MODEL: BRIEF_SYNTHESIS_CLAUDE_MODEL,
         CLAUDE_MODEL: BRIEF_SYNTHESIS_CLAUDE_MODEL,
         CLAUDE_API_TIMEOUT: '60',
+        BRIEF_MEMORY_KEY: BRIEF_MEMORY_KEY,
+        BRIEF_MEMORY_DAYS: BRIEF_MEMORY_DAYS,
       },
       role: role,
       layers: [layer],

@@ -16,7 +16,16 @@ from .article_processor import (
     _article_to_source,
     _iter_category_entries,
 )
-from .brief_generator import generate_brief
+from .brief_generator import generate_brief_full
+from .brief_memory import (
+    DEFAULT_MEMORY_KEY,
+    DEFAULT_WINDOW_DAYS,
+    append_and_prune,
+    build_day_record,
+    load_memory,
+    render_previous_context,
+    save_memory,
+)
 from .models import ArticleSource
 
 logger = logging.getLogger(__name__)
@@ -116,24 +125,42 @@ def _maybe_send_brief(
     client: anthropic.Anthropic,
     to_email: str,
     source_email: str,
+    bucket: str,
 ) -> None:
     """Generate and send the companion RSS Brief (best-effort).
 
     Any failure is logged and swallowed: the digest has already been sent, so the
     brief must never break the main flow or affect last_run.
+
+    Loads the rolling brief memory from S3 (see ``brief_memory.py``) to give the
+    synthesis prompt "previously covered" context, and - only on a successful
+    send - writes today's themes back to memory so tomorrow's run can see them.
+    A memory load/save failure is swallowed by ``load_memory``/``save_memory``
+    themselves and never affects whether the brief is sent.
     """
+    memory_key = os.environ.get("BRIEF_MEMORY_KEY", DEFAULT_MEMORY_KEY)
+    window_days = int(os.environ.get("BRIEF_MEMORY_DAYS", str(DEFAULT_WINDOW_DAYS)))
     try:
         article_count = sum(len(items) for items in categories.values())
         today = datetime.now().strftime("%Y-%m-%d")
-        brief_html = generate_brief(
+
+        memory = load_memory(bucket, memory_key)
+        previous_context = render_previous_context(memory)
+
+        result = generate_brief_full(
             categories,
             date=today,
             article_count=article_count,
             client=client,
+            previous_context=previous_context,
         )
-        if brief_html:
-            send_via_ses(to_email, source_email, f"RSS Brief — {today}", brief_html)
+        if result:
+            send_via_ses(to_email, source_email, f"RSS Brief — {today}", result.html)
             logger.info("Sent companion RSS Brief")
+
+            today_record = build_day_record(result.synthesis, result.article_index, today)
+            updated_memory = append_and_prune(memory, today_record, window_days)
+            save_memory(bucket, updated_memory, memory_key)
     except Exception as exc:  # pylint: disable=broad-except
         logger.error("Brief generation/send failed (digest already sent): %s", exc)
 
@@ -284,7 +311,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
         set_last_run(last_run_param)
 
         # Companion RSS Brief (best-effort; must never block the digest)
-        _maybe_send_brief(all_categories, client, to_email, source_email)
+        _maybe_send_brief(all_categories, client, to_email, source_email, bucket)
 
         logger.info("Successfully sent email with %d categories", len(all_categories))
 

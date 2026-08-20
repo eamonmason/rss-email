@@ -203,3 +203,38 @@ class BriefSynthesis(BaseModel):
     categories: Dict[str, BriefCategory] = Field(default_factory=dict)
     cross_cutting: List[CrossCuttingSignal] = Field(default_factory=list)
     personal: Optional[PersonalBlock] = None
+
+
+class BriefMemoryArticle(BaseModel):
+    """A single article referenced by a remembered theme."""
+
+    title: str
+    link: str = ""
+
+
+class BriefMemoryTheme(BaseModel):
+    """A remembered theme from a past day's RSS Brief."""
+
+    category: str
+    theme: str
+    signal_strength: Literal["HIGH", "STRATEGIC", "GENERAL"]
+    tldr: str = ""
+    articles: List[BriefMemoryArticle] = Field(default_factory=list)
+
+
+class BriefMemoryDay(BaseModel):
+    """One day's worth of remembered RSS Brief themes."""
+
+    date: str
+    themes: List[BriefMemoryTheme] = Field(default_factory=list)
+
+
+class BriefMemory(BaseModel):
+    """A rolling window of remembered RSS Brief days, persisted to S3.
+
+    See ``brief_memory.py`` for the load/save/prune logic that keeps this
+    small and the ``brief_generator.py`` prompt integration that turns it
+    into "previously covered" context for the daily synthesis call.
+    """
+
+    days: List[BriefMemoryDay] = Field(default_factory=list)
