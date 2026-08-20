@@ -19,6 +19,7 @@ from rss_email.json_repair import (
     repair_truncated_json,
 )  # Move this import to the top level
 
+from .json_utils import extract_json_from_text
 from .models import ArticleSource, DEFAULT_CLAUDE_MODEL
 
 # Add to the top imports section
@@ -249,7 +250,7 @@ INSTRUCTIONS:
 CATEGORIES (in priority order; prefer tech-related when applicable):
 {", ".join(PRIORITY_CATEGORIES)}
 
-OUTPUT FORMAT (return ONLY valid JSON, no commentary):
+OUTPUT FORMAT (return ONLY valid JSON, no markdown, no backticks, no commentary):
 {{
   "categories": {{
     "category_name": [
@@ -627,36 +628,23 @@ def _call_claude_with_prompt(
             # Log the problematic response for debugging
             logger.debug("Problematic JSON response: %s", response_text[:1000])
 
-            # Try to repair the JSON (using the top-level import)
-            categorized_data = repair_truncated_json(response_text)
+            # Claude sometimes wraps the JSON in a markdown code fence or adds
+            # stray prose despite being told not to; extract_json_from_text
+            # strips fences and tries several extraction strategies, validating
+            # against required_fields (same utility article_grouper.py and
+            # brief_generator.py already rely on for this).
+            categorized_data = extract_json_from_text(
+                response_text, required_fields=["categories"]
+            )
 
             if categorized_data is None:
-                logger.error(
-                    "Failed to repair truncated JSON using repair_truncated_json"
-                )
-                # Instead of returning None, let's try a more aggressive approach
-                # Look for the actual JSON object within the response
-                try:
-                    # Find first opening brace
-                    start = response_text.find("{")
-                    if start == -1:
-                        logger.error("No JSON object found in response")
-                        return None, None
-
-                    # Find last closing brace
-                    end = response_text.rfind("}")
-                    if end == -1:
-                        logger.error("No closing brace found in response")
-                        return None, None
-
-                    # Extract potential JSON substring
-                    json_substring = response_text[start:end + 1]
-                    categorized_data = json.loads(json_substring)
-                    logger.info("Successfully extracted JSON from response substring")
-                except (json.JSONDecodeError, ValueError) as extract_error:
-                    logger.error(
-                        "Failed to extract JSON from response: %s", extract_error
-                    )
+                # Not just noise-wrapped - likely genuine truncation (response
+                # cut off mid-object, e.g. max_tokens hit). extract_json_from_text
+                # can't complete a structure that never closes, so fall back to
+                # repair_truncated_json's brace/quote balancing.
+                categorized_data = repair_truncated_json(response_text)
+                if categorized_data is None:
+                    logger.error("Could not extract or repair JSON from response")
                     return None, None
 
         if not categorized_data:

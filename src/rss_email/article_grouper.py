@@ -57,7 +57,7 @@ GROUPING RULE (STRICT):
 - When in doubt, KEEP ARTICLES SEPARATE. Singleton groups are the default.
 
 OUTPUT RULES:
-- Return ONLY valid JSON, no commentary.
+- Return ONLY valid JSON, no markdown, no backticks, no commentary.
 - Every input article id must appear in EXACTLY ONE group.
 - Most groups will contain a single article. That is expected.
 
