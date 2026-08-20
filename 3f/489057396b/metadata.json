@@ -1,0 +1,32 @@
+{
+  "cli_version": "0.8.42",
+  "checkpoint_id": "3f489057396b",
+  "strategy": "manual-commit",
+  "branch": "fix/brief-citation-bracket-formatting",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "eval/README.md",
+    "eval/assertions/major_coverage.cjs",
+    "eval/assertions/source_ranking.cjs",
+    "eval/provider.py",
+    "src/rss_email/brief_generator.py",
+    "src/rss_email/models.py",
+    "tests/test_brief_generator.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/3f/489057396b/0/metadata.json",
+      "transcript": "/3f/489057396b/0/full.jsonl",
+      "compact_transcript": "/3f/489057396b/0/transcript.jsonl",
+      "content_hash": "/3f/489057396b/0/content_hash.txt",
+      "prompt": "/3f/489057396b/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 184,
+    "cache_creation_tokens": 253007,
+    "cache_read_tokens": 18618330,
+    "output_tokens": 87149,
+    "api_call_count": 92
+  }
+}
