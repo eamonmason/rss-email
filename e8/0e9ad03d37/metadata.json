@@ -1,0 +1,33 @@
+{
+  "cli_version": "0.8.42",
+  "checkpoint_id": "e80e9ad03d37",
+  "strategy": "manual-commit",
+  "branch": "feat/brief-memory",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "CLAUDE.md",
+    "lib/rss_lambda_stack.ts",
+    "src/rss_email/brief_generator.py",
+    "src/rss_email/brief_memory.py",
+    "src/rss_email/models.py",
+    "src/rss_email/retrieve_and_send_email.py",
+    "tests/test_brief_generator.py",
+    "tests/test_brief_memory.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/e8/0e9ad03d37/0/metadata.json",
+      "transcript": "/e8/0e9ad03d37/0/full.jsonl",
+      "compact_transcript": "/e8/0e9ad03d37/0/transcript.jsonl",
+      "content_hash": "/e8/0e9ad03d37/0/content_hash.txt",
+      "prompt": "/e8/0e9ad03d37/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 152,
+    "cache_creation_tokens": 257439,
+    "cache_read_tokens": 8711171,
+    "output_tokens": 55544,
+    "api_call_count": 76
+  }
+}
