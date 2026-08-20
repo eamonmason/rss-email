@@ -44,6 +44,13 @@ def test_grouping_prompt_mentions_same_event_rule():
     assert "article_2" in prompt
 
 
+def test_grouping_prompt_forbids_markdown():
+    """The prompt explicitly forbids code fences, not just 'commentary'."""
+    prompt = create_grouping_prompt(_articles())
+    assert "no markdown" in prompt
+    assert "no backticks" in prompt
+
+
 def test_parse_grouping_returns_indices_in_order():
     """Valid grouping JSON parses into index lists."""
     response = json.dumps({

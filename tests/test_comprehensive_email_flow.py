@@ -268,6 +268,90 @@ class TestComprehensiveEmailFlow(unittest.TestCase):
             self.assertEqual(len(result.categories["Technology"]), 1)
             self.assertEqual(result.categories["Technology"][0].title, "Test Article")
 
+    @patch("rss_email.article_grouper.anthropic.Anthropic")
+    @patch("rss_email.article_processor.anthropic.Anthropic")
+    def test_claude_processing_with_markdown_fenced_response(
+        self, mock_proc_anthropic, mock_grp_anthropic
+    ):
+        """A ```json-fenced summarize response is parsed cleanly, no fallback.
+
+        Regression test for the JSON parse errors seen in production: Claude
+        (particularly the default Haiku model) wraps its JSON in a markdown
+        code fence, which fails the primary json.loads parse with "Expecting
+        value: line 1 column 1 (char 0)". extract_json_from_text must recover
+        the real data directly, without any group falling back to
+        "Uncategorized".
+        """
+        articles = [
+            {
+                "title": "AI Breakthrough: New Machine Learning Model",
+                "link": "https://example.com/ai-breakthrough",
+                "description": "New ML model shows promising NLP results.",
+                "pubDate": "Thu, 02 Jan 2025 12:00:00 GMT",
+                "sortDate": 1735819200,
+            },
+            {
+                "title": "Cybersecurity Alert: New Vulnerability Discovered",
+                "link": "https://example.com/security-alert",
+                "description": "Critical vulnerability found in web frameworks.",
+                "pubDate": "Thu, 02 Jan 2025 10:30:00 GMT",
+                "sortDate": 1735813800,
+            },
+        ]
+
+        mock_client_instance = MagicMock()
+        mock_proc_anthropic.return_value = mock_client_instance
+        mock_grp_anthropic.return_value = mock_client_instance
+
+        grouping_response = {
+            "groups": [["article_0"], ["article_1"]],
+            "article_count": 2,
+        }
+        summary_response = {
+            "categories": {
+                "AI/ML": [self.mock_claude_response["categories"]["AI/ML"][0]],
+                "Cybersecurity": [
+                    self.mock_claude_response["categories"]["Cybersecurity"][0]
+                ],
+            },
+            "group_count": 2,
+        }
+
+        grouping = MagicMock()
+        grouping.content = [MagicMock()]
+        grouping.content[0].text = json.dumps(grouping_response)
+        grouping.usage.input_tokens = 200
+        grouping.usage.output_tokens = 100
+
+        summary = MagicMock()
+        summary.content = [MagicMock()]
+        # Wrapped exactly as Claude does when it ignores "no markdown, no
+        # backticks" - a fenced block with nothing else around it.
+        summary.content[0].text = (
+            "```json\n" + json.dumps(summary_response) + "\n```"
+        )
+        summary.usage.input_tokens = 1000
+        summary.usage.output_tokens = 500
+
+        mock_client_instance.messages.create.side_effect = [grouping, summary]
+
+        with patch.dict("os.environ", {
+            "CLAUDE_ENABLED": "true",
+            "CLAUDE_MODEL": "claude-haiku-4-5-20251001",
+            "ANTHROPIC_API_KEY": "test-key",
+        }):
+            rate_limiter = ClaudeRateLimiter()
+            result = process_articles_with_claude(articles, rate_limiter)
+
+            self.assertIsNotNone(result)
+            self.assertIn("AI/ML", result.categories)
+            self.assertIn("Cybersecurity", result.categories)
+            self.assertNotIn("Uncategorized", result.categories)
+            self.assertEqual(
+                result.categories["AI/ML"][0].title,
+                "AI Breakthrough: New Machine Learning Model",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -89,6 +89,20 @@ def test_group_summary_prompt_contains_required_fields():
     assert articles[1]["title"] in prompt
 
 
+def test_group_summary_prompt_forbids_markdown():
+    """The prompt explicitly forbids code fences, not just 'commentary'.
+
+    Regression test: without this instruction Claude (particularly the
+    default Haiku model) reliably wraps its JSON response in a ```json fence,
+    which fails the primary json.loads parse with "Expecting value: line 1
+    column 1 (char 0)" on every batch.
+    """
+    payloads = [_build_group_payload("group_0", [0], create_sample_articles())]
+    prompt = create_group_summary_prompt(payloads)
+    assert "no markdown" in prompt
+    assert "no backticks" in prompt
+
+
 def test_processed_article_from_response_merges_sources():
     """ProcessedArticle.sources contains one entry per member article."""
     articles = create_sample_articles()
