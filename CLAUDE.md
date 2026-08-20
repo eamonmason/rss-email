@@ -98,7 +98,8 @@ local `pip` bundling — acceptable for `synth`/`diff`, never for a real deploy.
 - **models.py**: Shared Pydantic models for consistent data validation across the application
 - **lib/rss_lambda_stack.ts**: Main CDK infrastructure stack defining all AWS resources
 - **cli_article_processor.py**: CLI tool for testing article processing with Claude API locally
-- **compression_utils.py**: Utilities for compressing/decompressing article data for S3 storage
+- **brief_generator.py**: Synthesises the companion "RSS Brief" email (themes, signal strength, cross-cutting signals) from a day's categorised articles via a single Claude call
+- **brief_memory.py**: Persists a rolling window of recent RSS Brief days to S3 so the synthesis prompt can avoid repeating stories and frame multi-day stories as developments — see "Brief Memory" below
 - **json_repair.py**: JSON repair utilities for handling malformed API responses
 - **json_utils.py**: JSON extraction and validation utilities with Pydantic integration
 
@@ -123,6 +124,30 @@ local `pip` bundling — acceptable for `synth`/`diff`, never for a real deploy.
 - `TO_EMAIL_ADDRESS`: Primary recipient email
 - `EMAIL_RECIPIENTS`: Comma-separated list of recipient emails
 - `AWS_ACCOUNT_ID` & `AWS_REGION`: AWS deployment configuration
+
+### Brief Memory
+
+The RSS Brief (not the daily digest) remembers recent days so it can avoid
+repeating stories and frame multi-day stories as developments instead of new
+news. `retrieve_and_send_email._maybe_send_brief` loads a rolling window of
+prior days from a single S3 object (`brief_memory.load_memory`), renders it
+into a compact "previously covered" text block
+(`brief_memory.render_previous_context`), and passes it into the synthesis
+prompt as `previous_context` (`brief_generator.build_prompt`). After a
+successful send, today's themes are reduced to `{category, theme,
+signal_strength, tldr, articles}` records and written back
+(`brief_memory.build_day_record` / `append_and_prune` / `save_memory`),
+pruning anything older than the window. This is intentionally not a vector
+store or managed memory service — at one run/day and roughly a hundred
+articles/day, a small rolling JSON object is simpler and cheaper, and Claude
+does the semantic matching in-prompt rather than via embeddings.
+
+- `BRIEF_MEMORY_KEY` (default `brief-memory/memory.json`): S3 key for the
+  memory object, in the same bucket as everything else (`RSS_BUCKET`).
+- `BRIEF_MEMORY_DAYS` (default `14`): rolling window size in days.
+
+A memory load/save failure is swallowed and logged — it never blocks the
+digest or the brief.
 
 ### Feed Configuration
 RSS sources are configured in `feed_urls.json` with this structure:

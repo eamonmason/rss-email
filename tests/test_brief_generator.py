@@ -12,11 +12,13 @@ import pytest
 import cli_brief_generator
 from rss_email.article_processor import ProcessedArticle
 from rss_email.brief_generator import (
+    BriefResult,
     build_article_index,
     build_prompt,
     build_synthesis_input,
     ensure_article_ids,
     generate_brief,
+    generate_brief_full,
     match_title_to_url,
     render_brief_html,
     source_tier,
@@ -244,6 +246,28 @@ def test_build_prompt_floor_can_be_disabled():
     )
     assert "never drop a genuinely major story" not in prompt
     assert "Be ruthless with noise" in prompt
+
+
+def test_build_prompt_omits_previous_context_when_empty():
+    """No previous_context -> no "PREVIOUS DAYS" section in the prompt."""
+    prompt = build_prompt(
+        {"AI/ML": [{"title": "T", "url": "u", "summary": "s", "source": "Blog", "id": "1"}]},
+        SYNTH_CONFIG,
+    )
+    assert "PREVIOUS DAYS" not in prompt
+
+
+def test_build_prompt_includes_previous_context_and_continuity_rule():
+    """A non-empty previous_context is embedded with the continuity rule."""
+    prompt = build_prompt(
+        {"AI/ML": [{"title": "T", "url": "u", "summary": "s", "source": "Blog", "id": "1"}]},
+        SYNTH_CONFIG,
+        previous_context="## 2026-06-13\n- [AI/ML] (HIGH) Some earlier theme: details",
+    )
+    assert "PREVIOUS DAYS" in prompt
+    assert "Some earlier theme" in prompt
+    assert "Continuity rule:" in prompt
+    assert "never cite it in top_articles" in prompt
 
 
 # --- category canonicalisation (AI/ML key fix) ----------------------------
@@ -557,6 +581,33 @@ def test_generate_brief_end_to_end(monkeypatch):
     assert "Excluded" not in html_body
 
 
+def test_generate_brief_full_returns_synthesis_and_index(monkeypatch):
+    """generate_brief_full exposes the validated synthesis + article index too."""
+    monkeypatch.setenv("BRIEF_ENABLED", "true")
+    categories = {
+        "AI/ML": [
+            {"title": "Open model beats GPT", "link": "https://x/a", "summary": "s"},
+            {"title": "Llama 4 released", "link": "https://x/b", "summary": "s"},
+        ],
+        "Cycling": [
+            {
+                "title": "Tour de France route announced",
+                "link": "https://x/cycling",
+                "summary": "s",
+            }
+        ],
+    }
+    client = make_client([json.dumps(VALID_SYNTHESIS)])
+    result = generate_brief_full(
+        categories, date="2026-06-14", article_count=3, client=client
+    )
+    assert result is not None
+    assert "RSS Brief — 2026-06-14" in result.html
+    assert isinstance(result.synthesis, BriefSynthesis)
+    assert "AI/ML" in result.synthesis.categories
+    assert result.article_index["1"]["title"] == "Open model beats GPT"
+
+
 def test_generate_brief_skips_when_no_themed(monkeypatch):
     """Only excluded categories present -> no brief."""
     monkeypatch.setenv("BRIEF_ENABLED", "true")
@@ -605,7 +656,7 @@ def _setup_handler_mocks(mock_boto3_client, mock_anthropic):
     mock_anthropic.return_value.messages.batches.results.return_value = [result]
 
 
-@patch("rss_email.retrieve_and_send_email.generate_brief")
+@patch("rss_email.retrieve_and_send_email.generate_brief_full")
 @patch("rss_email.retrieve_and_send_email.set_last_run")
 @patch("rss_email.retrieve_and_send_email.send_via_ses")
 @patch("rss_email.retrieve_and_send_email.create_html")
@@ -617,13 +668,15 @@ def test_handler_sends_brief_after_digest(
     mock_create_html,
     mock_send_via_ses,
     mock_set_last_run,
-    mock_generate_brief,
+    mock_generate_brief_full,
     handler_env,
 ):
     """The handler sends a second (brief) email after the digest."""
     _setup_handler_mocks(mock_boto3_client, mock_anthropic)
     mock_create_html.return_value = "<digest/>"
-    mock_generate_brief.return_value = "<brief/>"
+    mock_generate_brief_full.return_value = BriefResult(
+        html="<brief/>", synthesis=BriefSynthesis(), article_index={}
+    )
 
     result = lambda_handler(_batch_event(), None)
 
@@ -634,7 +687,7 @@ def test_handler_sends_brief_after_digest(
     assert "Your Daily RSS Digest" in subjects
 
 
-@patch("rss_email.retrieve_and_send_email.generate_brief")
+@patch("rss_email.retrieve_and_send_email.generate_brief_full")
 @patch("rss_email.retrieve_and_send_email.set_last_run")
 @patch("rss_email.retrieve_and_send_email.send_via_ses")
 @patch("rss_email.retrieve_and_send_email.create_html")
@@ -646,13 +699,13 @@ def test_handler_brief_failure_does_not_block_digest(
     mock_create_html,
     mock_send_via_ses,
     mock_set_last_run,
-    mock_generate_brief,
+    mock_generate_brief_full,
     handler_env,
 ):
     """A brief failure leaves the digest sent and last_run advanced."""
     _setup_handler_mocks(mock_boto3_client, mock_anthropic)
     mock_create_html.return_value = "<digest/>"
-    mock_generate_brief.side_effect = RuntimeError("synthesis boom")
+    mock_generate_brief_full.side_effect = RuntimeError("synthesis boom")
 
     result = lambda_handler(_batch_event(), None)
 

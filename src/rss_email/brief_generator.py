@@ -15,7 +15,7 @@ import logging
 import os
 import re
 from importlib.resources import files
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, NamedTuple, Optional
 
 import anthropic
 import pydantic
@@ -58,6 +58,7 @@ READER PROFILE:
 PERSONAL INTERESTS:
 {PERSONAL_INTERESTS}
 
+{PREVIOUS_CONTEXT}
 For each category below, identify 3-5 key themes. Use each category key EXACTLY as given
 (keep slashes and punctuation, e.g. "AI/ML"). Return ONLY valid JSON, no markdown, no
 backticks, matching this schema:
@@ -122,6 +123,26 @@ SOURCE_RULE = (
     "Google News) when choosing which articles to feature. When the same story appears from "
     "multiple sources, feature and rank the higher-quality primary or community source."
 )
+
+PREVIOUS_CONTEXT_RULE = (
+    "Continuity rule: the PREVIOUS DAYS block above is background only, not today's "
+    "material - never cite it in top_articles/top_stories, only today's numeric ids. "
+    "If today's articles cover a story already reported with no real development since "
+    "then, do not present it as a new theme: omit it, or fold a one-line update into a "
+    "related theme instead of restating the old facts as breaking news. If a story HAS "
+    "moved forward, write the theme around what's new (referencing the earlier date, "
+    "e.g. \"since Tuesday's...\") rather than re-explaining it from scratch."
+)
+
+
+def _render_previous_context_section(previous_context: str) -> str:
+    """Wrap rendered brief memory with usage rules, or omit the section entirely."""
+    if not previous_context:
+        return ""
+    return (
+        f"PREVIOUS DAYS (for context only - what this reader was already told):\n"
+        f"{previous_context}\n\n{PREVIOUS_CONTEXT_RULE}\n"
+    )
 
 
 def load_brief_config() -> Dict[str, Any]:
@@ -256,12 +277,18 @@ def build_synthesis_input(
 
 @pydantic.validate_call(validate_return=True, config={"arbitrary_types_allowed": True})
 def build_prompt(
-    synthesis_input: Dict[str, List[Dict[str, str]]], config: Dict[str, Any]
+    synthesis_input: Dict[str, List[Dict[str, str]]],
+    config: Dict[str, Any],
+    previous_context: str = "",
 ) -> str:
     """Assemble the synthesis prompt from the profile, sources, and articles.
 
     Within each category, articles are ordered by source tier (high-quality
     sources first) so the model sees prioritised sources before the rest.
+    ``previous_context`` is the rendered output of
+    ``brief_memory.render_previous_context`` - recent days' themes, given as
+    background so Claude can avoid repeating stories and frame developing
+    ones as continuations. Empty by default, which omits the section.
     """
     blocks = []
     for category, items in synthesis_input.items():
@@ -285,6 +312,7 @@ def build_prompt(
         .replace("{PERSONAL_INTERESTS}", config.get("personal_interests", ""))
         .replace("{MAJOR_STORY_RULE}", major_rule)
         .replace("{SOURCE_RULE}", SOURCE_RULE)
+        .replace("{PREVIOUS_CONTEXT}", _render_previous_context_section(previous_context))
         .replace("{ARTICLES_BY_CATEGORY}", articles_block)
     )
 
@@ -340,6 +368,7 @@ def synthesize(
     config: Dict[str, Any],
     client: Optional[Any] = None,
     temperature: float = 0.3,
+    previous_context: str = "",
 ) -> Optional[BriefSynthesis]:
     """Run one Claude synthesis call (with one retry) and validate the result.
 
@@ -351,6 +380,9 @@ def synthesize(
     doesn't already have them (mutates it in place) - ``build_prompt`` cites
     articles by id, so this guarantees it always has one to cite regardless
     of how the caller built ``synthesis_input``.
+
+    ``previous_context`` is passed straight through to ``build_prompt`` - see
+    its docstring.
     """
     if not synthesis_input:
         logger.info("No themed articles to synthesise; skipping brief")
@@ -365,7 +397,7 @@ def synthesize(
     known_categories = list(config.get("themed_categories", [])) + list(
         config.get("personal_categories", [])
     )
-    prompt = build_prompt(synthesis_input, config)
+    prompt = build_prompt(synthesis_input, config, previous_context)
     api_timeout = int(os.environ.get("CLAUDE_API_TIMEOUT", "120"))
 
     for attempt in (1, 2):
@@ -671,17 +703,29 @@ def render_brief_html(
     )
 
 
-def generate_brief(
+class BriefResult(NamedTuple):
+    """Everything ``_maybe_send_brief`` needs to send the email and update memory."""
+
+    html: str
+    synthesis: BriefSynthesis
+    article_index: Dict[str, Dict[str, str]]
+
+
+def generate_brief_full(
     categories: Dict[str, List[Any]],
     *,
     date: str,
     article_count: int,
     client: Optional[Any] = None,
-) -> Optional[str]:
-    """Build and render the RSS Brief email body.
+    previous_context: str = "",
+) -> Optional[BriefResult]:
+    """Build the RSS Brief and return its HTML plus the validated synthesis.
 
-    Returns the HTML body, or ``None`` if the brief is disabled, there is no
-    themed/personal content, or synthesis failed. Never raises.
+    Returns ``None`` if the brief is disabled, there is no themed/personal
+    content, or synthesis failed. Never raises. The returned ``synthesis``
+    and ``article_index`` are what ``brief_memory.build_day_record`` needs
+    to persist today's themes for future runs - use ``generate_brief``
+    instead when only the HTML is needed.
     """
     config = load_brief_config()
     if not config.get("enabled", True):
@@ -697,15 +741,40 @@ def generate_brief(
         logger.info("No themed/personal articles available; skipping brief")
         return None
 
-    brief = synthesize(synthesis_input, config, client=client)
+    brief = synthesize(synthesis_input, config, client=client, previous_context=previous_context)
     if brief is None:
         return None
 
     article_index = build_article_index(synthesis_input)
-    return render_brief_html(
+    rendered_html = render_brief_html(
         brief,
         article_index,
         date,
         article_count,
         themed_order=config.get("themed_categories", []),
     )
+    return BriefResult(html=rendered_html, synthesis=brief, article_index=article_index)
+
+
+def generate_brief(
+    categories: Dict[str, List[Any]],
+    *,
+    date: str,
+    article_count: int,
+    client: Optional[Any] = None,
+    previous_context: str = "",
+) -> Optional[str]:
+    """Build and render the RSS Brief email body.
+
+    Returns the HTML body, or ``None`` if the brief is disabled, there is no
+    themed/personal content, or synthesis failed. Never raises. A thin
+    HTML-only wrapper around ``generate_brief_full``.
+    """
+    result = generate_brief_full(
+        categories,
+        date=date,
+        article_count=article_count,
+        client=client,
+        previous_context=previous_context,
+    )
+    return result.html if result else None
