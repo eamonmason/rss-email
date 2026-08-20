@@ -20,7 +20,11 @@ if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
 # pylint: disable=wrong-import-position
-from rss_email.brief_generator import load_brief_config, synthesize  # noqa: E402
+from rss_email.brief_generator import (  # noqa: E402
+    ensure_article_ids,
+    load_brief_config,
+    synthesize,
+)
 
 
 def call_api(prompt: str, options: Dict[str, Any], context: Dict[str, Any]):
@@ -41,6 +45,11 @@ def call_api(prompt: str, options: Dict[str, Any], context: Dict[str, Any]):
 
     with open(fixture_path, "r", encoding="utf-8") as handle:
         synthesis_input = json.load(handle)
+
+    # Fixtures predate the "id" field build_synthesis_input now assigns in the
+    # real pipeline; backfill it here so build_prompt (which cites articles by
+    # id) works against fixtures loaded straight from disk.
+    ensure_article_ids(synthesis_input)
 
     config = load_brief_config()
     brief = synthesize(synthesis_input, config, temperature=0)

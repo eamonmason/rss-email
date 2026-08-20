@@ -12,15 +12,18 @@ import pytest
 import cli_brief_generator
 from rss_email.article_processor import ProcessedArticle
 from rss_email.brief_generator import (
-    build_article_map,
+    build_article_index,
     build_prompt,
     build_synthesis_input,
+    ensure_article_ids,
     generate_brief,
     match_title_to_url,
     render_brief_html,
     source_tier,
     synthesize,
+    _best_title_match,
     _canonical_category,
+    _render_article_links,
     _signal_badge,
 )
 from rss_email.models import BriefSynthesis, BriefTheme
@@ -48,14 +51,14 @@ VALID_SYNTHESIS = {
                 "theme": "Open-weight models close the gap",
                 "signal_strength": "HIGH",
                 "tldr": "Open models now rival proprietary ones. This shifts build-vs-buy.",
-                "top_articles": ["Open model beats GPT", "Llama 4 released"],
+                "top_articles": ["1", "2"],
                 "relevance_to_reader": "Affects your platform tooling choices.",
             },
             {
                 "theme": "Minor benchmark updates",
                 "signal_strength": "GENERAL",
                 "tldr": "Incremental gains.",
-                "top_articles": ["Benchmark tweak"],
+                "top_articles": ["3"],
                 "relevance_to_reader": None,
             },
         ],
@@ -68,9 +71,17 @@ VALID_SYNTHESIS = {
         }
     ],
     "personal": {
-        "top_stories": ["Tour de France route announced"],
+        "top_stories": ["4"],
         "summary": "Cycling season heats up.",
     },
+}
+
+# id -> {title, url, source} matching VALID_SYNTHESIS's top_articles/top_stories ids.
+VALID_ARTICLE_INDEX = {
+    "1": {"title": "Open model beats GPT", "url": "https://x/a", "source": ""},
+    "2": {"title": "Llama 4 released", "url": "https://x/b", "source": ""},
+    "3": {"title": "Benchmark tweak", "url": "", "source": ""},
+    "4": {"title": "Tour de France route announced", "url": "https://x/cycling", "source": ""},
 }
 
 
@@ -105,7 +116,22 @@ def test_build_synthesis_input_filters_categories():
         "url": "https://x/a",
         "summary": "sa",
         "source": "",
+        "id": "1",
     }
+
+
+def test_build_synthesis_input_assigns_stable_ids():
+    """Every article gets a unique, stable numeric-string id."""
+    categories = {
+        "AI/ML": [
+            {"title": "A", "link": "https://x/a", "summary": "sa"},
+            {"title": "B", "link": "https://x/b", "summary": "sb"},
+        ],
+        "Cycling": [{"title": "C", "link": "https://x/c", "summary": "sc"}],
+    }
+    result = build_synthesis_input(categories, ["AI/ML"], ["Cycling"])
+    ids = [item["id"] for item in result["AI/ML"]] + [item["id"] for item in result["Cycling"]]
+    assert ids == ["1", "2", "3"]
 
 
 def test_build_synthesis_input_handles_objects_and_dicts():
@@ -145,6 +171,27 @@ def test_build_synthesis_input_extracts_source():
     assert sources == {"Obj": "Hacker News", "Dict": "Techmeme"}
 
 
+# --- ensure_article_ids ----------------------------------------------------
+
+
+def test_ensure_article_ids_backfills_missing():
+    """Articles without an id get one assigned in dict/list order."""
+    synthesis_input = {
+        "AI/ML": [{"title": "A"}, {"title": "B"}],
+        "Cycling": [{"title": "C"}],
+    }
+    ensure_article_ids(synthesis_input)
+    assert [item["id"] for item in synthesis_input["AI/ML"]] == ["1", "2"]
+    assert synthesis_input["Cycling"][0]["id"] == "3"
+
+
+def test_ensure_article_ids_preserves_existing():
+    """An article that already has an id keeps it."""
+    synthesis_input = {"AI/ML": [{"title": "A", "id": "custom"}]}
+    ensure_article_ids(synthesis_input)
+    assert synthesis_input["AI/ML"][0]["id"] == "custom"
+
+
 # --- source tiering -------------------------------------------------------
 
 
@@ -172,17 +219,18 @@ def test_build_prompt_includes_source_and_rules():
     synthesis_input = {
         "AI/ML": [
             {"title": "Aggregated", "url": "https://x/a", "summary": "sa",
-             "source": "Techmeme"},
+             "source": "Techmeme", "id": "1"},
             {"title": "From HN", "url": "https://x/h", "summary": "sh",
-             "source": "Hacker News"},
+             "source": "Hacker News", "id": "2"},
         ]
     }
     prompt = build_prompt(synthesis_input, SYNTH_CONFIG)
-    assert "[Hacker News] From HN" in prompt
-    assert "[Techmeme] Aggregated" in prompt
+    assert "(2) [Hacker News] From HN" in prompt
+    assert "(1) [Techmeme] Aggregated" in prompt
     assert "personal interests" in prompt.lower()
     assert "Source ranking:" in prompt
     assert "never drop a genuinely major story" in prompt
+    assert "cite articles ONLY by their numeric ID" in prompt
     # High-tier source is presented before the deprioritised one.
     assert prompt.index("From HN") < prompt.index("Aggregated")
 
@@ -191,7 +239,7 @@ def test_build_prompt_floor_can_be_disabled():
     """With major_story_floor false, the ruthless rule is used instead."""
     config = {**SYNTH_CONFIG, "major_story_floor": False}
     prompt = build_prompt(
-        {"AI/ML": [{"title": "T", "url": "u", "summary": "s", "source": "Blog"}]},
+        {"AI/ML": [{"title": "T", "url": "u", "summary": "s", "source": "Blog", "id": "1"}]},
         config,
     )
     assert "never drop a genuinely major story" not in prompt
@@ -261,16 +309,89 @@ def test_match_title_unmatched():
     assert match_title_to_url("Open model beats GPT", mapping) is None
 
 
-def test_build_article_map():
-    """Article map is built from titles with URLs."""
+def test_best_title_match_resolves_bracket_prefixed_text():
+    """A model that ignores the id instruction and echoes '[Source] Title' back
+    still resolves to the plain candidate title via word-overlap, when the
+    extra source words don't dilute the overlap below threshold."""
+    candidates = ["OpenAI slows down training after its AI carried out hack"]
+    text = "BBC] OpenAI slows down training after its AI carried out hack"
+    assert _best_title_match(text, candidates) == candidates[0]
+
+
+def test_best_title_match_gives_up_below_threshold():
+    """A long/multi-word leaked prefix dilutes the overlap too far to match."""
+    candidates = ["OpenAI slows down training after its AI carried out hack"]
+    text = "BBC News - Technology] OpenAI slows down training after its AI carried out hack"
+    assert _best_title_match(text, candidates) is None
+
+
+def test_build_article_index():
+    """Article index is id-keyed and includes articles without a URL too."""
     synthesis_input = {
         "AI/ML": [
-            {"title": "A", "url": "https://x/a", "summary": ""},
-            {"title": "B", "url": "", "summary": ""},
+            {"title": "A", "url": "https://x/a", "summary": "", "source": "Blog", "id": "1"},
+            {"title": "B", "url": "", "summary": "", "source": "", "id": "2"},
         ]
     }
-    mapping = build_article_map(synthesis_input)
-    assert mapping == {"A": "https://x/a"}
+    index = build_article_index(synthesis_input)
+    assert index == {
+        "1": {"title": "A", "url": "https://x/a", "source": "Blog"},
+        "2": {"title": "B", "url": "", "source": ""},
+    }
+
+
+def test_render_article_links_recovers_from_bracket_leak_and_drops_unmatched():
+    """Regression test for the malformed-bracket bug: if Claude ignores the id
+    instruction and echoes title-like text back (with a leaked source prefix,
+    or the whole title wrapped in brackets), the renderer either composes a
+    correct "[Source] Title" from a fuzzy title match, or drops the citation
+    entirely - it never echoes Claude's malformed string into the email."""
+    article_index = {
+        "10": {
+            "title": (
+                "'Not a theoretical risk,' feds warn as attackers use AI-made "
+                "code to hack critical infrastructure controllers"
+            ),
+            "url": "https://example.com/feds-warn",
+            "source": "The Register",
+        },
+        "11": {
+            "title": "OpenAI slows down training after its AI carried out hack",
+            "url": "",
+            "source": "BBC News - Technology",
+        },
+    }
+    references = [
+        # Whole title wrapped in brackets - clears the fuzzy-match threshold.
+        "['Not a theoretical risk,' feds warn as attackers use AI-made code to "
+        "hack critical infrastructure controllers]",
+        # Multi-word source prefix missing its opening bracket - too different
+        # from the plain title to clear the threshold, so it's dropped.
+        "BBC News - Technology] OpenAI slows down training after its AI carried out hack",
+    ]
+
+    result = _render_article_links(references, article_index)
+
+    # Never echoes Claude's malformed string verbatim.
+    assert "['Not a theoretical risk,'" not in result
+    assert "Technology] OpenAI" not in result
+
+    # The whole-title-bracket case recovers via fuzzy match and is composed
+    # correctly by Python, with its source prefix.
+    assert "[The Register]" in result
+    assert "feds warn as attackers use AI-made code" in result
+    assert 'href="https://example.com/feds-warn"' in result
+
+    # The source-prefix-leak case doesn't clear the fuzzy-match threshold and
+    # is dropped rather than shown broken.
+    assert "OpenAI slows down training" not in result
+
+
+def test_render_article_links_drops_unresolvable_reference():
+    """A reference matching no id and no title (even fuzzily) is dropped."""
+    article_index = {"1": {"title": "Known article", "url": "https://x/a", "source": ""}}
+    result = _render_article_links(["totally unrelated made-up headline"], article_index)
+    assert result == ""
 
 
 # --- synthesize -----------------------------------------------------------
@@ -358,18 +479,15 @@ def test_signal_badge_colours(signal, expected_hex):
 
 @pytest.fixture
 def rendered_html():
-    """Render a brief from VALID_SYNTHESIS with a known article map."""
+    """Render a brief from VALID_SYNTHESIS with a known article index."""
     brief = BriefSynthesis(
         categories={"AI/ML": VALID_SYNTHESIS["AI/ML"]},
         cross_cutting=VALID_SYNTHESIS["cross_cutting"],
         personal=VALID_SYNTHESIS["personal"],
     )
-    article_map = {
-        "Open model beats GPT": "https://x/a",
-        "Llama 4 released": "https://x/b",
-        "Tour de France route announced": "https://x/cycling",
-    }
-    return render_brief_html(brief, article_map, "2026-06-14", 7, themed_order=["AI/ML"])
+    return render_brief_html(
+        brief, VALID_ARTICLE_INDEX, "2026-06-14", 7, themed_order=["AI/ML"]
+    )
 
 
 def test_render_contains_core_sections(rendered_html):

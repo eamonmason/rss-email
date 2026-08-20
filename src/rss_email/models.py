@@ -166,6 +166,10 @@ class BriefTheme(BaseModel):
     theme: str
     signal_strength: Literal["HIGH", "STRATEGIC", "GENERAL"]
     tldr: str = ""
+    # Article ids (as assigned by ensure_article_ids/build_synthesis_input),
+    # not titles - the model is asked to cite by numeric id so the renderer
+    # can compose the "[Source] Title" display text itself. See
+    # brief_generator._render_article_links.
     top_articles: List[str] = Field(default_factory=list)
     relevance_to_reader: Optional[str] = None
 
@@ -188,6 +192,7 @@ class CrossCuttingSignal(BaseModel):
 class PersonalBlock(BaseModel):
     """The personal-interest digest block (e.g. Cycling) of the RSS Brief."""
 
+    # Article ids, not titles - see BriefTheme.top_articles.
     top_stories: List[str] = Field(default_factory=list)
     summary: str = ""
 
