@@ -1923,3 +1923,7 @@ Important side effect: because the `top_articles` string may include the `[Sourc
 None of the existing tests exercise the case where Claude's `top_articles` output itself contains a `[Source] ` prefix — all test fixtures (e.g. `VALID_SYNTHESIS`) use clean titles, so this specific "brackets leak into the rendered bullet" scenario is currently untested.</result>
 <usage><subagent_tokens>54580</subagent_tokens><tool_uses>13</tool_uses><duration_ms>80691</duration_ms></usage>
 </task-notification>
+
+---
+
+let's do this as a PR
