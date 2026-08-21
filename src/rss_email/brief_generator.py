@@ -95,7 +95,11 @@ Signal strength:
 Each article below is listed as "(ID) [Source] Title", e.g. "(12) [Hacker News] Title".
 In top_articles and top_stories, cite articles ONLY by their numeric ID in parentheses
 (e.g. "12") - never the title or source text, and never include the brackets or
-parentheses themselves.
+parentheses themselves. These numeric-id citations belong ONLY inside the
+top_articles/top_stories arrays - never write an id citation (e.g. "(article 3)" or
+just "(3)") inline in prose. tldr, relevance_to_reader, week_verdict, implication, and
+summary are plain-prose fields: write them as complete sentences with no citation
+markers of any kind.
 relevance_to_reader must be null when a theme has no real bearing on the profile - do not
 invent relevance. A story can still be worth featuring with null relevance.
 
@@ -566,6 +570,72 @@ def _render_article_links(
     )
 
 
+# "(article N[, M ...])" is unambiguous and always resolved-or-stripped. A bare
+# "(N)" is ambiguous (may be an ordinary parenthetical number in prose), so it's
+# only touched when N resolves to a known article id - see
+# _linkify_or_strip_citations.
+_ARTICLE_CITATION_RE = re.compile(
+    r"\(\s*articles?\s*#?\s*(?P<ids>\d+(?:\s*(?:,|and|&)\s*#?\d+)*)\s*\)"
+    r"|\(\s*(?P<bare_id>\d{1,4})\s*\)",
+    re.IGNORECASE,
+)
+_CITATION_ID_RE = re.compile(r"\d+")
+
+
+def _linkify_or_strip_citations(text: str, article_index: Dict[str, Dict[str, str]]) -> str:
+    """Escape ``text`` for HTML while resolving/stripping inline citations.
+
+    Claude is instructed (``PROMPT_TEMPLATE``) to cite articles only inside the
+    top_articles/top_stories JSON fields, never inline in prose - but as
+    defense in depth (matching the ``a5c7dcc`` principle of never trusting
+    Claude's raw string for a citation), this scans free-text brief fields for
+    citation-like parentheticals before escaping. A resolvable id becomes a
+    real inline link whose display text (the source name) is composed by
+    Python, never echoed from Claude's string; an unresolvable one is dropped.
+    A drop-in replacement for a bare ``html.escape(text)`` call on any brief
+    prose field.
+    """
+    if not text:
+        return html.escape(text)
+
+    pieces: List[str] = []
+    last_end = 0
+    for match in _ARTICLE_CITATION_RE.finditer(text):
+        ids_group = match.group("ids")
+        if ids_group is not None:
+            candidate_ids = _CITATION_ID_RE.findall(ids_group)
+        else:
+            candidate_ids = [match.group("bare_id")]
+            if candidate_ids[0] not in article_index:
+                continue  # ambiguous bare "(N)" that isn't a known id - leave untouched
+
+        links = []
+        for article_id in candidate_ids:
+            entry = article_index.get(article_id)
+            if entry and entry.get("url"):
+                source = entry.get("source") or "source"
+                links.append(
+                    f'<a href="{html.escape(entry["url"])}" target="_blank" '
+                    f'style="color: #0066cc; text-decoration: underline;">'
+                    f"{html.escape(source)}</a>"
+                )
+            elif not entry:
+                logger.warning(
+                    "Brief prose cited an unresolvable article reference %r; dropping",
+                    article_id,
+                )
+
+        pieces.append(html.escape(text[last_end:match.start()]))
+        pieces.append("(" + ", ".join(links) + ")" if links else "")
+        last_end = match.end()
+
+    pieces.append(html.escape(text[last_end:]))
+    result = "".join(pieces)
+    result = re.sub(r"\s{2,}", " ", result)
+    result = re.sub(r"\s+([.,;:!?])", r"\1", result)
+    return result.strip()
+
+
 def _render_theme(theme: BriefTheme, article_index: Dict[str, Dict[str, str]]) -> str:
     """Render a single theme: badge, name, tldr, relevance, linked articles."""
     parts = [
@@ -577,13 +647,13 @@ def _render_theme(theme: BriefTheme, article_index: Dict[str, Dict[str, str]]) -
         f"{_signal_badge(theme.signal_strength)} "
         f"<strong>{html.escape(theme.theme)}</strong></p>",
         f'<p style="margin: 0 0 10px 0; font-size: 1em; color: #555; '
-        f'line-height: 1.6;">{html.escape(theme.tldr)}</p>',
+        f'line-height: 1.6;">{_linkify_or_strip_citations(theme.tldr, article_index)}</p>',
     ]
     if theme.relevance_to_reader:
         parts.append(
             f'<p style="margin: 0 0 8px 0; font-size: 0.875em; color: #1a5276; '
             f'line-height: 1.5;"><strong>Why this matters to you:</strong> '
-            f"{html.escape(theme.relevance_to_reader)}</p>"
+            f"{_linkify_or_strip_citations(theme.relevance_to_reader, article_index)}</p>"
         )
     parts.append(_render_article_links(theme.top_articles, article_index))
     parts.append("</td></tr></table>")
@@ -606,7 +676,8 @@ def _render_category(
     if category.week_verdict:
         verdict = (
             f'<p style="margin: 0 0 14px 0; font-size: 0.95em; color: #2c3e50; '
-            f'font-style: italic;">{html.escape(category.week_verdict)}</p>'
+            f'font-style: italic;">'
+            f"{_linkify_or_strip_citations(category.week_verdict, article_index)}</p>"
         )
     themes = "".join(_render_theme(theme, article_index) for theme in category.themes)
     return (
@@ -615,7 +686,9 @@ def _render_category(
     )
 
 
-def _render_cross_cutting(signals: List[CrossCuttingSignal]) -> str:
+def _render_cross_cutting(
+    signals: List[CrossCuttingSignal], article_index: Dict[str, Dict[str, str]]
+) -> str:
     """Render the cross-cutting signals section."""
     if not signals:
         return ""
@@ -631,7 +704,8 @@ def _render_cross_cutting(signals: List[CrossCuttingSignal]) -> str:
             f"<strong>{html.escape(signal.signal)}</strong></p>"
             f'<p style="margin: 0 0 6px 0; font-size: 0.8em; color: #666;">{cats}</p>'
             f'<p style="margin: 0; font-size: 1em; color: #555; '
-            f'line-height: 1.6;">{html.escape(signal.implication)}</p>'
+            f'line-height: 1.6;">'
+            f"{_linkify_or_strip_citations(signal.implication, article_index)}</p>"
             "</td></tr></table>"
         )
     header = (
@@ -664,7 +738,8 @@ def _render_personal(
     if personal.summary:
         summary = (
             f'<p style="margin: 0 0 10px 0; font-size: 1em; color: #555; '
-            f'line-height: 1.6;">{html.escape(personal.summary)}</p>'
+            f'line-height: 1.6;">'
+            f"{_linkify_or_strip_citations(personal.summary, article_index)}</p>"
         )
     links = _render_article_links(personal.top_stories, article_index)
     return (
@@ -690,7 +765,7 @@ def render_brief_html(
     sections = [
         _render_category(name, brief.categories[name], article_index) for name in ordered
     ]
-    sections.append(_render_cross_cutting(brief.cross_cutting))
+    sections.append(_render_cross_cutting(brief.cross_cutting, article_index))
     sections.append(_render_personal(brief.personal, article_index))
     brief_content = "\n".join(section for section in sections if section)
 

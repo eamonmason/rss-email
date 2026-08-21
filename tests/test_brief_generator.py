@@ -2,6 +2,7 @@
 # pylint: disable=redefined-outer-name,unused-argument,too-many-positional-arguments
 
 import contextlib
+import html
 import json
 from datetime import datetime
 from unittest.mock import MagicMock, patch
@@ -25,6 +26,7 @@ from rss_email.brief_generator import (
     synthesize,
     _best_title_match,
     _canonical_category,
+    _linkify_or_strip_citations,
     _render_article_links,
     _signal_badge,
 )
@@ -237,6 +239,18 @@ def test_build_prompt_includes_source_and_rules():
     assert prompt.index("From HN") < prompt.index("Aggregated")
 
 
+def test_build_prompt_forbids_inline_citations_in_prose():
+    """The prompt tells Claude id citations belong only in top_articles/
+    top_stories, never inline in tldr/relevance_to_reader/etc."""
+    prompt = build_prompt(
+        {"AI/ML": [{"title": "T", "url": "u", "summary": "s", "source": "Blog", "id": "1"}]},
+        SYNTH_CONFIG,
+    )
+    assert "never write an id citation" in prompt
+    assert "tldr, relevance_to_reader, week_verdict, implication, and" in prompt
+    assert "summary are plain-prose fields" in prompt
+
+
 def test_build_prompt_floor_can_be_disabled():
     """With major_story_floor false, the ruthless rule is used instead."""
     config = {**SYNTH_CONFIG, "major_story_floor": False}
@@ -418,6 +432,73 @@ def test_render_article_links_drops_unresolvable_reference():
     assert result == ""
 
 
+# --- inline citation leak into prose (_linkify_or_strip_citations) --------
+
+# Distinct from VALID_ARTICLE_INDEX (whose entries deliberately have empty
+# source/url) so link-text assertions below stay legible.
+CITATION_ARTICLE_INDEX = {
+    "1": {"title": "Open model beats GPT", "url": "https://x/a", "source": "Hacker News"},
+    "5": {"title": "No URL story", "url": "", "source": "Blog"},
+}
+
+
+def test_linkify_citations_resolves_article_word_citation_to_link():
+    """"(article N)" with a resolvable, URL-bearing id becomes a real link."""
+    result = _linkify_or_strip_citations(
+        "Adoption grew (article 1) this week.", CITATION_ARTICLE_INDEX
+    )
+    assert '<a href="https://x/a"' in result
+    assert ">Hacker News</a>" in result
+    assert "article 1" not in result
+
+
+def test_linkify_citations_strips_unresolvable_article_word_citation():
+    """An "(article N)" citation with an unknown id is dropped cleanly."""
+    result = _linkify_or_strip_citations(
+        "As noted (article 99) is not real.", CITATION_ARTICLE_INDEX
+    )
+    assert result == "As noted is not real."
+
+
+def test_linkify_citations_resolves_bare_id_when_known():
+    """A bare "(N)" is resolved the same way when N is a known id."""
+    result = _linkify_or_strip_citations("See update (1) for details.", CITATION_ARTICLE_INDEX)
+    assert '<a href="https://x/a"' in result
+    assert ">Hacker News</a>" in result
+
+
+def test_linkify_citations_leaves_unknown_bare_id_untouched():
+    """A bare "(N)" that isn't a known id is left as ordinary prose (avoids
+    false positives on legitimate parenthetical numbers)."""
+    result = _linkify_or_strip_citations("Revenue rose (20) percent.", CITATION_ARTICLE_INDEX)
+    assert result == "Revenue rose (20) percent."
+
+
+def test_linkify_citations_drops_resolved_id_with_no_url():
+    """A citation that resolves but has no URL is stripped, not linked -
+    matching _render_article_links' no-URL-still-known behaviour."""
+    result = _linkify_or_strip_citations(
+        "Related coverage (article 5) continues.", CITATION_ARTICLE_INDEX
+    )
+    assert result == "Related coverage continues."
+
+
+def test_linkify_citations_preserves_html_escaping_around_a_citation():
+    """Plain-text portions around a resolved citation are still escaped."""
+    result = _linkify_or_strip_citations(
+        "Growth < 5% (article 1) & rising", CITATION_ARTICLE_INDEX
+    )
+    assert "&lt; 5%" in result
+    assert "&amp; rising" in result
+    assert '<a href="https://x/a"' in result
+
+
+def test_linkify_citations_no_citation_present():
+    """No parenthetical citation -> identical to a plain html.escape()."""
+    text = "Plain prose with < and & but no parens."
+    assert _linkify_or_strip_citations(text, CITATION_ARTICLE_INDEX) == html.escape(text)
+
+
 # --- synthesize -----------------------------------------------------------
 
 
@@ -543,6 +624,50 @@ def test_render_is_email_safe(rendered_html):
     assert "<script" not in lowered
     assert "display: flex" not in lowered
     assert "display: grid" not in lowered
+
+
+def test_render_resolves_inline_citations_leaked_into_prose():
+    """End-to-end: if Claude ignores PROMPT_TEMPLATE and writes an id citation
+    inline into tldr/relevance_to_reader/week_verdict/implication/summary, the
+    rendered email resolves it into a real link (or drops it) - it never
+    reaches the reader as a bare "(article N)"."""
+    synthesis = {
+        "AI/ML": {
+            "week_verdict": "A big week (article 1) for open models.",
+            "themes": [
+                {
+                    "theme": "Open-weight models close the gap",
+                    "signal_strength": "HIGH",
+                    "tldr": "Open models now rival proprietary ones (article 1).",
+                    "top_articles": ["1"],
+                    "relevance_to_reader": "Affects your tooling choices (1).",
+                },
+            ],
+        },
+        "cross_cutting": [
+            {
+                "signal": "AI reshapes security tooling",
+                "categories_involved": ["AI/ML"],
+                "implication": "Watch for AI-driven SOC tools (article 1).",
+            }
+        ],
+        "personal": {
+            "top_stories": ["4"],
+            "summary": "Cycling season heats up (article 4).",
+        },
+    }
+    brief = BriefSynthesis(
+        categories={"AI/ML": synthesis["AI/ML"]},
+        cross_cutting=synthesis["cross_cutting"],
+        personal=synthesis["personal"],
+    )
+    html_body = render_brief_html(
+        brief, VALID_ARTICLE_INDEX, "2026-06-14", 7, themed_order=["AI/ML"]
+    )
+    assert "(article" not in html_body
+    # Resolved citations become real links to the cited article's URL.
+    assert html_body.count('href="https://x/a"') >= 3  # tldr, relevance, implication
+    assert 'href="https://x/cycling"' in html_body  # personal summary
 
 
 # --- generate_brief orchestration -----------------------------------------
