@@ -160,7 +160,6 @@ def group_articles_with_claude(
         response = client.messages.create(
             model=model_name,
             max_tokens=4096,
-            temperature=0.0,
             messages=[{"role": "user", "content": prompt}],
             timeout=api_timeout,
         )
