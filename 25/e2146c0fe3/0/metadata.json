@@ -1,0 +1,46 @@
+{
+  "cli_version": "0.8.42",
+  "checkpoint_id": "25e2146c0fe3",
+  "session_id": "99fd0b23-f4b9-40a3-a9e8-c5fc3d20ca3c",
+  "strategy": "manual-commit",
+  "created_at": "2026-08-21T10:25:02.956088Z",
+  "branch": "fix/pin-anthropic-and-freeze-layer-deps",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "pyproject.toml",
+    "lib/rss_lambda_stack.ts",
+    ".github/workflows/deploy.yml"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-5",
+  "turn_id": "b979b68b5652",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 90,
+    "cache_creation_tokens": 111104,
+    "cache_read_tokens": 3466695,
+    "output_tokens": 29869,
+    "api_call_count": 45
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-08-21T10:25:02.932627Z",
+    "agent_lines": 30,
+    "agent_removed": 36,
+    "human_added": 1,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 31,
+    "total_lines_changed": 68,
+    "agent_percentage": 97.05882352941177,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
