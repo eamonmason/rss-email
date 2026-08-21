@@ -52,7 +52,7 @@ def call_api(prompt: str, options: Dict[str, Any], context: Dict[str, Any]):
     ensure_article_ids(synthesis_input)
 
     config = load_brief_config()
-    brief = synthesize(synthesis_input, config, temperature=0)
+    brief = synthesize(synthesis_input, config)
     if brief is None:
         return {"error": "synthesis returned None (parse/validation/API failure)"}
 

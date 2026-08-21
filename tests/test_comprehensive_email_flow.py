@@ -209,6 +209,16 @@ class TestComprehensiveEmailFlow(unittest.TestCase):
             self.assertEqual(rate_limiter.current_requests, 2)
             self.assertEqual(rate_limiter.current_tokens, 1800)
 
+            # Regression guard: anthropic>=1.0.0 rejects temperature/top_p/top_k
+            # on both the grouping call (article_grouper.py) and the
+            # categorize+summarize call (article_processor.py) - both share
+            # this mock client instance.
+            for call in mock_client_instance.messages.create.call_args_list:
+                _, kwargs = call
+                self.assertNotIn("temperature", kwargs)
+                self.assertNotIn("top_p", kwargs)
+                self.assertNotIn("top_k", kwargs)
+
     @patch("rss_email.article_grouper.anthropic.Anthropic")
     @patch("rss_email.article_processor.anthropic.Anthropic")
     def test_claude_processing_with_json_repair(self, mock_proc_anthropic, mock_grp_anthropic):

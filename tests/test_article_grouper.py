@@ -118,6 +118,32 @@ def test_group_articles_with_claude_happy_path(_mock_key, mock_anthropic):
     assert result == [[0, 1], [2]]
 
 
+@patch("rss_email.article_grouper.anthropic.Anthropic")
+@patch("rss_email.article_grouper.get_anthropic_api_key", return_value="test-key")
+def test_group_articles_with_claude_does_not_pass_removed_sampling_kwargs(
+    _mock_key, mock_anthropic
+):
+    """Regression guard: anthropic>=1.0.0 rejects temperature/top_p/top_k."""
+    mock_client = MagicMock()
+    mock_anthropic.return_value = mock_client
+    response = MagicMock()
+    response.content = [MagicMock()]
+    response.content[0].text = json.dumps({
+        "groups": [["article_0", "article_1"], ["article_2"]],
+        "article_count": 3,
+    })
+    response.usage.input_tokens = 200
+    response.usage.output_tokens = 100
+    mock_client.messages.create.return_value = response
+
+    group_articles_with_claude(_articles(), ClaudeRateLimiter())
+
+    _, kwargs = mock_client.messages.create.call_args
+    assert "temperature" not in kwargs
+    assert "top_p" not in kwargs
+    assert "top_k" not in kwargs
+
+
 def test_group_articles_with_claude_disabled_returns_singletons(monkeypatch):
     """When CLAUDE_ENABLED is false the function returns singleton groups locally."""
     monkeypatch.setenv("CLAUDE_ENABLED", "false")

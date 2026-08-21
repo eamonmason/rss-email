@@ -585,7 +585,6 @@ def _call_claude_with_prompt(
         response = client.messages.create(
             model=model_name,
             max_tokens=max_tokens,
-            temperature=0.3,  # Use 0.0 for more deterministic JSON responses
             messages=[{"role": "user", "content": prompt}],
             timeout=api_timeout,  # Set API request timeout
         )
