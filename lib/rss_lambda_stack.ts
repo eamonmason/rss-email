@@ -18,6 +18,7 @@ import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import { Construct } from 'constructs';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { execSync } from 'child_process';
 
@@ -156,14 +157,32 @@ export class RSSEmailStack extends cdk.Stack {
       }
     });
 
+    // Freeze the Lambda layer's dependency versions from uv.lock rather than
+    // letting `pip install` re-resolve pyproject.toml's unbounded `>=` specs
+    // at build time. That floating resolution is what broke production on
+    // 2026-08-21: anthropic shipped a breaking 1.0.0 (dropping the
+    // `temperature`/`top_p`/`top_k` kwargs) and a routine layer rebuild picked
+    // it up with no corresponding code change. uv.lock (checked in, and
+    // exercised by `uv sync`/tests/pylint) is the single source of truth for
+    // exact versions - export it once here so both bundling paths below
+    // install precisely what CI validated.
+    const layerRequirementsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rss-email-layer-'));
+    const layerRequirementsFile = 'requirements.txt';
+    const layerRequirementsPath = path.join(layerRequirementsDir, layerRequirementsFile);
+    execSync(
+      `uv export --frozen --no-dev --no-emit-project --no-hashes -o ${layerRequirementsPath}`,
+      { stdio: 'inherit', cwd: process.cwd() }
+    );
+
     const layer = new lambda.LayerVersion(this, 'RSSLibsLayer', {
       code: lambda.Code.fromAsset('.', {
         exclude: ['*.pyc'],
         bundling: {
           image: lambda.Runtime.PYTHON_3_13.bundlingImage,
+          volumes: [{ hostPath: layerRequirementsDir, containerPath: '/layer-requirements' }],
           command: [
             'bash', '-c',
-            'mkdir -p /asset-output/python/lib/python3.13/site-packages/ && pip install -t /asset-output/python/lib/python3.13/site-packages/ . && rm -r /asset-output/python/lib/python3.13/site-packages/rss_email*'
+            `mkdir -p /asset-output/python/lib/python3.13/site-packages/ && pip install -r /layer-requirements/${layerRequirementsFile} -t /asset-output/python/lib/python3.13/site-packages/`
           ],
           local: {
             tryBundle(outputDir: string) {
@@ -173,44 +192,11 @@ export class RSSEmailStack extends cdk.Stack {
                 const pythonDir = path.join(outputDir, 'python', 'lib', 'python3.13', 'site-packages');
                 fs.mkdirSync(pythonDir, { recursive: true });
 
-                // Read dependencies from pyproject.toml and create requirements.txt
-                const pyprojectPath = path.join(process.cwd(), 'pyproject.toml');
-                const pyprojectContent = fs.readFileSync(pyprojectPath, 'utf-8');
-
-                // Extract dependencies from pyproject.toml (Standard [project] format)
-                const dependencies: string[] = [];
-                const lines = pyprojectContent.split('\n');
-                let inDependencies = false;
-
-                for (const line of lines) {
-                  const trimmed = line.trim();
-                  if (trimmed.startsWith('dependencies = [')) {
-                    inDependencies = true;
-                    continue;
-                  }
-                  if (inDependencies && trimmed === ']') {
-                    inDependencies = false;
-                    break;
-                  }
-                  if (inDependencies) {
-                    // Parse "package>=version",
-                    const cleanLine = trimmed.replace(/[",]/g, '');
-                    if (cleanLine) dependencies.push(cleanLine);
-                  }
-                }
-
-                // Create requirements.txt file
-                const requirementsPath = path.join(outputDir, 'requirements.txt');
-                fs.writeFileSync(requirementsPath, dependencies.join('\n'));
-
-                // Use pip to install dependencies
                 try {
-                  execSync(`pip install -r ${requirementsPath} -t ${pythonDir}`, {
+                  execSync(`pip install -r ${layerRequirementsPath} -t ${pythonDir}`, {
                     stdio: 'inherit',
                     cwd: outputDir
                   });
-                  // Clean up
-                  fs.unlinkSync(requirementsPath);
                   return true;
                 } catch (error) {
                   console.error('Failed to install dependencies locally:', error);
