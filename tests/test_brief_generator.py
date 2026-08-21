@@ -436,6 +436,20 @@ def test_synthesize_valid():
     assert client.messages.stream.call_count == 1
 
 
+def test_synthesize_does_not_pass_removed_sampling_kwargs():
+    """Regression guard: anthropic>=1.0.0 rejects temperature/top_p/top_k."""
+    client = make_client([json.dumps(VALID_SYNTHESIS)])
+    synthesize(
+        {"AI/ML": [{"title": "x", "url": "u", "summary": "s"}]},
+        SYNTH_CONFIG,
+        client=client,
+    )
+    _, kwargs = client.messages.stream.call_args
+    assert "temperature" not in kwargs
+    assert "top_p" not in kwargs
+    assert "top_k" not in kwargs
+
+
 def test_synthesize_strips_json_fences():
     """A fenced ```json response is parsed after stripping fences."""
     fenced = f"```json\n{json.dumps(VALID_SYNTHESIS)}\n```"
