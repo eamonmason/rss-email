@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.8.42",
+  "checkpoint_id": "ee4cf070ebe8",
+  "session_id": "99fd0b23-f4b9-40a3-a9e8-c5fc3d20ca3c",
+  "strategy": "manual-commit",
+  "created_at": "2026-08-21T14:33:34.40192Z",
+  "branch": "fix/brief-inline-citation-leak",
+  "checkpoints_count": 16,
+  "save_step_count": 1,
+  "files_touched": [],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-5",
+  "turn_id": "60b5d55e81fd",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 336,
+    "cache_creation_tokens": 454394,
+    "cache_read_tokens": 26007189,
+    "output_tokens": 85346,
+    "api_call_count": 168
+  },
+  "session_metrics": {
+    "turn_count": 17
+  }
+}

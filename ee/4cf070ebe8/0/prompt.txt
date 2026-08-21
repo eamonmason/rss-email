@@ -1,0 +1,600 @@
+<task-notification>
+<task-id>bwrhr7tex</task-id>
+<summary>Monitor event: "Poll PR #57 checks until all complete, emitting each result"</summary>
+<event>triage: skipping</event>
+If this event is something the user would act on now, send a PushNotification. Routine or benign output doesn't need one.
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>bwrhr7tex</task-id>
+<summary>Monitor event: "Poll PR #57 checks until all complete, emitting each result"</summary>
+<event>automerge / automerge: skipping
+CodeQL: skipping</event>
+If this event is something the user would act on now, send a PushNotification. Routine or benign output doesn't need one.
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>bwrhr7tex</task-id>
+<summary>Monitor event: "Poll PR #57 checks until all complete, emitting each result"</summary>
+<event>Analyze (actions): pass
+Analyze (javascript): pass
+Analyze (python): pass
+CodeQL: pass
+test-cdk-synth: pass</event>
+If this event is something the user would act on now, send a PushNotification. Routine or benign output doesn't need one.
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>bwrhr7tex</task-id>
+<summary>Monitor event: "Poll PR #57 checks until all complete, emitting each result"</summary>
+<event>build (3.13): pass
+ALL DONE</event>
+If this event is something the user would act on now, send a PushNotification. Routine or benign output doesn't need one.
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>bwrhr7tex</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-eamon-code-rss-email/99fd0b23-f4b9-40a3-a9e8-c5fc3d20ca3c/tasks/bwrhr7tex.output</output-file>
+<status>completed</status>
+<summary>Monitor "Poll PR #57 checks until all complete, emitting each result" stream ended</summary>
+</task-notification>
+
+---
+
+merged
+
+---
+
+<task-notification>
+<task-id>bbdx4ipl6</task-id>
+<summary>Monitor event: "Poll the deploy run until it completes, emitting each job status change"</summary>
+<event>test / build (3.13): in_progress/</event>
+If this event is something the user would act on now, send a PushNotification. Routine or benign output doesn't need one.
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>bbdx4ipl6</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-eamon-code-rss-email/99fd0b23-f4b9-40a3-a9e8-c5fc3d20ca3c/tasks/bbdx4ipl6.output</output-file>
+<status>failed</status>
+<summary>Monitor "Poll the deploy run until it completes, emitting each job status change" script failed (exit 1)</summary>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>b7td0q3n3</task-id>
+<summary>Monitor event: "Poll the deploy run until it completes (fixed variable name), emitting each job status change"</summary>
+<event>test / build (3.13): in_progress/</event>
+If this event is something the user would act on now, send a PushNotification. Routine or benign output doesn't need one.
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>b7td0q3n3</task-id>
+<summary>Monitor event: "Poll the deploy run until it completes (fixed variable name), emitting each job status change"</summary>
+<event>deploy: in_progress/
+test / build (3.13): completed/success</event>
+If this event is something the user would act on now, send a PushNotification. Routine or benign output doesn't need one.
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>b7td0q3n3</task-id>
+<summary>Monitor event: "Poll the deploy run until it completes (fixed variable name), emitting each job status change"</summary>
+<event>deploy: completed/success
+RUN COMPLETED: success</event>
+If this event is something the user would act on now, send a PushNotification. Routine or benign output doesn't need one.
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>b7td0q3n3</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-eamon-code-rss-email/99fd0b23-f4b9-40a3-a9e8-c5fc3d20ca3c/tasks/b7td0q3n3.output</output-file>
+<status>completed</status>
+<summary>Monitor "Poll the deploy run until it completes (fixed variable name), emitting each job status change" stream ended</summary>
+</task-notification>
+
+---
+
+can you trigger a run now?
+
+---
+
+<task-notification>
+<task-id>bue5tdq2q</task-id>
+<summary>Monitor event: "Poll the manually triggered Step Functions execution until it finishes"</summary>
+<event>execution status: RUNNING</event>
+If this event is something the user would act on now, send a PushNotification. Routine or benign output doesn't need one.
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>bue5tdq2q</task-id>
+<summary>Monitor event: "Poll the manually triggered Step Functions execution until it finishes"</summary>
+<event>execution status: SUCCEEDED
+EXECUTION DONE: SUCCEEDED
+{"article_count":205,"s3_bucket":"cd-rssemailstack-rssbucket91adb797-1ds7r89g7wdoo","s3_key":"articles.json","timestamp":"2026-08-18T00:00:00","results":[{"article_count":205,"s3_bucket":"cd-rssemailstack-rssbucket91adb797-1ds7r89g7wdoo","s3_key":"articles.json","timestamp":"2026-08-18T00:00:00","emailResult":[{"status":"success","categories_count":14,"failed_requests":0}]},{"article_count":205,"s3_bucket":"cd-rssemailstack-rssbucket91adb797-1ds7r89g7wdoo","s3_key":"articles.json","timestamp":"2...(truncated)</event>
+If this event is something the user would act on now, send a PushNotification. Routine or benign output doesn't need one.
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>bue5tdq2q</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-eamon-code-rss-email/99fd0b23-f4b9-40a3-a9e8-c5fc3d20ca3c/tasks/bue5tdq2q.output</output-file>
+<status>completed</status>
+<summary>Monitor "Poll the manually triggered Step Functions execution until it finishes" stream ended</summary>
+</task-notification>
+
+---
+
+email looks good apart from one thing: the description on each story includes (article x) in the prose. This reference makes no contextual sense. Either remove these from the textual description, or turn them into meaningful hyperlinks.
+
+Also move the anthropic dependency to >= 1 and make associated changes to be compatible
+
+---
+
+<task-notification>
+<task-id>aed44519793fb42aa</task-id>
+<tool-use-id>toolu_01CvVCcQ7RhN727e3dSm9dvY</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-eamon-code-rss-email/99fd0b23-f4b9-40a3-a9e8-c5fc3d20ca3c/tasks/aed44519793fb42aa.output</output-file>
+<status>completed</status>
+<summary>Agent "Explore article-id citation issue" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Summary of findings
+
+### Where "(article X)" comes from
+
+This is **Claude's own generated prose leaking a citation convention that was only ever scoped to the structured `top_articles`/`top_stories` fields**, not a rendering placeholder inserted by the code. There is no string anywhere in the codebase (`grep -rn "article [0-9]\|(article\b"` across `src/` and `tests/` turns up nothing) that programmatically emits `"(article N)"` — so the text is being typed by Claude directly into `tldr` / `relevance_to_reader` / `week_verdict` / cross-cutting `implication` / `personal.summary`, and the renderer forwards it verbatim.
+
+### 1. The prompt and its citation instruction
+
+File: `src/rss_email/brief_generator.py`
+
+- `PROMPT_TEMPLATE` (lines 53–104) shows each article to Claude as `"(ID) [Source] Title"` (built in `build_prompt`, line 302: `lines.append(f"- ({item['id']}) [{source}] {item['title']}")`).
+- The only citation instruction is at lines 95–98:
+  ```
+  Each article below is listed as "(ID) [Source] Title", e.g. "(12) [Hacker News] Title".
+  In top_articles and top_stories, cite articles ONLY by their numeric ID in parentheses
+  (e.g. "12") - never the title or source text, and never include the brackets or
+  parentheses themselves.
+  ```
+  This instruction only constrains the `top_articles` / `top_stories` **array fields** in the JSON schema (schema shown at lines 66–84, e.g. line 74: `"top_articles": ["&lt;id1&gt;", "&lt;id2&gt;", "&lt;id3&gt;"]`). Nothing in the prompt tells Claude to avoid mentioning an article's numeric id *inline within the free-text fields* (`tldr`, `relevance_to_reader`, `week_verdict`, `implication`, `summary`). Since Claude has just been trained (via this prompt) to think of articles as numbered things to cite, it evidently sometimes bleeds that same "(N)"/"(article N)" habit into the prose sentences too — a classic instruction-scope gap.
+
+This is a direct consequence of the a5c7dcc fix (`git show a5c7dcc`): before that commit, Claude echoed exact titles for `top_articles` and the renderer looked them up by title (`match_title_to_url`); the fix moved to numeric-id citation (`ensure_article_ids`, `build_article_index`) specifically to stop malformed titles/brackets reaching the email. That fix hardened the *array field* path but didn't add any guard against the *prose fields* picking up the same numeric-citation habit.
+
+### 2. Data model — is the citation a separate structured field, or embedded in prose?
+
+File: `src/rss_email/models.py`
+
+- `BriefTheme` (lines 163–174): `tldr: str = ""` (line 168) and `relevance_to_reader: Optional[str] = None` (line 174) are **plain free-text strings** — there is no structured citation field for them (only `top_articles: List[str]`, line 173, comment: "Article ids ... not titles").
+- `BriefCategory.week_verdict: str = ""` (line 180), `CrossCuttingSignal.implication: str = ""` (line 189), `PersonalBlock.summary: str = ""` (line 197) are likewise plain strings with no companion citation field.
+
+So: **the citation, when it appears in prose, is embedded directly in the string itself** — there is no `articles: [ids]` side-channel for `tldr`/`relevance_to_reader`/etc. Only `top_articles`/`top_stories` have that structured id-list treatment.
+
+### 3. HTML rendering — how tldr/relevance flow to the email, and whether URLs are available
+
+File: `src/rss_email/brief_generator.py`, function `_render_theme` (lines 569–590):
+
+```python
+f'&lt;p style="margin: 0 0 10px 0; font-size: 1em; color: #555; '
+f'line-height: 1.6;"&gt;{html.escape(theme.tldr)}&lt;/p&gt;',
+...
+if theme.relevance_to_reader:
+    parts.append(
+        f'&lt;p ...&gt;&lt;strong&gt;Why this matters to you:&lt;/strong&gt; '
+        f"{html.escape(theme.relevance_to_reader)}&lt;/p&gt;"
+    )
+parts.append(_render_article_links(theme.top_articles, article_index))
+```
+
+`theme.tldr` and `theme.relevance_to_reader` are passed straight through `html.escape()` with **no post-processing, no regex stripping, and no citation resolution** — whatever numeric-citation text Claude wrote inline is rendered verbatim. Contrast this with `_render_article_links` (lines 518–566), which *does* resolve each `top_articles`/`top_stories` id against `article_index` (an `id -&gt; {title, url, source}` dict, built by `build_article_index`, lines 442–463) to compose a real `&lt;a href=...&gt;` link.
+
+Critically, **`article_index` (with full urls) is already threaded into every render function that touches `tldr`** — `_render_theme(theme, article_index)` (line 569), `_render_category(name, category, article_index)` (line 594), `_render_personal(personal, article_index)` (line 651), `render_brief_html(brief, article_index, ...)` (line 677) all receive it. So **the URL data is available exactly where `tldr`/`relevance_to_reader` are rendered** — it's just not consulted there today. `_render_theme` would only need to be taught to detect an inline `(N)` / `(article N)` reference in `theme.tldr`/`relevance_to_reader` and resolve it against the same `article_index` dict it already has in scope, or (better) the prompt should be tightened so Claude never emits it there in the first place, keeping `top_articles` as the sole citation surface.
+
+### 4. Root cause verdict
+
+It is **Claude embedding the citation directly in the prose string** — not a rendering-code placeholder that failed to get linked. The prompt (lines 95–98) only forbids everything *except* the numeric id in the `top_articles`/`top_stories` arrays; it never tells Claude to keep numeric ids **out of** `tldr`/`relevance_to_reader`/`week_verdict`/`implication`/`summary`. The render path (`_render_theme` et al.) has zero handling for citations appearing in those fields — it just `html.escape()`s and prints them.
+
+Two complementary fixes are possible, and both are needed for robustness:
+- **Prompt-side**: add an explicit rule like "Never mention an article's numeric id inside tldr, relevance_to_reader, week_verdict, implication, or summary — those are prose only; ids belong exclusively in top_articles/top_stories."
+- **Render-side defensive strip/link**: since a5c7dcc's own reasoning was "never trust Claude's raw string, the renderer composes the display text" — the same principle should probably apply here: a regex sweep (e.g. `\(\s*(?:article\s*)?\d+\s*\)`) over `tldr`/`relevance_to_reader`/etc. before/after `html.escape`, either stripped or resolved via `article_index` into a real link, so a future prompt regression can't reintroduce the bug.
+
+### 5. Existing test coverage
+
+File: `tests/test_brief_generator.py`
+
+- Line 235: `assert "cite articles ONLY by their numeric ID" in prompt` — only asserts the prompt instruction text exists, not that it's honored.
+- Line 270: `assert "never cite it in top_articles" in prompt` — the continuity-rule wording, unrelated to inline prose citations.
+- Lines 50–64: fixture `VALID_SYNTHESIS` themes have clean `tldr`/`relevance_to_reader` strings (no embedded citations) — there is **no test exercising a `tldr` containing "(article N)"** or verifying `_render_theme`/`render_brief_html` strips or links such patterns. This confirms the gap is currently untested and unguarded.
+
+No test in `test_email_articles.py` is relevant here — that file covers the main digest email (`generate_html`/`generate_enhanced_html_content` in `email_articles.py`), which is a separate render path unaffected by this issue (the brief is the only place with numeric-id citation).</result>
+<usage><subagent_tokens>53147</subagent_tokens><tool_uses>12</tool_uses><duration_ms>74248</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ab923155a30ba54e8</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-eamon-code-rss-email/99fd0b23-f4b9-40a3-a9e8-c5fc3d20ca3c/tasks/ab923155a30ba54e8.output</output-file>
+<status>completed</status>
+<summary>Agent "Explore anthropic 1.0.0 breaking changes" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Investigation Report: `anthropic&gt;=1.0.0` compatibility for rss-email
+
+### 1. Current pin
+
+- **`pyproject.toml:9`**: `"anthropic&gt;=0.52.0,&lt;1.0.0"`
+- **`uv.lock:16`**: resolved to `version = "0.91.0"`
+- **`uv.lock:1118`**: dependency specifier echoes the pyproject constraint.
+- **PyPI check** (`pip index versions anthropic`): only **`1.0.0`** exists as a 1.x release today (next below it is `0.125.0`). So `anthropic&gt;=1.0.0` or an unbounded `anthropic` constraint would currently resolve to exactly `1.0.0` — there is no 1.0.1/1.1.0 to land on yet.
+
+### 2. What actually changed in `anthropic` 1.0.0 (verified against the SDK's own migration guide, not just the prior scratch-venv test)
+
+- **`temperature`, `top_p`, `top_k` are removed outright** from `messages.create()`/`.stream()`/`.parse()`, their `beta.messages` counterparts, `tool_runner()`, and per-request `params` inside `messages.batches.create()`. Passing any of them now raises `TypeError` (not silently ignored, not renamed). The SDK's own migration doc offers "no escape hatch": *"Remove them. Current models do not use these sampling parameters."* — there is no supported replacement for temperature-style determinism control in 1.x.
+- Everything else this codebase touches is **unchanged**: `anthropic.Anthropic(...)`, `anthropic.APIError`, `anthropic.APIConnectionError`, `client.messages.create/.stream`, and the whole Batches surface (`client.messages.batches.create/.retrieve/.results`) keep identical names/signatures in 1.x. Exception hierarchy (`APIError`, `APIStatusError`, `APIConnectionError`, `RateLimitError`, `AuthenticationError`, etc.) is unaffected.
+- Other 1.x breaking changes exist (httpx→httpx2 for objects handed to the SDK, `.with_raw_response` becoming async-aware, removed Text Completions API, `output_format={...}` dict → `output_config`, Bedrock region requirement, etc.) but **none of them are triggered by this codebase** — see the "clean" checks in section 4 below. Python floor for 1.x is 3.10+; this project already requires `&gt;=3.13`, so no floor bump needed.
+
+### 3. Every anthropic SDK call site in `src/`
+
+| File | Line(s) | Call | Kwargs passed | Impact |
+|---|---|---|---|---|
+| `article_grouper.py` | 154 (`anthropic.Anthropic`), 160–166 (`client.messages.create`), 174 (`except anthropic.APIError`) | `messages.create` | `model`, `max_tokens=4096`, **`temperature=0.0`**, `messages`, `timeout` | **Must delete `temperature=0.0`** (line 163) |
+| `article_processor.py` | 549–552 (`_initialize_claude_client`), 585–591 (`client.messages.create`), 674 (`except anthropic.APIError`), 322 (`except anthropic.APIError` in `process_articles_with_claude`) | `messages.create` | `model`, `max_tokens`, **`temperature=0.3`** (comment: `# Use 0.0 for more deterministic JSON responses`), `messages`, `timeout` | **Must delete `temperature=0.3`** (line 588) |
+| `brief_generator.py` | 394 (`anthropic.Anthropic`), 405–411 (`client.messages.stream`), 415–416 (`except anthropic.APIError, anthropic.APIConnectionError`) | `messages.stream` | `model`, `max_tokens=SYNTHESIS_MAX_TOKENS`, **`temperature=temperature`** (param default `0.3`, `synthesize()` signature line 370), `messages`, `timeout` | **Must delete `temperature=temperature`** (line 408) and consider dropping/reworking the now-dead `temperature: float = 0.3` parameter (line 370) and its sole caller path (`generate_brief_full` → `synthesize`, line 744, does not pass `temperature` explicitly, so it's currently unused by any caller anyway — grep of `synthesize(` shows no caller passes `temperature=`) |
+| `podcast_generator.py` | 18–20 (conditional `import anthropic`), 332 (`anthropic.Anthropic`), 337–343 (`client.messages.create`), 345 (`except anthropic.APIError, anthropic.APIConnectionError`) | `messages.create` | `model`, `max_tokens`, `messages` — **no temperature/top_p/top_k** | No change needed |
+| `submit_email_batch.py` | 9–12 (imports), 148 (`anthropic.Anthropic`), 152 (`client.messages.batches.create`) | `messages.batches.create` via `Request(params=MessageCreateParamsNonStreaming(...))` | `model`, `max_tokens=8192`, `messages` — no sampling params | No change needed |
+| `submit_podcast_batch.py` | 8–11 (imports), 71 (`anthropic.Anthropic`), 86 (`client.messages.batches.create`) | same pattern | `model`, `max_tokens=4000`, `messages` | No change needed |
+| `check_email_batch_status.py` | 7, 69 (`anthropic.Anthropic`), 70 (`client.messages.batches.retrieve`) | `messages.batches.retrieve` | n/a | No change needed |
+| `check_podcast_batch_status.py` | 7, 63, 64 | `messages.batches.retrieve` | n/a | No change needed |
+| `retrieve_and_send_email.py` | 9 (import), 125 (type hint `anthropic.Anthropic`), 212, 218 (`client.messages.batches.results`) | `messages.batches.results` | n/a | No change needed |
+| `retrieve_and_generate_podcast.py` | 8, 50, 54 (`client.messages.batches.results`) | `messages.batches.results` | n/a | No change needed |
+| `email_articles.py` | 22–25 (conditional import), 424 (`isinstance(e, anthropic.APIError)`) | exception check only | n/a | No change needed |
+| `models.py` | 126 | only the string `"rss-email-anthropic-api-key"` — not an SDK usage | n/a | No change needed |
+
+No occurrences of `top_p` or `top_k` anywhere in `src/` or `tests/` — only `temperature` is used, at the three sites above.
+
+### 4. Other 1.x breaking-change surfaces — all clean
+
+Checked and **not present** anywhere in `src/`/`tests/`: `with_raw_response`, `LegacyAPIResponse`, `completions.create`/`HUMAN_PROMPT`/`AI_PROMPT`, raw `output_format={...}` dicts passed to Anthropic calls (the only `output_format` hit is an unrelated CLI arg name in `src/cli_article_processor.py`, classified "unrelated use of the same name"), `messages.parse(stream=...)`, `tool_runner`/`compaction_control`, `isinstance(..., anthropic.Stream)`, custom/duplicate header casing, raw `bytes` as `body=`, and `AnthropicBedrock`/`AsyncAnthropicBedrock`. The project's own `httpx` usage (`src/rss_email/retrieve_articles.py:33,133,161,166,171` and its tests) is a separate direct dependency used to fetch RSS/article content over HTTP — it is never handed to the Anthropic client as `http_client=`, so it's an "unrelated use of the same name" per the SDK's own migration guide and needs no `httpx2` change for Anthropic-compatibility purposes (though `httpx2` will still arrive transitively once `anthropic` 1.x is installed).
+
+### 5. Tests
+
+Searched `tests/` for `temperature`/`top_p`/`top_k` and for `assert_called_with`/`call_args` on any `messages.create`/`.stream`/`.batches.create`:
+
+- **No test asserts on `temperature`, `top_p`, or `top_k`** anywhere in `tests/` (confirmed by direct grep — zero hits).
+- `tests/test_article_grouper.py:104-114` mocks `client.messages.create` with a bare `MagicMock()` and only sets `.return_value`/`.content` — it never inspects `call_args` for `temperature`, so deleting the kwarg won't break it.
+- `tests/test_brief_generator.py` (lines ~294, 427, 443, 455, 467) calls `synthesize(...)` and only asserts `client.messages.stream.call_count` — never inspects kwargs, so removing `temperature=temperature` from the `client.messages.stream(...)` call is test-safe.
+- `tests/test_submit_email_batch.py:179-180` does inspect `call_args` on `client.messages.batches.create`, but only extracts `requests=` — no temperature involved, unaffected.
+- No other test file (`test_podcast_generator.py`, `test_check_email_batch_status.py`, `test_retrieve_and_send_email.py`, `test_retrieve_and_generate_podcast.py`, `test_podcast_batch_modules.py`, `test_comprehensive_email_flow.py`) references temperature/sampling kwargs.
+
+**Conclusion: no test edits are required** for the temperature removal — existing mocks are loose enough. (Tests would only need updating if you choose to add new assertions per the SDK guide's suggestion to "keep passthrough tests meaningful" by asserting on a still-valid param instead — that's optional, not forced.)
+
+### 6. Why `temperature` was being set (context on behavior lost)
+
+- **`article_grouper.py:163`** — `temperature=0.0` for **deterministic JSON clustering**: the prompt asks Claude to partition articles into logical groups and return strict JSON; determinism minimizes flaky mis-groupings across retries/runs.
+- **`article_processor.py:588`** — `temperature=0.3` (comment explicitly notes `# Use 0.0 for more deterministic JSON responses`) for the categorize+summarize stage; the author picked 0.3 over 0.0 for **slightly more natural/varied summary prose** while still returning JSON, trading a little determinism for less repetitive-sounding output.
+- **`brief_generator.py:370,408`** — `temperature: float = 0.3` default, passed straight through to `client.messages.stream(...)` for the "RSS Brief" **narrative synthesis** (prose commentary/themes, not raw JSON extraction) — again a deliberate middle ground between rigid determinism and overly repetitive phrasing. Note: no current caller (`generate_brief_full` at line 744) passes a non-default `temperature=` into `synthesize()`, so in practice only the `0.3` default is ever exercised.
+
+In 1.x there is **no direct API replacement** for these — per the SDK's migration guide, current Claude models don't expose `temperature`/`top_p`/`top_k` at all in this SDK version, and the guidance is simply to delete the parameter and rely on the model's own default sampling behavior (plus prompt-level instructions, e.g. "return only strict JSON, no prose" for the deterministic-JSON use cases) if consistency needs bolstering. This is a product/behavior decision for the user to make (accept default sampling vs. add prompt-based determinism hints) — not something a mechanical code change can substitute for.
+
+### 7. Summary of exact edits needed to move to `anthropic&gt;=1.0.0`
+
+1. `pyproject.toml:9` — change `"anthropic&gt;=0.52.0,&lt;1.0.0"` → e.g. `"anthropic&gt;=1.0.0"` (or `~=1.0`); regenerate `uv.lock` (currently pinned to `0.91.0` at lines 15-16, 1118).
+2. `src/rss_email/article_grouper.py:163` — delete `temperature=0.0,`
+3. `src/rss_email/article_processor.py:588` — delete `temperature=0.3,  # Use 0.0 for more deterministic JSON responses`
+4. `src/rss_email/brief_generator.py:408` — delete `temperature=temperature,`; decide whether to also remove the now-unused `temperature: float = 0.3` parameter from `synthesize()`'s signature (line 370) and its docstring, since nothing forwards it further.
+5. No other `src/` files need changes (batches API, exception classes, imports, and all other `messages.create`/`messages.stream` call sites are already 1.x-compatible).
+6. No test file needs changes for this specific removal, since none assert on `temperature`/`top_p`/`top_k`.</result>
+<usage><subagent_tokens>94227</subagent_tokens><tool_uses>27</tool_uses><duration_ms>139791</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a28378cfc1e455d6d</task-id>
+<tool-use-id>toolu_01MpFJvCMjyuauQbMkWNjgok</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-eamon-code-rss-email/99fd0b23-f4b9-40a3-a9e8-c5fc3d20ca3c/tasks/a28378cfc1e455d6d.output</output-file>
+<status>completed</status>
+<summary>Agent "Design plan for citation fix and anthropic 1.0 migration" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result># Implementation Plan: RSS Brief citation cleanup (Task A) + anthropic SDK 1.x migration (Task B)
+
+Both tasks were verified against current file contents (line numbers below are exact as of this read, `HEAD` = `f4522b5`). One important correction to the Task B background and one addition to Task A's background came out of this verification — flagged inline below.
+
+---
+
+## Task A: Strip/linkify inline "(article N)" citations in RSS Brief prose
+
+### Verified ground truth vs. the investigation summary
+
+- `PROMPT_TEMPLATE` is at `src/rss_email/brief_generator.py:53-104`; the citation instruction is at lines 95-98; `build_prompt` is at line 279 (not 302, but functionally identical).
+- The 5 prose fields are confirmed exactly as described: `BriefTheme.tldr`/`relevance_to_reader` (models.py:168,174), `BriefCategory.week_verdict` (180), `CrossCuttingSignal.implication` (189), `PersonalBlock.summary` (197).
+- **Correction to the investigation:** `article_index` is **not** already threaded into every renderer that touches these fields. `_render_theme` (569), `_render_category` (593), and `_render_personal` (650) do have it, but **`_render_cross_cutting` (line 618) does not** — its signature is `_render_cross_cutting(signals: List[CrossCuttingSignal]) -&gt; str`, called at `render_brief_html:693` as `_render_cross_cutting(brief.cross_cutting)` with no index. Since `implication` is one of the five in-scope fields, this signature has to gain an `article_index` parameter as part of this change — it's not "already there," it's a required edit.
+- `git show a5c7dcc` confirms the established pattern: never trust Claude's raw string for a citation — resolve ids against `article_index` and have Python compose the display text; drop what doesn't resolve, with a `logger.warning`.
+
+### A1. Prompt-side tightening (`PROMPT_TEMPLATE`, lines 95-100)
+
+Current:
+```python
+Each article below is listed as "(ID) [Source] Title", e.g. "(12) [Hacker News] Title".
+In top_articles and top_stories, cite articles ONLY by their numeric ID in parentheses
+(e.g. "12") - never the title or source text, and never include the brackets or
+parentheses themselves.
+relevance_to_reader must be null when a theme has no real bearing on the profile - do not
+invent relevance. A story can still be worth featuring with null relevance.
+```
+
+New (inserts one sentence; deliberately keeps the substring `"cite articles ONLY by their numeric ID"` unchanged so the existing test assertion at test line 235 still passes without modification):
+```python
+Each article below is listed as "(ID) [Source] Title", e.g. "(12) [Hacker News] Title".
+In top_articles and top_stories, cite articles ONLY by their numeric ID in parentheses
+(e.g. "12") - never the title or source text, and never include the brackets or
+parentheses themselves. These numeric-id citations belong ONLY inside the
+top_articles/top_stories arrays - never write an id citation (e.g. "(article 3)" or
+just "(3)") inline in prose. tldr, relevance_to_reader, week_verdict, implication, and
+summary are plain-prose fields: write them as complete sentences with no citation
+markers of any kind.
+relevance_to_reader must be null when a theme has no real bearing on the profile - do not
+invent relevance. A story can still be worth featuring with null relevance.
+```
+
+### A2. Render-side defensive helper (new function in `brief_generator.py`, placed right after `_render_article_links`, before `_render_theme` at line 569)
+
+Design rationale: a bare `(article N)`-style citation is unambiguous — the word "article" makes intent clear — so it's safe to always resolve-or-strip it. A **bare** `(N)` is ambiguous (could be a legitimate parenthetical quantity/year/footnote in prose), so it's only touched when `N` actually resolves to a known article id; if it doesn't resolve, it's left untouched rather than risk deleting real prose. This mirrors the a5c7dcc philosophy (only ever assert what we can *prove* resolves) while bounding false-positive risk on the ambiguous pattern.
+
+```python
+_ARTICLE_CITATION_RE = re.compile(
+    r"\(\s*articles?\s*#?\s*(?P&lt;ids&gt;\d+(?:\s*(?:,|and|&amp;)\s*#?\d+)*)\s*\)"
+    r"|\(\s*(?P&lt;bare_id&gt;\d{1,4})\s*\)",
+    re.IGNORECASE,
+)
+_CITATION_ID_RE = re.compile(r"\d+")
+
+
+def _linkify_or_strip_citations(text: str, article_index: Dict[str, Dict[str, str]]) -&gt; str:
+    """Escape ``text`` for HTML while resolving/stripping inline "(article N)" citations.
+
+    Claude is instructed (PROMPT_TEMPLATE) to cite articles only inside the
+    top_articles/top_stories JSON fields, never inline in prose - but as
+    defense in depth (matching the a5c7dcc principle of never trusting
+    Claude's raw string for a citation), this scans free-text brief fields
+    for citation-like parentheticals before escaping. "(article N[, M ...])"
+    is unambiguous and is always resolved to a real link or dropped; a bare
+    "(N)" is ambiguous (it may be an ordinary parenthetical number in prose)
+    and is only touched when N resolves to a known article id - otherwise
+    it's left as plain text. A resolvable id with a URL becomes a real
+    inline link whose display text (the source name) is composed by Python,
+    never echoed from Claude's string. This is a drop-in replacement for a
+    bare ``html.escape(text)`` call on any brief prose field.
+    """
+    if not text:
+        return html.escape(text)
+
+    pieces: List[str] = []
+    last_end = 0
+    for match in _ARTICLE_CITATION_RE.finditer(text):
+        ids_group = match.group("ids")
+        if ids_group is not None:
+            candidate_ids = _CITATION_ID_RE.findall(ids_group)
+        else:
+            candidate_ids = [match.group("bare_id")]
+            if candidate_ids[0] not in article_index:
+                continue  # ambiguous bare "(N)" that isn't a known id - leave untouched
+
+        links = []
+        for article_id in candidate_ids:
+            entry = article_index.get(article_id)
+            if entry and entry.get("url"):
+                source = entry.get("source") or "source"
+                links.append(
+                    f'&lt;a href="{html.escape(entry["url"])}" target="_blank" '
+                    f'style="color: #0066cc; text-decoration: underline;"&gt;'
+                    f"{html.escape(source)}&lt;/a&gt;"
+                )
+            elif not entry:
+                logger.warning(
+                    "Brief prose cited an unresolvable article reference %r; dropping",
+                    article_id,
+                )
+
+        pieces.append(html.escape(text[last_end:match.start()]))
+        pieces.append("(" + ", ".join(links) + ")" if links else "")
+        last_end = match.end()
+
+    pieces.append(html.escape(text[last_end:]))
+    result = "".join(pieces)
+    result = re.sub(r"\s{2,}", " ", result)
+    result = re.sub(r"\s+([.,;:!?])", r"\1", result)
+    return result.strip()
+```
+
+Note: HTML rendering collapses consecutive whitespace visually anyway, so the whitespace cleanup regexes are a hygiene pass on the string itself, not a strict correctness requirement — applying them globally (not just around a stripped match) is safe and simpler.
+
+### A3. Wire the helper into every render call site
+
+- `_render_theme` (569): replace `html.escape(theme.tldr)` → `_linkify_or_strip_citations(theme.tldr, article_index)`; replace `html.escape(theme.relevance_to_reader)` → `_linkify_or_strip_citations(theme.relevance_to_reader, article_index)`.
+- `_render_category` (593): replace `html.escape(category.week_verdict)` → `_linkify_or_strip_citations(category.week_verdict, article_index)`.
+- `_render_cross_cutting` (618): **change signature** to `_render_cross_cutting(signals: List[CrossCuttingSignal], article_index: Dict[str, Dict[str, str]]) -&gt; str`; replace `html.escape(signal.implication)` → `_linkify_or_strip_citations(signal.implication, article_index)`; update its docstring.
+- `render_brief_html` (693): update the call site → `sections.append(_render_cross_cutting(brief.cross_cutting, article_index))`.
+- `_render_personal` (650): replace `html.escape(personal.summary)` → `_linkify_or_strip_citations(personal.summary, article_index)`.
+
+Out of scope (left as plain `html.escape`, by design): `theme.theme` (5-8 word label), `signal.signal` (short label), category/signal names — these are short labels, not prose, and not named in the task's scope. Note this explicitly in the PR description so a reviewer doesn't wonder why they were skipped.
+
+### A4. Test plan (`tests/test_brief_generator.py`)
+
+New imports needed: `_linkify_or_strip_citations`, `_render_cross_cutting` (if testing directly).
+
+**Prompt tests:**
+- `test_build_prompt_includes_source_and_rules` (line 219): no change required — new prompt text preserves the existing assertion substring.
+- New `test_build_prompt_forbids_inline_citations_in_prose()`: assert `"never write an id citation" in prompt` and that all five field names appear in that sentence, e.g. `assert "tldr, relevance_to_reader, week_verdict, implication, and\nsummary" in prompt` (or a looser substring check tolerant of line wrapping).
+
+**Helper unit tests** (add near `_render_article_links` tests, ~line 367-421), using a dedicated fixture distinct from `VALID_ARTICLE_INDEX` (whose entries deliberately have empty `source`/`url` for other test purposes) so assertions are legible:
+```python
+CITATION_ARTICLE_INDEX = {
+    "1": {"title": "Open model beats GPT", "url": "https://x/a", "source": "Hacker News"},
+    "5": {"title": "No URL story", "url": "", "source": "Blog"},
+}
+```
+- `test_linkify_citations_resolves_article_word_citation_to_link()`: text `"Adoption grew (article 1) this week."` → result contains `&lt;a href="https://x/a"` and `&gt;Hacker News&lt;/a&gt;`, and does not contain the literal string `"(article 1)"`.
+- `test_linkify_citations_strips_unresolvable_article_word_citation()`: text `"As noted (article 99) is not real."` → result has no `"article 99"`, no `"()"`, no doubled spaces, e.g. `assert result == "As noted is not real."`.
+- `test_linkify_citations_resolves_bare_id_when_known()`: text `"See update (1) for details."` with `CITATION_ARTICLE_INDEX` → resolves to the same link (bare-id family, positive case).
+- `test_linkify_citations_leaves_unknown_bare_id_untouched()`: text `"Revenue rose (20) percent."` where `"20"` is not a known id → result is unchanged (`"Revenue rose (20) percent."` after escaping), proving the false-positive guard for ambiguous bare numbers.
+- `test_linkify_citations_drops_resolved_id_with_no_url()`: text `"Related coverage (article 5) continues."` where id `"5"` resolves but has no URL → citation is stripped (not linked), matching `_render_article_links`'s no-URL-still-known behaviour.
+- `test_linkify_citations_preserves_html_escaping_around_a_citation()`: text `"Growth &lt; 5% (article 1) &amp; rising"` → assert `"&amp;lt; 5%"` and `"&amp;amp; rising"` both present, alongside the resolved link — proves the escape/splice interleaving is correct.
+- `test_linkify_citations_no_citation_present()`: plain text with `&lt;`/`&amp;` and no parens → equals `html.escape(text)` exactly (baseline no-op case).
+
+**Render-level integration test** (extend the `rendered_html` fixture area, ~504-546, or add a standalone test): construct a `BriefTheme`/`BriefCategory`/`CrossCuttingSignal`/`PersonalBlock` whose prose fields contain `"(article 1)"` / `"(3)"` patterns, render via `render_brief_html` with `VALID_ARTICLE_INDEX` (or a variant with populated sources), and assert the final HTML contains a resolved `&lt;a href=...&gt;` and never the literal `"(article"` substring anywhere in the output.
+
+### A5. Files touched for Task A
+- `src/rss_email/brief_generator.py` — `PROMPT_TEMPLATE`, new helper + regexes, 5 render function bodies, 1 signature change (`_render_cross_cutting`), 1 call-site update (`render_brief_html`).
+- `tests/test_brief_generator.py` — new tests as above; no fixture changes required to existing `VALID_SYNTHESIS`/`VALID_ARTICLE_INDEX` (add a small dedicated `CITATION_ARTICLE_INDEX` instead, to keep existing tests' assertions undisturbed).
+- No changes needed to `src/rss_email/models.py` (the five fields are unchanged `str` types) or `eval/` (promptfoo assertions operate on `top_articles`/`top_stories` ids, not prose fields).
+
+---
+
+## Task B: Migrate `anthropic` to `&gt;=1.0.0`
+
+### Critical context the investigation missed: this exact incident already happened today
+
+`git log` shows `af60b09` ("fix: pin anthropic below 1.0 and freeze Lambda layer deps from uv.lock", same day as today, `2026-08-21 11:24:52`) — this is a **live production incident that already occurred**: a routine Lambda-layer rebuild picked up the newly-released anthropic 1.0.0 (because `pyproject.toml` had `anthropic&gt;=0.52.0` with no upper bound) and broke with `TypeError: Messages.create() got an unexpected keyword argument 'temperature'`. The reactive fix in that commit was two-fold: (1) pin `anthropic&gt;=0.52.0,&lt;1.0.0"`, and (2) stop letting the Lambda layer `pip install` re-resolve `pyproject.toml`'s unbounded specs at build time — instead export a frozen `requirements.txt` from `uv.lock` (`lib/rss_lambda_stack.ts`) so the layer always installs exactly what CI tested against.
+
+This matters for planning in two ways:
+1. **It confirms the investigation's root-cause claim precisely** — this is not hypothetical, it's exactly what will happen again if the pin is bumped without also fixing the three `temperature=` call sites.
+2. **It means this migration is now safe to do properly**: with the frozen-lockfile mechanism already in place, bumping `anthropic` in `pyproject.toml` + regenerating `uv.lock` is exactly what the Lambda layer will consume — there's no separate "layer build" risk to manage, it's covered by the existing `uv.lock`-driven bundling. This PR is effectively completing the fix that `af60b09` started reactively (remove the pin band-aid, fix root cause).
+
+### B1. Additional call site the investigation did not flag: `eval/provider.py:55`
+
+The investigation stated "no caller passes a non-default value" for `synthesize()`'s `temperature` parameter, checking only `src/`. That's true for `src/`, but **`eval/provider.py:55`** (tracked in git, matched by `git ls-files '*.py'`, and thus in the pylint/flake8 scope per `CLAUDE.md`) calls:
+```python
+brief = synthesize(synthesis_input, config, temperature=0)
+```
+This is a real, non-default caller. If the `temperature` parameter is removed from `synthesize()`'s signature (recommended below), this call **must** be updated in the same change or it breaks with `TypeError: synthesize() got an unexpected keyword argument 'temperature'` the next time the promptfoo eval runs. This file must be added to the edit list.
+
+(The other `temperature: 0` appearing in `eval/promptfooconfig.yaml:25` is promptfoo's own Node-side Anthropic provider config for the grading rubric call — a different SDK, in `eval/node_modules/`, entirely unrelated to this Python package migration. No change needed there; call this out in the report as "considered, out of scope.")
+
+### B2. Exact edits
+
+1. **`pyproject.toml`** (line 15): 
+   ```diff
+   -    "anthropic&gt;=0.52.0,&lt;1.0.0",
+   +    "anthropic&gt;=1.0.0",
+   ```
+   This matches the project's existing bare-`&gt;=` convention used by every other dependency in that list (`boto3&gt;=1.28.49`, `feedparser&gt;=6.0.10`, etc.) — restoring the pattern `af60b09` deviated from under incident pressure.
+
+2. **`uv.lock`**: regenerate via `uv lock` (do not hand-edit). Confirm the resolved `anthropic` version is `1.0.0` (currently the only published 1.x — verified live against PyPI: `pip index versions anthropic` shows `1.0.0` then a long run of `0.x`). Currently installed/locked is `0.91.0`.
+
+3. **`src/rss_email/article_grouper.py`** (line 163), inside `group_articles_with_claude`:
+   ```diff
+    response = client.messages.create(
+        model=model_name,
+        max_tokens=4096,
+   -    temperature=0.0,
+        messages=[{"role": "user", "content": prompt}],
+        timeout=api_timeout,
+    )
+   ```
+   No prompt reinforcement needed for determinism: `create_grouping_prompt` (article_grouper.py) already contains an explicit `"Return ONLY valid JSON, no markdown, no backticks, no commentary."` instruction, and `parse_grouping_response` already falls back through `extract_json_from_text` (json_utils.py) with repair strategies and a singleton-group fallback on total failure. This existing defense-in-depth already covers the loss of `temperature=0.0`'s (weak) determinism nudge — no prompt change recommended here.
+
+4. **`src/rss_email/article_processor.py`** (line 588), inside `_call_claude_with_prompt`:
+   ```diff
+    response = client.messages.create(
+        model=model_name,
+        max_tokens=max_tokens,
+   -    temperature=0.3,  # Use 0.0 for more deterministic JSON responses
+        messages=[{"role": "user", "content": prompt}],
+        timeout=api_timeout,  # Set API request timeout
+    )
+   ```
+
+5. **`src/rss_email/brief_generator.py`**:
+   - Line 408, inside `synthesize`, delete `temperature=temperature,` from the `client.messages.stream(...)` call.
+   - **Recommended:** remove the now-dead `temperature: float = 0.3` parameter entirely from `synthesize()`'s signature (line 370) and its docstring — it does nothing once the kwarg is gone from the API call, and keeping a no-op parameter around is exactly the kind of dead surface this codebase's conventions (and the `sdk-upgrade.md` guidance: *"Remove them... current models do not use these sampling parameters"*) argue against keeping. This requires the companion edit to `eval/provider.py:55` below.
+   - Also update `synthesize`'s docstring, which doesn't currently mention `temperature` but should be checked for staleness after the signature change (it doesn't reference it, so likely no change needed beyond removing the parameter line itself).
+
+6. **`eval/provider.py`** (line 55) — required companion edit if `temperature` is removed from `synthesize()`:
+   ```diff
+   -    brief = synthesize(synthesis_input, config, temperature=0)
+   +    brief = synthesize(synthesis_input, config)
+   ```
+
+No changes needed (confirmed unaffected, not re-investigated further): `podcast_generator.py`, `submit_email_batch.py`, `submit_podcast_batch.py`, `check_*_batch_status.py`, `retrieve_and_send_email.py`, `retrieve_and_generate_podcast.py`, `email_articles.py`, `models.py`.
+
+### B3. Test plan for Task B
+
+- No test in `tests/` currently asserts on `temperature`/`top_p`/`top_k` via `call_args` (verified: only `eval/` and `eval/node_modules/` matched the grep, nothing under `tests/`), so deleting these kwargs breaks nothing in the existing suite.
+- **Recommendation: add one light regression guard, not several.** Given this is the exact failure mode that caused today's production incident, a single assertion that the removed kwargs never reappear is cheap insurance against the same class of bug recurring (e.g., someone "helpfully" re-adding `temperature=0.0` for determinism during a future edit). Add to `tests/test_brief_generator.py`, `tests/test_article_grouper.py`, and `tests/test_article_processor.py` (confirm exact existing test file names before adding) something like:
+  ```python
+  def test_synthesize_does_not_pass_removed_sampling_kwargs():
+      """Regression guard: anthropic&gt;=1.0.0 rejects temperature/top_p/top_k."""
+      client = make_client([json.dumps(VALID_SYNTHESIS)])
+      synthesize({"AI/ML": [{"title": "x", "url": "u", "summary": "s"}]}, SYNTH_CONFIG, client=client)
+      _, kwargs = client.messages.stream.call_args
+      assert "temperature" not in kwargs
+      assert "top_p" not in kwargs
+      assert "top_k" not in kwargs
+  ```
+  and equivalents for `group_articles_with_claude`'s `client.messages.create.call_args` and `_call_claude_with_prompt`'s. This is deliberately narrow (one assertion per call site, not a new test file) — consistent with the project's existing test granularity, and directly answers "don't reintroduce the bug that broke production today."
+- If `synthesize`'s `temperature` parameter is removed, also confirm no existing test calls `synthesize(..., temperature=...)` — grep confirms none do in `tests/`.
+
+### B4. Verification checklist
+
+1. `uv run python -m pytest tests` — full suite, including the new regression-guard tests above.
+2. `uv run pylint --fail-under=9.9 $(git ls-files '*.py')` — this includes `eval/provider.py`, so the companion edit there is required for lint to even parse correctly (a stale `temperature=0` kwarg call against a `synthesize()` with no such parameter is a runtime error, not a lint error, but pylint's own arg-count checks may also flag it — verify).
+3. `uv run flake8`.
+4. `uv lock` then inspect `uv.lock`'s `anthropic` entry resolves to `1.0.0`; `git diff uv.lock` should show only the anthropic version bump (and possibly `httpx`/transitive changes — check for `httpx2` appearing as a new transitive dependency per the SDK's HTTP-layer change, and note it in the PR description if present, since reviewers/supply-chain scanners may flag an unfamiliar package name).
+5. Confirm the old `TypeError` is actually gone: given the existing test suite already fully mocks `client.messages.stream`/`.create` (no live API calls), the mocked coverage plus the regression-guard assertions in B3 already prove the kwargs are never sent — a live network call isn't needed to prove *that*. However, since 1.0.0 is installed locally (`uv sync` after the bump), a quick one-line sanity check is cheap and directly closes the loop on today's incident:
+   ```bash
+   uv run python -c "
+   import anthropic
+   c = anthropic.Anthropic(api_key='sk-ant-dummy')
+   try:
+       c.messages.create(model='claude-3-5-haiku-latest', max_tokens=1, temperature=0.5, messages=[{'role':'user','content':'hi'}])
+   except TypeError as e:
+       print('confirmed old bug would fire:', e)
+   "
+   ```
+   run once against the **old** call shape (with `temperature=`) to confirm it still raises `TypeError` under 1.0.0 (proving the incident is real and reproducible), then confirm the same call **without** `temperature=` raises an auth/network error instead (proving the `TypeError` is gone) — this doesn't require a real API key since the `TypeError` happens client-side before any request is sent. Include this as a one-time manual check in the PR description rather than a permanent test (it needs the real 1.0.0 package installed, which the mocked unit tests deliberately don't depend on).
+6. Re-run the Step 1 grep inventory from the `sdk-upgrade.md` skill guide (`temperature`, `top_p`, `top_k`, `with_raw_response`, `completions.create`, `httpx.Timeout`/transports passed to the client, etc.) across `src/`, `tests/`, and `eval/` to confirm no other 1.x-breaking call sites were missed. This repo's client construction (`anthropic.Anthropic(api_key=...)`) and error handling (`anthropic.APIError`, `anthropic.APIConnectionError`) are unaffected by 1.x.
+
+### B5. Python floor / `httpx2` — decide, don't silently skip
+
+`anthropic&gt;=1.0.0` requires Python ≥3.10; `pyproject.toml` already declares `requires-python = "&gt;=3.13"`, so no floor change needed. Check whether `httpx` is imported anywhere in `src/`/`tests/` in a way that hands objects to the SDK (e.g., custom transports, `httpx.Timeout`) — a quick grep found none in the call sites reviewed, but re-run `rg -n "import httpx|from httpx"` across the full tree as part of Step 1 of the upgrade before merging, since a missed `httpx.Timeout` passed as `http_client=` would raise `TypeError` at client construction (a different, sharper failure than the one from `af60b09`).
+
+---
+
+## Order of operations and PR structure
+
+**Recommendation: two separate branches/PRs, either order — they touch disjoint files and have no shared risk.** This matches the repo's established one-PR-per-logical-change pattern (`a5c7dcc`, `b7640c8`, `0c3655c`, `af60b09` are all single-purpose). Suggested order: **Task B first**, for two reasons — (1) it directly completes/closes out a real incident from earlier the same day (`af60b09`), so shipping it promptly reduces the window where the reactive `&lt;1.0.0` pin masks the real fix; (2) it's smaller and more mechanical (5 files, no new behavior), lower review risk, and doesn't interact with Task A's changes at all. Task A is a larger, more design-heavy change (new regex/helper, prompt wording, several new tests) better reviewed on its own.
+
+If a reviewer prefers a single PR instead, the two diffs remain cleanly separable within it — no code in Task A depends on Task B or vice versa.
+
+### Critical Files for Implementation
+- src/rss_email/brief_generator.py
+- src/rss_email/models.py
+- src/rss_email/article_grouper.py
+- src/rss_email/article_processor.py
+- pyproject.toml
+- eval/provider.py
+- tests/test_brief_generator.py</result>
+<usage><subagent_tokens>140354</subagent_tokens><tool_uses>31</tool_uses><duration_ms>380485</duration_ms></usage>
+</task-notification>
