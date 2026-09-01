@@ -8,7 +8,7 @@
     "eval:view": "promptfoo view"
   },
   "devDependencies": {
-    "promptfoo": "^0.122.0"
+    "promptfoo": "^0.122.2"
   },
   "overrides": {
     "sharp": "^0.35.3",
