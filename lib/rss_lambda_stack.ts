@@ -42,6 +42,11 @@ const BRIEF_SYNTHESIS_CLAUDE_MODEL = 'claude-sonnet-4-6';
 const BRIEF_MEMORY_KEY = 'brief-memory/memory.json';
 const BRIEF_MEMORY_DAYS = '14';
 
+// Daily digest email. Paused ('false') while only the companion RSS Brief is
+// wanted; flip back to 'true' and redeploy to resume. Read by
+// retrieve_and_send_email.lambda_handler (defaults to enabled if unset).
+const DIGEST_ENABLED = 'false';
+
 export class RSSEmailStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
@@ -297,6 +302,7 @@ export class RSSEmailStack extends cdk.Stack {
         SOURCE_EMAIL_ADDRESS: SOURCE_EMAIL_ADDRESS,
         TO_EMAIL_ADDRESS: TO_EMAIL_ADDRESS,
         LAST_RUN_PARAMETER: LAST_RUN_PARAMETER,
+        DIGEST_ENABLED: DIGEST_ENABLED,
         BRIEF_ENABLED: 'true',
         BRIEF_CLAUDE_MODEL: BRIEF_SYNTHESIS_CLAUDE_MODEL,
         CLAUDE_MODEL: BRIEF_SYNTHESIS_CLAUDE_MODEL,

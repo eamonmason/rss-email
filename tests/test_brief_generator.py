@@ -832,6 +832,38 @@ def test_handler_sends_brief_after_digest(
 @patch("rss_email.retrieve_and_send_email.create_html")
 @patch("rss_email.retrieve_and_send_email.anthropic.Anthropic")
 @patch("rss_email.retrieve_and_send_email.boto3.client")
+def test_handler_digest_disabled_sends_only_brief(
+    mock_boto3_client,
+    mock_anthropic,
+    mock_create_html,
+    mock_send_via_ses,
+    mock_set_last_run,
+    mock_generate_brief_full,
+    handler_env,
+    monkeypatch,
+):
+    """DIGEST_ENABLED=false skips the digest but still sends the brief."""
+    monkeypatch.setenv("DIGEST_ENABLED", "false")
+    _setup_handler_mocks(mock_boto3_client, mock_anthropic)
+    mock_generate_brief_full.return_value = BriefResult(
+        html="<brief/>", synthesis=BriefSynthesis(), article_index={}
+    )
+
+    result = lambda_handler(_batch_event(), None)
+
+    assert result["status"] == "success"
+    mock_create_html.assert_not_called()
+    mock_send_via_ses.assert_called_once()
+    assert mock_send_via_ses.call_args.args[2].startswith("RSS Brief —")
+    mock_set_last_run.assert_called_once_with("test-lastrun")
+
+
+@patch("rss_email.retrieve_and_send_email.generate_brief_full")
+@patch("rss_email.retrieve_and_send_email.set_last_run")
+@patch("rss_email.retrieve_and_send_email.send_via_ses")
+@patch("rss_email.retrieve_and_send_email.create_html")
+@patch("rss_email.retrieve_and_send_email.anthropic.Anthropic")
+@patch("rss_email.retrieve_and_send_email.boto3.client")
 def test_handler_brief_failure_does_not_block_digest(
     mock_boto3_client,
     mock_anthropic,
