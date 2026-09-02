@@ -120,6 +120,26 @@ def build_processed_articles_from_groups(
     return enriched
 
 
+def _maybe_send_digest(
+    categories: Dict[str, List[Any]],
+    feed_stats: Dict[str, int],
+    to_email: str,
+    source_email: str,
+) -> bool:
+    """Render and send the daily digest email unless it has been paused.
+
+    Returns ``True`` if the digest was sent. Set ``DIGEST_ENABLED=false`` to
+    pause it (e.g. when only the companion RSS Brief is wanted); the shared
+    categorisation batch still runs and the brief is unaffected.
+    """
+    if os.environ.get("DIGEST_ENABLED", "true").lower() != "true":
+        logger.info("Digest email paused (DIGEST_ENABLED=false); skipping digest send")
+        return False
+    html_content = create_html(categories, feed_stats=feed_stats)
+    send_via_ses(to_email, source_email, "Your Daily RSS Digest", html_content)
+    return True
+
+
 def _maybe_send_brief(
     categories: Dict[str, List[Any]],
     client: anthropic.Anthropic,
@@ -129,8 +149,8 @@ def _maybe_send_brief(
 ) -> None:
     """Generate and send the companion RSS Brief (best-effort).
 
-    Any failure is logged and swallowed: the digest has already been sent, so the
-    brief must never break the main flow or affect last_run.
+    Any failure is logged and swallowed: the digest has already been handled, so
+    the brief must never break the main flow or affect last_run.
 
     Loads the rolling brief memory from S3 (see ``brief_memory.py``) to give the
     synthesis prompt "previously covered" context, and - only on a successful
@@ -303,9 +323,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
         except Exception:  # pylint: disable=broad-except
             logger.info("No feed stats available, skipping feed summary")
 
-        # Format and send email (reuse existing email formatting logic)
-        html_content = create_html(all_categories, feed_stats=feed_stats)
-        send_via_ses(to_email, source_email, "Your Daily RSS Digest", html_content)
+        # Format and send the daily digest (unless paused via DIGEST_ENABLED=false)
+        _maybe_send_digest(all_categories, feed_stats, to_email, source_email)
 
         # Update last_run parameter
         set_last_run(last_run_param)
