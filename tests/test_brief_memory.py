@@ -176,8 +176,12 @@ def test_build_day_record_skips_unknown_ids():
 # --- append_and_prune ---------------------------------------------------------
 
 
-def test_append_and_prune_adds_new_day():
+@patch("rss_email.brief_memory.datetime")
+def test_append_and_prune_adds_new_day(mock_datetime):
     """A brand-new date is appended."""
+    from datetime import datetime as real_datetime  # pylint: disable=import-outside-toplevel
+
+    mock_datetime.now.return_value = real_datetime(2026, 8, 19)
     memory = BriefMemory(days=[BriefMemoryDay(date="2026-08-18", themes=[])])
     updated = append_and_prune(
         memory, BriefMemoryDay(date="2026-08-19", themes=[]), window_days=14
@@ -185,8 +189,12 @@ def test_append_and_prune_adds_new_day():
     assert [d.date for d in updated.days] == ["2026-08-18", "2026-08-19"]
 
 
-def test_append_and_prune_replaces_same_date():
+@patch("rss_email.brief_memory.datetime")
+def test_append_and_prune_replaces_same_date(mock_datetime):
     """Re-running for a date already in memory replaces it (idempotent)."""
+    from datetime import datetime as real_datetime  # pylint: disable=import-outside-toplevel
+
+    mock_datetime.now.return_value = real_datetime(2026, 8, 19)
     memory = BriefMemory(
         days=[
             BriefMemoryDay(
