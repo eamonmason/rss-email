@@ -4,16 +4,33 @@ on:
   issue_comment:
     types: [created]
 
-permissions:
-  contents: read
-  issues: write
-
 jobs:
   call-executor:
-    if: ${{ !github.event.issue.pull_request && contains(github.event.comment.body, '@agent') && contains(github.event.comment.body, 'execute') }}
-    uses: eamonmason/ai-workflows/.github/workflows/reusable-executor.yml@main
+    # `@agent execute` from the repo owner is the approval gate for the whole
+    # pipeline. Labels are advisory state and are not trusted for this.
+    if: >-
+      !github.event.issue.pull_request
+      && github.event.comment.author_association == 'OWNER'
+      && contains(github.event.comment.body, '@agent')
+      && contains(github.event.comment.body, 'execute')
+    # Must be at least what reusable-executor.yml declares, or the call fails
+    # validation before it runs: the repo default is `read`, so anything not
+    # listed here is granted `none`.
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    uses: eamonmason/ai-workflows/.github/workflows/reusable-executor.yml@d74f701d0f3ef995f9b5eb9e7b00ac4ba7a29ede  # v1.1.0
     with:
-      issue_number: ${{ github.event.issue.number }}
+      issue_number: ${{ format('{0}', github.event.issue.number) }}
       issue_title: ${{ github.event.issue.title }}
+      # Python, node and uv are all needed before any check can run here, and
+      # cdk synth needs pip on PATH, which setup-python provides.
+      verify_command: ./scripts/verify.sh
+      setup_python: true
+      setup_node: true
+      setup_uv: true
     secrets:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      APP_ID: ${{ secrets.APP_ID }}
+      APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
