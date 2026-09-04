@@ -13,7 +13,7 @@ permissions:
 jobs:
   call-planner:
     if: ${{ !github.event.issue.pull_request && github.actor != 'github-actions[bot]' && (github.event_name == 'issues' || (github.event_name == 'issue_comment' && !contains(github.event.comment.body, '@agent execute'))) }}
-    uses: eamonmason/ai-workflows/.github/workflows/reusable-planner.yml@main
+    uses: eamonmason/ai-workflows/.github/workflows/reusable-planner.yml@7bb010e327b2553843f9a4633ec3c1f78b51d136  # pre-hardening baseline
     with:
       issue_number: ${{ toJSON(github.event.issue.number) }}
       issue_title: ${{ github.event.issue.title }}
