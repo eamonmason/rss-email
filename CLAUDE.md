@@ -149,6 +149,35 @@ does the semantic matching in-prompt rather than via embeddings.
 A memory load/save failure is swallowed and logged — it never blocks the
 digest or the brief.
 
+### Discussion Links
+
+Feeds from discussion sites carry two URLs - the article and the thread - and
+the brief renders both, as `[Source] Title · discussion`.
+`retrieve_articles.extract_discussion` normalises the two feed shapes we
+actually poll:
+
+- **RSS 2.0 `<comments>`** (Hacker News via hnrss, Lobsters): `<link>` is
+  already the article, `<comments>` is the thread. Straight read.
+- **Reddit's Atom feeds** have no `<comments>`. Their `<link>` *is* the thread,
+  and the article URL only appears as the `[link]` anchor in the post body, so
+  the two are swapped: the article becomes the primary link and the thread
+  becomes `comments`. Self-posts (where `[link]` points back at the thread)
+  are left alone - one link already covers both.
+
+Everything else falls through unchanged. Slashdot has no separate article URL
+at all, so there is nothing to split.
+
+Two invariants worth keeping:
+
+- **Discussion URLs never enter the Claude prompt.** Like article URLs, they
+  travel out-of-band in `brief_generator.build_article_index` and are
+  reattached at render time by id. `build_prompt` sends only id/source/title/
+  summary.
+- **A group's discussion link comes from any member, not just the primary**
+  (`article_processor.first_comments`). The grouper decides which feed lands
+  first, and a mainstream copy of a story usually beats the Hacker News one,
+  so reading `comments` off `members[0]` alone drops most threads.
+
 ### Feed Configuration
 RSS sources are configured in `feed_urls.json` with this structure:
 ```json

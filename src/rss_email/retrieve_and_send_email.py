@@ -15,6 +15,7 @@ from .article_processor import (
     ProcessedArticle,
     _article_to_source,
     _iter_category_entries,
+    first_comments,
 )
 from .brief_generator import generate_brief_full
 from .brief_memory import (
@@ -105,6 +106,7 @@ def build_processed_articles_from_groups(
         if not indices:
             continue
         primary = original_articles[indices[0]] if indices[0] < len(original_articles) else {}
+        members = [original_articles[i] for i in indices if 0 <= i < len(original_articles)]
         sources = _sources_for_indices(indices, original_articles)
         enriched.setdefault(category, []).append(ProcessedArticle(
             title=entry.get("title") or primary.get("title", "Untitled"),
@@ -114,7 +116,7 @@ def build_processed_articles_from_groups(
             pubdate=primary.get("pubDate", ""),
             sources=sources,
             original_description=primary.get("description"),
-            comments=primary.get("comments"),
+            comments=first_comments(members),
         ))
 
     return enriched
