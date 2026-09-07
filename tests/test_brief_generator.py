@@ -82,7 +82,12 @@ VALID_SYNTHESIS = {
 
 # id -> {title, url, source} matching VALID_SYNTHESIS's top_articles/top_stories ids.
 VALID_ARTICLE_INDEX = {
-    "1": {"title": "Open model beats GPT", "url": "https://x/a", "source": ""},
+    "1": {
+        "title": "Open model beats GPT",
+        "url": "https://x/a",
+        "source": "",
+        "comments": "https://news.ycombinator.com/item?id=1",
+    },
     "2": {"title": "Llama 4 released", "url": "https://x/b", "source": ""},
     "3": {"title": "Benchmark tweak", "url": "", "source": ""},
     "4": {"title": "Tour de France route announced", "url": "https://x/cycling", "source": ""},
@@ -120,6 +125,7 @@ def test_build_synthesis_input_filters_categories():
         "url": "https://x/a",
         "summary": "sa",
         "source": "",
+        "comments": "",
         "id": "1",
     }
 
@@ -373,8 +379,8 @@ def test_build_article_index():
     }
     index = build_article_index(synthesis_input)
     assert index == {
-        "1": {"title": "A", "url": "https://x/a", "source": "Blog"},
-        "2": {"title": "B", "url": "", "source": ""},
+        "1": {"title": "A", "url": "https://x/a", "source": "Blog", "comments": ""},
+        "2": {"title": "B", "url": "", "source": "", "comments": ""},
     }
 
 

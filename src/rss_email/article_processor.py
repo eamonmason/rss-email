@@ -271,6 +271,17 @@ Groups to process:
 """
 
 
+def first_comments(members: List[Dict[str, Any]]) -> Optional[str]:
+    """First discussion URL among a group's members, not just the primary.
+
+    A story is often covered by both a mainstream feed and a discussion site.
+    The primary (``members[0]``) is whichever the grouper listed first, so
+    taking its ``comments`` alone silently drops the thread whenever the
+    discussion-site copy is not first.
+    """
+    return next((m.get("comments") for m in members if m.get("comments")), None)
+
+
 def _article_to_source(article: Dict[str, Any]) -> ArticleSource:
     """Build an ArticleSource from a raw filtered article dict."""
     return ArticleSource(
@@ -379,7 +390,7 @@ def _group_fallback_articles(
         pubdate=primary.get("pubDate", ""),
         sources=sources,
         original_description=description,
-        comments=primary.get("comments"),
+        comments=first_comments(members),
     )
 
 
@@ -401,7 +412,7 @@ def _processed_article_from_response(
         pubdate=primary.get("pubDate", ""),
         sources=sources,
         original_description=primary.get("description"),
-        comments=primary.get("comments"),
+        comments=first_comments(members),
     )
 
 

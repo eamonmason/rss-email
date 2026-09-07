@@ -253,6 +253,9 @@ def build_synthesis_input(
 ) -> Dict[str, List[Dict[str, str]]]:
     """Reduce categorised articles to ``{category: [{id, title, url, summary}]}``.
 
+    ``comments`` (the discussion-thread URL, where the feed had one) rides
+    along too - like ``url`` it never enters the prompt, only the index.
+
     Only themed and personal categories are kept; everything else is dropped to
     keep the brief tight. Accepts ``ProcessedArticle`` objects or raw dicts.
     """
@@ -272,6 +275,7 @@ def build_synthesis_input(
                     "url": str(_article_field(article, "link") or ""),
                     "summary": str(_article_field(article, "summary") or ""),
                     "source": _article_source(article),
+                    "comments": str(_article_field(article, "comments") or ""),
                 }
             )
         if items:
@@ -444,7 +448,7 @@ def _normalise(text: str) -> str:
 def build_article_index(
     synthesis_input: Dict[str, List[Dict[str, str]]]
 ) -> Dict[str, Dict[str, str]]:
-    """Build an ``id -> {title, url, source}`` index from the synthesis input.
+    """Build an ``id -> {title, url, source, comments}`` index from the input.
 
     Every article is included, even ones with an empty ``url`` - the renderer
     needs ``title``/``source`` for those too, to compose a correct plain-text
@@ -461,6 +465,7 @@ def build_article_index(
                 "title": item.get("title", ""),
                 "url": item.get("url", ""),
                 "source": item.get("source", ""),
+                "comments": item.get("comments", ""),
             }
     return index
 
@@ -517,6 +522,22 @@ def _signal_badge(signal: str) -> str:
     )
 
 
+def _discussion_suffix(comments: Optional[str], url: Optional[str]) -> str:
+    """Render the trailing " - discussion" link for an article citation.
+
+    Empty when the feed exposed no thread, or when the thread *is* the article
+    link (Reddit self-posts, Slashdot) - a link to itself is just noise.
+    """
+    if not comments or comments == url:
+        return ""
+    return (
+        '<span style="color: #888;"> &middot; </span>'
+        f'<a href="{html.escape(comments)}" target="_blank" '
+        'style="color: #888; text-decoration: underline; font-size: 0.9em;">'
+        "discussion</a>"
+    )
+
+
 def _render_article_links(
     references: List[str], article_index: Dict[str, Dict[str, str]]
 ) -> str:
@@ -548,16 +569,18 @@ def _render_article_links(
         display = f"[{source}] {title}" if source else title
         safe_title = html.escape(display)
         url = entry.get("url")
+        suffix = _discussion_suffix(entry.get("comments"), url)
         if url:
             parts.append(
                 f'<li style="margin: 0 0 6px 0;">'
                 f'<a href="{html.escape(url)}" target="_blank" '
                 f'style="color: #0066cc; text-decoration: underline;">'
-                f"{safe_title}</a></li>"
+                f"{safe_title}</a>{suffix}</li>"
             )
         else:
             parts.append(
-                f'<li style="margin: 0 0 6px 0; color: #555;">{safe_title}</li>'
+                f'<li style="margin: 0 0 6px 0; color: #555;">'
+                f"{safe_title}{suffix}</li>"
             )
     if not parts:
         return ""
