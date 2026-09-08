@@ -7,7 +7,7 @@ these feeds should now come back as plain XML with no extra handling.
 
 import logging
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 
 
 from rss_email.retrieve_articles import get_feed_items
@@ -24,8 +24,8 @@ logger = logging.getLogger(__name__)
 # List of problematic feeds that need special handling
 PROBLEM_FEEDS = [
     {
-        "name": "Enterprise – TechCrunch",
-        "url": "https://feeds.feedburner.com/techcrunchIt",
+        "name": "TechCrunch",
+        "url": "https://techcrunch.com/feed/",
     },
     {"name": "Facebook Engineering", "url": "https://engineering.fb.com/feed/"},
     {"name": "xkcd.com", "url": "https://xkcd.com/rss.xml"},
@@ -53,8 +53,13 @@ def test_problematic_feeds():
     success_count = 0
     failed_feeds = []
 
-    # Get a timestamp 3 days ago for conditional requests
-    timestamp = datetime.now() - timedelta(days=3)
+    # Use a far-past timestamp for the conditional request so feeds always
+    # return a full body. This test checks that a fetched body comes back as
+    # decompressed XML; a recent timestamp makes well-behaved feeds (GitHub
+    # Blog, Facebook Engineering) answer 304 Not Modified, which get_feed_items
+    # correctly turns into an empty body and which is not a decompression
+    # failure. 304 handling itself is covered by test_retrieve_articles.
+    timestamp = datetime(2000, 1, 1)
 
     for feed in PROBLEM_FEEDS:
         feed_url = feed["url"]
@@ -117,9 +122,9 @@ def test_problematic_feeds():
     if failed_feeds:
         logger.info("Failed feeds: %s", ", ".join(failed_feeds))
 
-    # For pytest, we'll allow the test to pass if we have at least 6 out of 8 feeds working
-    # The TechCrunch feed is special-cased to use a direct feed URL instead
-    min_success = len(PROBLEM_FEEDS) - 2  # Allow up to 2 feeds to fail
+    # Allow up to 2 of the live feeds to be transiently unreachable without
+    # failing the build; this is a decompression smoke test, not a feed monitor.
+    min_success = len(PROBLEM_FEEDS) - 2
     assert success_count >= min_success, (
         f"{len(failed_feeds)} feeds failed: {', '.join(failed_feeds)}"
     )
