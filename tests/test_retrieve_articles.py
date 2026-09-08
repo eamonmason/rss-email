@@ -125,6 +125,33 @@ class TestRetrieveArticles(unittest.TestCase):
         self.assertTrue(any("403" in message for message in captured.output))
         self.assertFalse(any(record.levelname == "WARNING" for record in captured.records))
 
+    @patch("rss_email.retrieve_articles.time.sleep")
+    @patch("rss_email.retrieve_articles.httpx.get")
+    def test_get_feed_items_410_skips_without_retry_or_error(self, mock_get, mock_sleep):
+        """A 410 Gone means the feed is permanently removed.
+
+        Retrying fails every run, so it must be skipped without retry and logged
+        at INFO, not ERROR/WARNING (which feed the ErrorWarningCount metric
+        filter and page on-call every single day the feed stays in the config).
+        """
+        mock_response = MagicMock()
+        mock_response.status_code = 410
+        mock_get.return_value = mock_response
+
+        url = "https://queue.acm.org/rss/feeds/queuecontent.xml"
+        timestamp = datetime.now() - timedelta(days=3)
+
+        with self.assertLogs("rss_email.retrieve_articles", level="INFO") as captured:
+            result = get_feed_items(url, timestamp)
+
+        self.assertEqual(result, b"")
+        self.assertEqual(mock_get.call_count, 1)
+        mock_sleep.assert_not_called()
+        self.assertTrue(any("410" in message for message in captured.output))
+        self.assertFalse(
+            any(record.levelname in ("WARNING", "ERROR") for record in captured.records)
+        )
+
     def test_get_feed(self):
         """Test feed parsing and processing from raw feed bytes."""
         feed_url = "http://example.com/feed"

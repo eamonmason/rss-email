@@ -144,6 +144,17 @@ def get_feed_items(url: str, timestamp: datetime) -> bytes:
                     url,
                 )
                 return b""
+            if response.status_code == 410:
+                # 410 Gone means the feed is permanently removed. Retrying never
+                # helps and it fails every single run, so log at INFO rather than
+                # ERROR to avoid paging on-call every day. The feed should be
+                # removed from feed_urls.json.
+                logger.info(
+                    "URL: %s returned 410 Gone; feed is permanently removed and "
+                    "should be deleted from feed_urls.json",
+                    url,
+                )
+                return b""
             if response.status_code == 429:
                 # Rate limited. Retrying within this invocation only makes it
                 # worse, so skip and pick the feed up on the next run. Logged at
