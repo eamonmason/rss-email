@@ -16,17 +16,17 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@aws-sdk/client-sns": "^3.1130.0",
-    "aws-cdk": "^2.1141.0",
-    "aws-cdk-lib": "^2.269.0",
+    "@aws-sdk/client-sns": "^3.1135.0",
+    "aws-cdk": "^2.1142.0",
+    "aws-cdk-lib": "^2.270.0",
     "constructs": "^10.x",
-    "dotenv": "^17.x",
+    "dotenv": "^18.x",
     "fast-xml-parser": "^5.11.1",
     "source-map-support": "^0.x",
     "ts-node": "^10.x"
   },
   "devDependencies": {
-    "@types/node": "^26.5.1",
+    "@types/node": "^26.6.1",
     "ts-node": "^10.9.1",
     "tsx": "^4.23.13",
     "typescript": "~7.0.2"
