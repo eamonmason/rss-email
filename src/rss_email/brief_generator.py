@@ -871,7 +871,6 @@ def render_brief_html(
     template = files("rss_email").joinpath("brief_body.html").read_text(encoding="utf-8")
     return template.format(
         subject=f"RSS Brief — {date}",
-        generation_time=date,
         article_count=article_count,
         brief_content=brief_content,
     )
