@@ -612,8 +612,7 @@ def rendered_html():
 
 
 def test_render_contains_core_sections(rendered_html):
-    """Header, cross-cutting, and personal sections are present."""
-    assert "RSS Brief" in rendered_html
+    """Cross-cutting and personal sections are present."""
     assert "Cross-Cutting Signals" in rendered_html
     assert "Personal" in rendered_html
     assert "Why this matters to you:" in rendered_html
@@ -715,7 +714,7 @@ def test_generate_brief_end_to_end(monkeypatch):
         categories, date="2026-06-14", article_count=4, client=client
     )
     assert html_body is not None
-    assert "RSS Brief" in html_body
+    assert "<strong>Articles synthesised:</strong> 4" in html_body
     assert '<a href="https://x/a"' in html_body
     assert "Excluded" not in html_body
 
@@ -741,7 +740,7 @@ def test_generate_brief_full_returns_synthesis_and_index(monkeypatch):
         categories, date="2026-06-14", article_count=3, client=client
     )
     assert result is not None
-    assert "RSS Brief" in result.html
+    assert "<strong>Articles synthesised:</strong> 3" in result.html
     assert isinstance(result.synthesis, BriefSynthesis)
     assert "AI/ML" in result.synthesis.categories
     assert result.article_index["1"]["title"] == "Open model beats GPT"
