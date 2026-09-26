@@ -318,9 +318,7 @@ def test_synthesize_canonicalises_and_orders_ai_ml():
     )
     assert "AI/ML" in brief.categories
     assert "AI_ML" not in brief.categories
-    html_body = render_brief_html(
-        brief, {}, "2026-06-14", 1, themed_order=["AI/ML", "Technology"]
-    )
+    html_body = render_brief_html(brief, {}, 1, themed_order=["AI/ML", "Technology"])
     assert ">AI/ML</h2>" in html_body
     assert html_body.index(">AI/ML</h2>") < html_body.index(">Technology</h2>")
 
@@ -610,14 +608,11 @@ def rendered_html():
         cross_cutting=VALID_SYNTHESIS["cross_cutting"],
         personal=VALID_SYNTHESIS["personal"],
     )
-    return render_brief_html(
-        brief, VALID_ARTICLE_INDEX, "2026-06-14", 7, themed_order=["AI/ML"]
-    )
+    return render_brief_html(brief, VALID_ARTICLE_INDEX, 7, themed_order=["AI/ML"])
 
 
 def test_render_contains_core_sections(rendered_html):
-    """Header, cross-cutting, and personal sections are present."""
-    assert "RSS Brief — 2026-06-14" in rendered_html
+    """Cross-cutting and personal sections are present."""
     assert "Cross-Cutting Signals" in rendered_html
     assert "Personal" in rendered_html
     assert "Why this matters to you:" in rendered_html
@@ -681,9 +676,7 @@ def test_render_resolves_inline_citations_leaked_into_prose():
         cross_cutting=synthesis["cross_cutting"],
         personal=synthesis["personal"],
     )
-    html_body = render_brief_html(
-        brief, VALID_ARTICLE_INDEX, "2026-06-14", 7, themed_order=["AI/ML"]
-    )
+    html_body = render_brief_html(brief, VALID_ARTICLE_INDEX, 7, themed_order=["AI/ML"])
     assert "(article" not in html_body
     # Resolved citations become real links to the cited article's URL.
     assert html_body.count('href="https://x/a"') >= 3  # tldr, relevance, implication
@@ -721,7 +714,7 @@ def test_generate_brief_end_to_end(monkeypatch):
         categories, date="2026-06-14", article_count=4, client=client
     )
     assert html_body is not None
-    assert "RSS Brief — 2026-06-14" in html_body
+    assert "<strong>Articles synthesised:</strong> 4" in html_body
     assert '<a href="https://x/a"' in html_body
     assert "Excluded" not in html_body
 
@@ -747,7 +740,7 @@ def test_generate_brief_full_returns_synthesis_and_index(monkeypatch):
         categories, date="2026-06-14", article_count=3, client=client
     )
     assert result is not None
-    assert "RSS Brief — 2026-06-14" in result.html
+    assert "<strong>Articles synthesised:</strong> 3" in result.html
     assert isinstance(result.synthesis, BriefSynthesis)
     assert "AI/ML" in result.synthesis.categories
     assert result.article_index["1"]["title"] == "Open model beats GPT"

@@ -46,8 +46,14 @@ def load_feed_urls():
     return feed_entries
 
 
-def test_all_feeds():
-    """Test all feeds by trying to retrieve them."""
+def check_all_feeds():
+    """Test all feeds by trying to retrieve them.
+
+    Deliberately not named ``test_*``: this makes live requests to every feed
+    in feed_urls.json by design (see CLAUDE.md's "Test all feeds in
+    feed_urls.json for connectivity"), so it must stay out of pytest's
+    default collection instead of hitting the network on every unit test run.
+    """
     feeds = load_feed_urls()
     logger.info("Testing %s feeds", len(feeds))
 
@@ -232,18 +238,13 @@ def test_all_feeds():
                 )
             break  # Only show suggestions once
 
-    # For testing from command line
-    if __name__ == "__main__":
-        return feed_results
-    # In pytest context, just assert something basic
-    assert True
-    return None
+    return feed_results
 
 
 if __name__ == "__main__":
     logger.info("Starting test of all feeds...")
     try:
-        results = test_all_feeds()
+        results = check_all_feeds()
         if results and "failed" in results and len(results["failed"]) > 0:
             sys.exit(1)
     except (IOError, ValueError, AttributeError, KeyError) as e:

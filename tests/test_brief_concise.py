@@ -137,7 +137,7 @@ def test_must_read_renders_first_with_reason_and_drops_unknown_ids():
         ],
         categories={"AI/ML": {"themes": [_theme("A", ["1"])]}},
     )
-    body = render_brief_html(brief, INDEX, "2026-09-23", 3, themed_order=["AI/ML"])
+    body = render_brief_html(brief, INDEX, 3, themed_order=["AI/ML"])
     assert body.index("Read these") < body.index(">AI/ML</h2>")
     assert "[Linear] CI rebuilt</a>" in body
     assert "Most useful piece for the platform remit." in body
@@ -154,7 +154,7 @@ def test_article_cited_by_two_themes_is_listed_once():
         },
         personal={"top_stories": ["2", "3"], "summary": ""},
     )
-    body = render_brief_html(brief, INDEX, "2026-09-23", 3)
+    body = render_brief_html(brief, INDEX, 3)
     assert body.count("[Blog] SAML critique") == 1
     assert body.count("[Linear] CI rebuilt") == 1
     assert "[Feed] No link" in body
@@ -165,7 +165,7 @@ def test_verdict_is_not_rendered():
     brief = BriefSynthesis(
         categories={"AI/ML": {"week_verdict": "VERDICT", "themes": [_theme("A", [])]}}
     )
-    assert "VERDICT" not in render_brief_html(brief, INDEX, "d", 1)
+    assert "VERDICT" not in render_brief_html(brief, INDEX, 1)
 
 
 # --- input filtering ----------------------------------------------------------

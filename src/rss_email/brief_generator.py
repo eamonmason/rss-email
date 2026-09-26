@@ -848,7 +848,6 @@ def _render_must_read(
 def render_brief_html(
     brief: BriefSynthesis,
     article_index: Dict[str, Dict[str, str]],
-    date: str,
     article_count: int,
     themed_order: Optional[List[str]] = None,
 ) -> str:
@@ -870,8 +869,6 @@ def render_brief_html(
 
     template = files("rss_email").joinpath("brief_body.html").read_text(encoding="utf-8")
     return template.format(
-        subject=f"RSS Brief — {date}",
-        generation_time=date,
         article_count=article_count,
         brief_content=brief_content,
     )
@@ -932,7 +929,6 @@ def generate_brief_full(
     rendered_html = render_brief_html(
         brief,
         article_index,
-        date,
         article_count,
         themed_order=config.get("themed_categories", []),
     )
