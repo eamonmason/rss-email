@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
 # Single source of truth for the default Claude model ID, so every module
 # that falls back to it (submit_email_batch, submit_podcast_batch,
@@ -197,9 +197,21 @@ class PersonalBlock(BaseModel):
     summary: str = ""
 
 
+class MustRead(BaseModel):
+    """One article on the RSS Brief's "Read these" list."""
+
+    # Article id, not a title - see BriefTheme.top_articles. A bare JSON
+    # number ("id": 12) is accepted too, so one sloppy id can't sink the brief.
+    model_config = ConfigDict(coerce_numbers_to_str=True)
+
+    id: str
+    why: str = ""
+
+
 class BriefSynthesis(BaseModel):
     """Validated structure of the Claude synthesis response for the RSS Brief."""
 
+    must_read: List[MustRead] = Field(default_factory=list)
     categories: Dict[str, BriefCategory] = Field(default_factory=dict)
     cross_cutting: List[CrossCuttingSignal] = Field(default_factory=list)
     personal: Optional[PersonalBlock] = None
@@ -227,6 +239,7 @@ class BriefMemoryDay(BaseModel):
 
     date: str
     themes: List[BriefMemoryTheme] = Field(default_factory=list)
+    must_read: List[BriefMemoryArticle] = Field(default_factory=list)
 
 
 class BriefMemory(BaseModel):

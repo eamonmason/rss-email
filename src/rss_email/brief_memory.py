@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, List
+from typing import Dict, List, Set
 
 import boto3
 import pydantic
@@ -32,6 +32,7 @@ from .models import (
     BriefMemoryTheme,
     BriefSynthesis,
 )
+from .url_utils import normalise_link
 
 logger = logging.getLogger(__name__)
 
@@ -82,8 +83,9 @@ def build_day_record(
 
     ``article_index`` is the ``id -> {title, url, source}`` map returned by
     ``brief_generator.build_article_index`` for the same synthesis run -
-    themes cite articles by id, so this resolves those ids to the
-    title/link a future prompt can display.
+    themes and must-reads cite articles by id, so this resolves those ids to
+    the title/link a future prompt can display (and ``seen_links`` can use to
+    drop repeats).
     """
     themes: List[BriefMemoryTheme] = []
     for category, cat_data in brief.categories.items():
@@ -105,7 +107,15 @@ def build_day_record(
                     articles=articles,
                 )
             )
-    return BriefMemoryDay(date=date, themes=themes)
+    must_read = [
+        BriefMemoryArticle(
+            title=article_index[item.id]["title"],
+            link=article_index[item.id].get("url", ""),
+        )
+        for item in brief.must_read
+        if item.id in article_index and article_index[item.id].get("title")
+    ]
+    return BriefMemoryDay(date=date, themes=themes, must_read=must_read)
 
 
 @pydantic.validate_call(validate_return=True)
@@ -145,3 +155,22 @@ def render_previous_context(memory: BriefMemory) -> str:
                 lines.append(f"    - {article.title}")
         blocks.append("\n".join(lines))
     return "\n\n".join(blocks)
+
+
+@pydantic.validate_call(validate_return=True)
+def seen_links(memory: BriefMemory) -> Set[str]:
+    """Return the normalised links of every article a remembered brief featured.
+
+    ``brief_generator.build_synthesis_input`` drops today's articles whose
+    ``normalise_link`` key is in this set, so a story already put in front of
+    the reader doesn't come back verbatim. A genuine development usually has
+    a new URL and still gets through.
+    """
+    links: Set[str] = set()
+    for day in memory.days:
+        articles = [a for theme in day.themes for a in theme.articles] + list(day.must_read)
+        for article in articles:
+            key = normalise_link(article.link)
+            if key:
+                links.add(key)
+    return links

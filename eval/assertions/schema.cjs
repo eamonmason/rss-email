@@ -30,12 +30,35 @@ module.exports = (output, context) => {
     problems.push('expected an "AI/ML" category (got: ' + JSON.stringify(keys) + ')');
   }
 
-  // Every theme has a valid signal strength.
+  // Every theme has a valid signal strength, and the brief respects its length caps.
+  const perCategory = cfg.max_themes_per_category ?? 3;
+  const maxTotal = cfg.max_total_themes ?? 12;
+  const mustReadMax = cfg.must_read_max ?? 8;
+  let totalThemes = 0;
   for (const [cat, body] of Object.entries(brief.categories || {})) {
-    for (const theme of (body.themes || [])) {
+    const themes = body.themes || [];
+    totalThemes += themes.length;
+    if (themes.length > perCategory) {
+      problems.push(`${cat} has ${themes.length} themes (max ${perCategory})`);
+    }
+    for (const theme of themes) {
       if (!VALID_SIGNALS.has(theme.signal_strength)) {
         problems.push(`invalid signal_strength "${theme.signal_strength}" in ${cat}`);
       }
+    }
+  }
+  if (totalThemes > maxTotal) {
+    problems.push(`${totalThemes} themes in total (max ${maxTotal})`);
+  }
+
+  // The "Read these" list is the brief's lead: it must exist and stay short.
+  const mustRead = brief.must_read || [];
+  if (mustRead.length < 1 || mustRead.length > mustReadMax) {
+    problems.push(`must_read has ${mustRead.length} entries (expected 1-${mustReadMax})`);
+  }
+  for (const item of mustRead) {
+    if (!item.why || !item.why.trim()) {
+      problems.push(`must_read entry ${item.id} has no "why"`);
     }
   }
 
