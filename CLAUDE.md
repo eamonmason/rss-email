@@ -98,7 +98,9 @@ local `pip` bundling — acceptable for `synth`/`diff`, never for a real deploy.
 - **models.py**: Shared Pydantic models for consistent data validation across the application
 - **lib/rss_lambda_stack.ts**: Main CDK infrastructure stack defining all AWS resources
 - **cli_article_processor.py**: CLI tool for testing article processing with Claude API locally
-- **brief_generator.py**: Synthesises the companion "RSS Brief" email (themes, signal strength, cross-cutting signals) from a day's categorised articles via a single Claude call
+- **brief_generator.py**: Synthesises the companion "RSS Brief" email ("Read these" list, themes, signal strength, cross-cutting signals) from a day's categorised articles via a single Claude call
+- **brief_prompt.py**: Prompt text and editorial rules (selection, length caps, fidelity) for the RSS Brief synthesis call
+- **url_utils.py**: Credential-param stripping (via `w3lib`) and link normalisation shared by ingest and the brief
 - **brief_memory.py**: Persists a rolling window of recent RSS Brief days to S3 so the synthesis prompt can avoid repeating stories and frame multi-day stories as developments — see "Brief Memory" below
 - **json_repair.py**: JSON repair utilities for handling malformed API responses
 - **json_utils.py**: JSON extraction and validation utilities with Pydantic integration
@@ -148,6 +150,52 @@ does the semantic matching in-prompt rather than via embeddings.
 
 A memory load/save failure is swallowed and logged — it never blocks the
 digest or the brief.
+
+Memory also drives a deterministic repeat filter: each day records the links
+of the articles it featured (theme citations and the must-read list), and
+`brief_memory.seen_links` hands them to `build_synthesis_input`, which drops
+today's articles whose `url_utils.normalise_link` key (scheme, host and path,
+with no query or fragment) matches. A real development usually has a new URL,
+so it still gets through.
+
+### Brief Shape & Filtering
+
+The brief is meant to be read in a couple of minutes, not skimmed for an hour:
+
+- **"Read these"** (`must_read`) leads the email: 5-8 articles across all
+  categories, each with one sentence on why it's worth opening.
+- **Slim categories**: 1-3 themes per category, at most 12 in total, 1-2
+  sentence tldrs, no per-category verdict line. Empty categories are omitted.
+- **Caps are config, and enforced twice**: `brief_config.json` keys
+  `must_read_min`/`must_read_max`, `max_themes_per_category`,
+  `max_total_themes` and `cross_cutting_max` are written into the prompt, and
+  `brief_generator._enforce_caps` truncates the parsed result, so prompt drift
+  can't bring back a long brief.
+- **Each article is listed once**: the renderer skips an article already
+  listed under an earlier theme or in Personal. The must-read list may overlap
+  with the themes.
+- **Sponsored content never reaches the prompt**: `is_sponsored` drops
+  `/sponsored/`, `/partner-content/`, `/paid-post/` and `/brandvoice/` URLs,
+  plus titles starting "Sponsored"/"Advertorial"/"Paid post".
+- **Fidelity rules** (`brief_prompt.FIDELITY_RULE`): don't claim more than
+  the source does, keep "agreed/announced" distinct from "completed", use
+  `TODAY` to avoid calling past events upcoming, never cite coverage the
+  reader can't see, and only give `relevance_to_reader` when it names a
+  concrete decision or action.
+
+Prompt text lives in `brief_prompt.py`; `brief_generator.py` builds and
+renders it.
+
+### URL Credential Stripping
+
+Some paid feeds put a personal access token in every article link.
+`url_utils.strip_credential_params` removes credential-like query parameters
+(`access_token`, `token`, `api_key`, `sig`, … matched case-insensitively)
+using `w3lib.url.url_query_cleaner`. It runs at ingest
+(`retrieve_articles.get_feed`), so the token never reaches S3, the digest,
+the brief or the podcast. It runs again in `build_synthesis_input` to cover
+data stored before this change. A URL without such parameters is returned
+byte-for-byte unchanged.
 
 ### Discussion Links
 

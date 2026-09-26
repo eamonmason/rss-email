@@ -253,7 +253,7 @@ def test_build_prompt_forbids_inline_citations_in_prose():
         SYNTH_CONFIG,
     )
     assert "never write an id citation" in prompt
-    assert "tldr, relevance_to_reader, week_verdict, implication, and" in prompt
+    assert "why, tldr, relevance_to_reader, implication, and summary" in prompt
     assert "summary are plain-prose fields" in prompt
 
 
@@ -308,7 +308,7 @@ def test_synthesize_canonicalises_and_orders_ai_ml():
     """A response keyed AI_ML validates, canonicalises, and renders AI/ML first."""
     payload = {
         "AI_ML": VALID_SYNTHESIS["AI/ML"],
-        "Technology": {"week_verdict": "v", "themes": []},
+        "Technology": VALID_SYNTHESIS["AI/ML"],
     }
     client = make_client([json.dumps(payload)])
     brief = synthesize(

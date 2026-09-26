@@ -42,6 +42,13 @@ except ImportError:
     RSSItem = None
     FeedList = None
 
+try:
+    from .url_utils import strip_credential_params
+except ImportError:
+    # Run as a script (``python src/rss_email/retrieve_articles.py``): the
+    # package is still installed in the project environment.
+    from rss_email.url_utils import strip_credential_params
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -368,6 +375,10 @@ def get_feed(
         if feed_datetime > update_date:
             # Create article with proper fields based on model type
             article_link, discussion = extract_discussion(article, article.link)
+            # Some paid feeds embed a personal access token in every link.
+            article_link = strip_credential_params(article_link)
+            if discussion:
+                discussion = strip_credential_params(discussion)
             article_kwargs = {
                 "title": article.title,
                 "link": article_link,

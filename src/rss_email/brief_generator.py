@@ -14,13 +14,22 @@ import json
 import logging
 import os
 import re
+import urllib.parse
 from importlib.resources import files
-from typing import Any, Dict, List, NamedTuple, Optional
+from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Set
 
 import anthropic
 import pydantic
 
 from .article_processor import get_anthropic_api_key
+from .brief_prompt import (
+    FIDELITY_RULE,
+    MAJOR_STORY_RULE,
+    PREVIOUS_CONTEXT_RULE,
+    PROMPT_TEMPLATE,
+    RUTHLESS_RULE,
+    SOURCE_RULE,
+)
 from .email_articles import category_color
 from .json_utils import extract_json_from_text
 from .models import (
@@ -28,14 +37,30 @@ from .models import (
     BriefSynthesis,
     BriefTheme,
     CrossCuttingSignal,
+    MustRead,
     PersonalBlock,
 )
+from .url_utils import normalise_link, strip_credential_params
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_SYNTHESIS_MODEL = "claude-sonnet-4-6"
 SYNTHESIS_MAX_TOKENS = 8192
 WORD_OVERLAP_THRESHOLD = 0.75
+
+# Length caps: stated in the prompt, then enforced on the parsed synthesis
+# (``_enforce_caps``) so prompt drift can't bring back a long brief.
+DEFAULT_CAPS = {
+    "must_read_min": 5,
+    "must_read_max": 8,
+    "max_themes_per_category": 3,
+    "max_total_themes": 12,
+    "cross_cutting_max": 3,
+}
+
+# URL path segments / title prefixes that mark paid or advertorial content.
+SPONSORED_PATH_MARKERS = ("/sponsored/", "/partner-content/", "/paid-post/", "/brandvoice/")
+SPONSORED_TITLE_RE = re.compile(r"^\W*(sponsored|advertorial|paid post)\b", re.IGNORECASE)
 
 # Signal badge styling: (background, border, text) hexes, consistent with the
 # digest's category palette.
@@ -47,96 +72,6 @@ SIGNAL_BADGE_STYLES = {
 
 # Source-tier ordering used to present higher-quality sources to the model first.
 _TIER_ORDER = {"high": 0, "medium": 1, "low": 2}
-
-# Note: the ``{...}`` placeholders are substituted with ``str.replace`` (not
-# ``str.format``) so the literal JSON braces in the schema below survive.
-PROMPT_TEMPLATE = """You are synthesising a day's RSS digest articles for a specific reader.
-
-READER PROFILE:
-{READER_PROFILE}
-
-PERSONAL INTERESTS:
-{PERSONAL_INTERESTS}
-
-{PREVIOUS_CONTEXT}
-For each category below, identify 3-5 key themes. Use each category key EXACTLY as given
-(keep slashes and punctuation, e.g. "AI/ML"). Return ONLY valid JSON, no markdown, no
-backticks, matching this schema:
-
-{
-  "<CATEGORY_KEY>": {
-    "week_verdict": "one crisp sentence on what this category's day signals",
-    "themes": [
-      {
-        "theme": "5-8 words",
-        "signal_strength": "HIGH | STRATEGIC | GENERAL",
-        "tldr": "2-3 sentences",
-        "top_articles": ["<id1>", "<id2>", "<id3>"],
-        "relevance_to_reader": "one sentence tied to the reader profile, or null"
-      }
-    ]
-  },
-  ... one object per category ...,
-  "cross_cutting": [
-    { "signal": "...", "categories_involved": ["c1","c2"], "implication": "..." }
-  ],
-  "personal": { "top_stories": ["<id1>","<id2>","<id3>"], "summary": "1-2 sentences" }
-}
-
-Signal strength:
-- HIGH      = paradigm shift, affects the reader's decisions now
-- STRATEGIC = watch-list item, 6-18 month horizon
-- GENERAL   = awareness only, no action
-
-{MAJOR_STORY_RULE}
-
-{SOURCE_RULE}
-
-Each article below is listed as "(ID) [Source] Title", e.g. "(12) [Hacker News] Title".
-In top_articles and top_stories, cite articles ONLY by their numeric ID in parentheses
-(e.g. "12") - never the title or source text, and never include the brackets or
-parentheses themselves. These numeric-id citations belong ONLY inside the
-top_articles/top_stories arrays - never write an id citation (e.g. "(article 3)" or
-just "(3)") inline in prose. tldr, relevance_to_reader, week_verdict, implication, and
-summary are plain-prose fields: write them as complete sentences with no citation
-markers of any kind.
-relevance_to_reader must be null when a theme has no real bearing on the profile - do not
-invent relevance. A story can still be worth featuring with null relevance.
-
-ARTICLES:
-{ARTICLES_BY_CATEGORY}
-"""
-
-MAJOR_STORY_RULE = (
-    "Be ruthless with genuine noise: drop incremental patch notes, repetitive market "
-    "commentary, and minor funding rounds. BUT never drop a genuinely major story merely "
-    "because it is not work-relevant - industry-shifting announcements, major outages or "
-    "incidents, large acquisitions or IPOs, and high-impact societal tech stories must "
-    "appear as themes (set relevance_to_reader to null when they do not bear on the "
-    "reader's job). This is a personal feed as much as a work feed."
-)
-
-RUTHLESS_RULE = (
-    "Be ruthless with noise: ignore incremental patch notes, repetitive market commentary, "
-    "and minor funding rounds."
-)
-
-SOURCE_RULE = (
-    "Source ranking: prefer independent blogs, Hacker News, Reddit, and similar community "
-    "or primary sources over wire-service and aggregator reposts (e.g. Techmeme, Slashdot, "
-    "Google News) when choosing which articles to feature. When the same story appears from "
-    "multiple sources, feature and rank the higher-quality primary or community source."
-)
-
-PREVIOUS_CONTEXT_RULE = (
-    "Continuity rule: the PREVIOUS DAYS block above is background only, not today's "
-    "material - never cite it in top_articles/top_stories, only today's numeric ids. "
-    "If today's articles cover a story already reported with no real development since "
-    "then, do not present it as a new theme: omit it, or fold a one-line update into a "
-    "related theme instead of restating the old facts as breaking news. If a story HAS "
-    "moved forward, write the theme around what's new (referencing the earlier date, "
-    "e.g. \"since Tuesday's...\") rather than re-explaining it from scratch."
-)
 
 
 def _render_previous_context_section(previous_context: str) -> str:
@@ -167,6 +102,8 @@ def load_brief_config() -> Dict[str, Any]:
     config.setdefault("personal_categories", [])
     config.setdefault("prioritised_sources", [])
     config.setdefault("deprioritised_sources", [])
+    for key, value in DEFAULT_CAPS.items():
+        config.setdefault(key, value)
 
     if "BRIEF_ENABLED" in os.environ:
         config["enabled"] = os.environ["BRIEF_ENABLED"].lower() == "true"
@@ -250,6 +187,7 @@ def build_synthesis_input(
     categories: Dict[str, List[Any]],
     themed: List[str],
     personal: List[str],
+    seen_links: Optional[Set[str]] = None,
 ) -> Dict[str, List[Dict[str, str]]]:
     """Reduce categorised articles to ``{category: [{id, title, url, summary}]}``.
 
@@ -257,8 +195,14 @@ def build_synthesis_input(
     along too - like ``url`` it never enters the prompt, only the index.
 
     Only themed and personal categories are kept; everything else is dropped to
-    keep the brief tight. Accepts ``ProcessedArticle`` objects or raw dicts.
+    keep the brief tight. Also dropped: sponsored/advertorial articles
+    (``is_sponsored``) and articles whose ``normalise_link`` key is in
+    ``seen_links`` (already featured by a previous day's brief - see
+    ``brief_memory.seen_links``). Credential query params are stripped from
+    ``url``/``comments``. Accepts ``ProcessedArticle`` objects or raw dicts.
     """
+    seen = seen_links or set()
+    dropped_sponsored = dropped_seen = 0
     synthesis_input: Dict[str, List[Dict[str, str]]] = {}
     for category in list(themed) + list(personal):
         articles = categories.get(category)
@@ -269,18 +213,41 @@ def build_synthesis_input(
             title = _article_field(article, "title")
             if not title:
                 continue
+            url = strip_credential_params(str(_article_field(article, "link") or ""))
+            if is_sponsored(str(title), url):
+                dropped_sponsored += 1
+                continue
+            if seen and normalise_link(url) in seen:
+                dropped_seen += 1
+                continue
             items.append(
                 {
                     "title": str(title),
-                    "url": str(_article_field(article, "link") or ""),
+                    "url": url,
                     "summary": str(_article_field(article, "summary") or ""),
                     "source": _article_source(article),
-                    "comments": str(_article_field(article, "comments") or ""),
+                    "comments": strip_credential_params(
+                        str(_article_field(article, "comments") or "")
+                    ),
                 }
             )
         if items:
             synthesis_input[category] = items
+    if dropped_sponsored or dropped_seen:
+        logger.info(
+            "Brief input: dropped %d sponsored and %d previously-featured articles",
+            dropped_sponsored,
+            dropped_seen,
+        )
     return ensure_article_ids(synthesis_input)
+
+
+def is_sponsored(title: str, url: str) -> bool:
+    """True when the URL path or title marks the article as paid content."""
+    path = urllib.parse.urlsplit(url).path.lower() if url else ""
+    if any(marker in path + "/" for marker in SPONSORED_PATH_MARKERS):
+        return True
+    return bool(SPONSORED_TITLE_RE.match(title or ""))
 
 
 @pydantic.validate_call(validate_return=True, config={"arbitrary_types_allowed": True})
@@ -288,6 +255,7 @@ def build_prompt(
     synthesis_input: Dict[str, List[Dict[str, str]]],
     config: Dict[str, Any],
     previous_context: str = "",
+    date: str = "",
 ) -> str:
     """Assemble the synthesis prompt from the profile, sources, and articles.
 
@@ -297,6 +265,8 @@ def build_prompt(
     ``brief_memory.render_previous_context`` - recent days' themes, given as
     background so Claude can avoid repeating stories and frame developing
     ones as continuations. Empty by default, which omits the section.
+    ``date`` is today's date (``YYYY-MM-DD``) so the model can judge whether
+    an event has already happened.
     """
     blocks = []
     for category, items in synthesis_input.items():
@@ -314,12 +284,17 @@ def build_prompt(
         blocks.append("\n".join(lines))
     articles_block = "\n\n".join(blocks)
     major_rule = MAJOR_STORY_RULE if config.get("major_story_floor", True) else RUTHLESS_RULE
+    prompt = PROMPT_TEMPLATE
+    for key, default in DEFAULT_CAPS.items():
+        prompt = prompt.replace("{" + key.upper() + "}", str(config.get(key, default)))
     return (
-        PROMPT_TEMPLATE
+        prompt
+        .replace("{DATE}", date or "unknown")
         .replace("{READER_PROFILE}", config.get("reader_profile", ""))
         .replace("{PERSONAL_INTERESTS}", config.get("personal_interests", ""))
         .replace("{MAJOR_STORY_RULE}", major_rule)
         .replace("{SOURCE_RULE}", SOURCE_RULE)
+        .replace("{FIDELITY_RULE}", FIDELITY_RULE)
         .replace("{PREVIOUS_CONTEXT}", _render_previous_context_section(previous_context))
         .replace("{ARTICLES_BY_CATEGORY}", articles_block)
     )
@@ -356,12 +331,14 @@ def _parse_synthesis(
     payload = dict(data)
     cross_cutting = payload.pop("cross_cutting", []) or []
     personal = payload.pop("personal", None)
+    must_read = payload.pop("must_read", []) or []
     known = known_categories or []
     categories = {
         _canonical_category(key, known): value for key, value in payload.items()
     }
     try:
         return BriefSynthesis(
+            must_read=must_read,
             categories=categories,
             cross_cutting=cross_cutting,
             personal=personal,
@@ -371,11 +348,38 @@ def _parse_synthesis(
         return None
 
 
+def _enforce_caps(brief: BriefSynthesis, config: Dict[str, Any]) -> BriefSynthesis:
+    """Truncate the synthesis to the configured length caps, preserving order.
+
+    Themes are capped per category, then in total (earlier categories in the
+    model's output win). Categories left with no themes are dropped.
+    """
+    def cap(key: str) -> int:
+        return int(config.get(key, DEFAULT_CAPS[key]))
+
+    per_category = cap("max_themes_per_category")
+    remaining = cap("max_total_themes")
+    categories: Dict[str, BriefCategory] = {}
+    for name, category in brief.categories.items():
+        themes = category.themes[: min(per_category, max(remaining, 0))]
+        remaining -= len(themes)
+        if themes:
+            categories[name] = category.model_copy(update={"themes": themes})
+    return brief.model_copy(
+        update={
+            "must_read": brief.must_read[: cap("must_read_max")],
+            "categories": categories,
+            "cross_cutting": brief.cross_cutting[: cap("cross_cutting_max")],
+        }
+    )
+
+
 def synthesize(
     synthesis_input: Dict[str, List[Dict[str, str]]],
     config: Dict[str, Any],
     client: Optional[Any] = None,
     previous_context: str = "",
+    date: str = "",
 ) -> Optional[BriefSynthesis]:
     """Run one Claude synthesis call (with one retry) and validate the result.
 
@@ -388,8 +392,9 @@ def synthesize(
     articles by id, so this guarantees it always has one to cite regardless
     of how the caller built ``synthesis_input``.
 
-    ``previous_context`` is passed straight through to ``build_prompt`` - see
-    its docstring.
+    ``previous_context`` and ``date`` are passed straight through to
+    ``build_prompt`` - see its docstring. The parsed result is truncated to
+    the configured caps by ``_enforce_caps``.
     """
     if not synthesis_input:
         logger.info("No themed articles to synthesise; skipping brief")
@@ -404,7 +409,7 @@ def synthesize(
     known_categories = list(config.get("themed_categories", [])) + list(
         config.get("personal_categories", [])
     )
-    prompt = build_prompt(synthesis_input, config, previous_context)
+    prompt = build_prompt(synthesis_input, config, previous_context, date)
     api_timeout = int(os.environ.get("CLAUDE_API_TIMEOUT", "120"))
 
     for attempt in (1, 2):
@@ -430,7 +435,7 @@ def synthesize(
             continue
 
         if brief is not None:
-            return brief
+            return _enforce_caps(brief, config)
         logger.warning(
             "Brief synthesis JSON parse/validation failed (attempt %d)", attempt
         )
@@ -538,8 +543,47 @@ def _discussion_suffix(comments: Optional[str], url: Optional[str]) -> str:
     )
 
 
+def _resolve_reference(
+    ref: str, article_index: Dict[str, Dict[str, str]]
+) -> Optional[Dict[str, str]]:
+    """Resolve a cited id (or, as a fallback, title-like text) to its index entry."""
+    entry = article_index.get(ref)
+    if entry is None:
+        title_lookup = {
+            item["title"]: item for item in article_index.values() if item.get("title")
+        }
+        match = _best_title_match(ref, list(title_lookup.keys()))
+        entry = title_lookup.get(match) if match else None
+    if entry is None:
+        logger.warning("Brief cited an unresolvable article reference %r; dropping", ref)
+    return entry
+
+
+def _article_link_html(entry: Dict[str, str]) -> str:
+    """Render one article as "[Source] Title" (linked when it has a URL) + discussion."""
+    title = entry.get("title", "")
+    source = entry.get("source", "")
+    display = html.escape(f"[{source}] {title}" if source else title)
+    url = entry.get("url")
+    suffix = _discussion_suffix(entry.get("comments"), url)
+    if url:
+        return (
+            f'<a href="{html.escape(url)}" target="_blank" '
+            f'style="color: #0066cc; text-decoration: underline;">'
+            f"{display}</a>{suffix}"
+        )
+    return f'<span style="color: #555;">{display}</span>{suffix}'
+
+
+def _entry_key(entry: Dict[str, str]) -> str:
+    """Identity of an index entry for de-duplicating citations."""
+    return normalise_link(entry.get("url", "")) or entry.get("title", "")
+
+
 def _render_article_links(
-    references: List[str], article_index: Dict[str, Dict[str, str]]
+    references: List[str],
+    article_index: Dict[str, Dict[str, str]],
+    shown: Optional[Set[str]] = None,
 ) -> str:
     """Render a list of article citations (ids) as links, plain text if unlinked.
 
@@ -550,38 +594,22 @@ def _render_article_links(
     Python from the matched entry's own ``source``/``title`` fields - never
     Claude's raw string - so a malformed bracket in Claude's output can never
     reach the email. A reference that resolves neither way is dropped.
+
+    ``shown`` (mutated) holds the keys of articles already listed elsewhere in
+    the brief; an article already in it is skipped, so the same article is
+    never listed under two themes.
     """
-    title_lookup = {
-        entry["title"]: entry for entry in article_index.values() if entry.get("title")
-    }
     parts = []
     for ref in references:
-        entry = article_index.get(ref)
+        entry = _resolve_reference(ref, article_index)
         if entry is None:
-            match = _best_title_match(ref, list(title_lookup.keys()))
-            entry = title_lookup.get(match) if match else None
-        if entry is None:
-            logger.warning("Brief cited an unresolvable article reference %r; dropping", ref)
             continue
-
-        title = entry.get("title", "")
-        source = entry.get("source", "")
-        display = f"[{source}] {title}" if source else title
-        safe_title = html.escape(display)
-        url = entry.get("url")
-        suffix = _discussion_suffix(entry.get("comments"), url)
-        if url:
-            parts.append(
-                f'<li style="margin: 0 0 6px 0;">'
-                f'<a href="{html.escape(url)}" target="_blank" '
-                f'style="color: #0066cc; text-decoration: underline;">'
-                f"{safe_title}</a>{suffix}</li>"
-            )
-        else:
-            parts.append(
-                f'<li style="margin: 0 0 6px 0; color: #555;">'
-                f"{safe_title}{suffix}</li>"
-            )
+        if shown is not None:
+            key = _entry_key(entry)
+            if key in shown:
+                continue
+            shown.add(key)
+        parts.append(f'<li style="margin: 0 0 6px 0;">{_article_link_html(entry)}</li>')
     if not parts:
         return ""
     return (
@@ -657,7 +685,11 @@ def _linkify_or_strip_citations(text: str, article_index: Dict[str, Dict[str, st
     return result.strip()
 
 
-def _render_theme(theme: BriefTheme, article_index: Dict[str, Dict[str, str]]) -> str:
+def _render_theme(
+    theme: BriefTheme,
+    article_index: Dict[str, Dict[str, str]],
+    shown: Optional[Set[str]] = None,
+) -> str:
     """Render a single theme: badge, name, tldr, relevance, linked articles."""
     parts = [
         '<table width="100%" cellpadding="0" cellspacing="0" border="0" '
@@ -676,15 +708,23 @@ def _render_theme(theme: BriefTheme, article_index: Dict[str, Dict[str, str]]) -
             f'line-height: 1.5;"><strong>Why this matters to you:</strong> '
             f"{_linkify_or_strip_citations(theme.relevance_to_reader, article_index)}</p>"
         )
-    parts.append(_render_article_links(theme.top_articles, article_index))
+    parts.append(_render_article_links(theme.top_articles, article_index, shown))
     parts.append("</td></tr></table>")
     return "".join(parts)
 
 
 def _render_category(
-    name: str, category: BriefCategory, article_index: Dict[str, Dict[str, str]]
+    name: str,
+    category: BriefCategory,
+    article_index: Dict[str, Dict[str, str]],
+    shown: Optional[Set[str]] = None,
 ) -> str:
-    """Render a themed category: coloured header, verdict, then themes."""
+    """Render a themed category: coloured header, then themes.
+
+    ``week_verdict`` is no longer requested or rendered (it added a line per
+    category without telling the reader what to read); the model field stays
+    for backward compatibility.
+    """
     header = (
         f'<table width="100%" cellpadding="12" cellspacing="0" border="0" '
         f'style="background-color: {category_color(name)}; border-radius: 6px; '
@@ -693,17 +733,12 @@ def _render_category(
         f'font-weight: bold; line-height: 1.3;">{html.escape(name)}</h2>'
         f"</td></tr></table>"
     )
-    verdict = ""
-    if category.week_verdict:
-        verdict = (
-            f'<p style="margin: 0 0 14px 0; font-size: 0.95em; color: #2c3e50; '
-            f'font-style: italic;">'
-            f"{_linkify_or_strip_citations(category.week_verdict, article_index)}</p>"
-        )
-    themes = "".join(_render_theme(theme, article_index) for theme in category.themes)
+    themes = "".join(
+        _render_theme(theme, article_index, shown) for theme in category.themes
+    )
     return (
         '<table width="100%" cellpadding="0" cellspacing="0" border="0" '
-        'style="margin: 0 0 30px 0;"><tr><td>' + header + verdict + themes + "</td></tr></table>"
+        'style="margin: 0 0 30px 0;"><tr><td>' + header + themes + "</td></tr></table>"
     )
 
 
@@ -743,7 +778,9 @@ def _render_cross_cutting(
 
 
 def _render_personal(
-    personal: Optional[PersonalBlock], article_index: Dict[str, Dict[str, str]]
+    personal: Optional[PersonalBlock],
+    article_index: Dict[str, Dict[str, str]],
+    shown: Optional[Set[str]] = None,
 ) -> str:
     """Render the personal-interest digest block (e.g. Cycling)."""
     if personal is None:
@@ -762,10 +799,48 @@ def _render_personal(
             f'line-height: 1.6;">'
             f"{_linkify_or_strip_citations(personal.summary, article_index)}</p>"
         )
-    links = _render_article_links(personal.top_stories, article_index)
+    links = _render_article_links(personal.top_stories, article_index, shown)
     return (
         '<table width="100%" cellpadding="0" cellspacing="0" border="0" '
         'style="margin: 0 0 30px 0;"><tr><td>' + header + summary + links + "</td></tr></table>"
+    )
+
+
+def _render_must_read(
+    items: Iterable[MustRead], article_index: Dict[str, Dict[str, str]]
+) -> str:
+    """Render the "Read these" list: numbered articles, each with why to read it."""
+    rows = []
+    seen: Set[str] = set()
+    for item in items:
+        entry = _resolve_reference(item.id, article_index)
+        if entry is None or _entry_key(entry) in seen:
+            continue
+        seen.add(_entry_key(entry))
+        why = ""
+        if item.why:
+            why = (
+                '<br><span style="color: #555; font-size: 0.9em; line-height: 1.5;">'
+                f"{_linkify_or_strip_citations(item.why, article_index)}</span>"
+            )
+        rows.append(
+            f'<li style="margin: 0 0 12px 0; line-height: 1.5;">'
+            f"{_article_link_html(entry)}{why}</li>"
+        )
+    if not rows:
+        return ""
+    header = (
+        '<table width="100%" cellpadding="12" cellspacing="0" border="0" '
+        'style="background-color: #2c3e50; border-radius: 6px; '
+        'margin: 0 0 12px 0;"><tr><td>'
+        '<h2 style="color: #ffffff; margin: 0; font-size: 1.25em; '
+        'font-weight: bold;">Read these</h2></td></tr></table>'
+    )
+    return (
+        '<table width="100%" cellpadding="0" cellspacing="0" border="0" '
+        'style="margin: 0 0 30px 0;"><tr><td>' + header
+        + '<ol style="margin: 0; padding-left: 24px; font-size: 1em;">'
+        + "".join(rows) + "</ol></td></tr></table>"
     )
 
 
@@ -783,11 +858,14 @@ def render_brief_html(
         if name in brief.categories and name not in ordered:
             ordered.append(name)
 
-    sections = [
-        _render_category(name, brief.categories[name], article_index) for name in ordered
-    ]
+    shown: Set[str] = set()
+    sections = [_render_must_read(brief.must_read, article_index)]
+    sections.extend(
+        _render_category(name, brief.categories[name], article_index, shown)
+        for name in ordered
+    )
     sections.append(_render_cross_cutting(brief.cross_cutting, article_index))
-    sections.append(_render_personal(brief.personal, article_index))
+    sections.append(_render_personal(brief.personal, article_index, shown))
     brief_content = "\n".join(section for section in sections if section)
 
     template = files("rss_email").joinpath("brief_body.html").read_text(encoding="utf-8")
@@ -814,6 +892,7 @@ def generate_brief_full(
     article_count: int,
     client: Optional[Any] = None,
     previous_context: str = "",
+    seen_links: Optional[Set[str]] = None,
 ) -> Optional[BriefResult]:
     """Build the RSS Brief and return its HTML plus the validated synthesis.
 
@@ -821,7 +900,8 @@ def generate_brief_full(
     content, or synthesis failed. Never raises. The returned ``synthesis``
     and ``article_index`` are what ``brief_memory.build_day_record`` needs
     to persist today's themes for future runs - use ``generate_brief``
-    instead when only the HTML is needed.
+    instead when only the HTML is needed. ``seen_links`` (from
+    ``brief_memory.seen_links``) drops articles a previous brief featured.
     """
     config = load_brief_config()
     if not config.get("enabled", True):
@@ -832,12 +912,19 @@ def generate_brief_full(
         categories,
         config.get("themed_categories", []),
         config.get("personal_categories", []),
+        seen_links=seen_links,
     )
     if not synthesis_input:
         logger.info("No themed/personal articles available; skipping brief")
         return None
 
-    brief = synthesize(synthesis_input, config, client=client, previous_context=previous_context)
+    brief = synthesize(
+        synthesis_input,
+        config,
+        client=client,
+        previous_context=previous_context,
+        date=date,
+    )
     if brief is None:
         return None
 
@@ -859,6 +946,7 @@ def generate_brief(
     article_count: int,
     client: Optional[Any] = None,
     previous_context: str = "",
+    seen_links: Optional[Set[str]] = None,
 ) -> Optional[str]:
     """Build and render the RSS Brief email body.
 
@@ -872,5 +960,6 @@ def generate_brief(
         article_count=article_count,
         client=client,
         previous_context=previous_context,
+        seen_links=seen_links,
     )
     return result.html if result else None
