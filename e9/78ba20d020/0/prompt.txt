@@ -1,0 +1,9 @@
+update the rss process to use the latest claude versions
+
+---
+
+should actually be opus 5.5, which is the latest opus model
+
+---
+
+yes, run a real brief request against opus 5.5

@@ -1,0 +1,41 @@
+{
+  "cli_version": "0.10.5",
+  "checkpoint_id": "e978ba20d020",
+  "strategy": "manual-commit",
+  "branch": "feat/brief-opus-5-5",
+  "checkpoints_count": 2,
+  "files_touched": [
+    ".env.example",
+    "CLAUDE.md",
+    "README.md",
+    "eval/promptfooconfig.yaml",
+    "lib/rss_lambda_stack.ts",
+    "src/rss_email/brief_config.json",
+    "src/rss_email/brief_generator.py",
+    "src/rss_email/email_articles.py",
+    "src/rss_email/models.py",
+    "src/rss_email/podcast_generator.py",
+    "tests/test_article_processor.py",
+    "tests/test_brief_generator.py",
+    "tests/test_claude_improvements.py",
+    "tests/test_comprehensive_email_flow.py",
+    "tests/test_podcast_batch_modules.py",
+    "tests/test_submit_email_batch.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/e9/78ba20d020/0/metadata.json",
+      "transcript": "/e9/78ba20d020/0/full.jsonl",
+      "compact_transcript": "/e9/78ba20d020/0/transcript.jsonl",
+      "content_hash": "/e9/78ba20d020/0/content_hash.txt",
+      "prompt": "/e9/78ba20d020/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 118,
+    "cache_creation_tokens": 184531,
+    "cache_read_tokens": 10636917,
+    "output_tokens": 33950,
+    "api_call_count": 59
+  }
+}
