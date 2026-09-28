@@ -20,6 +20,7 @@ from rss_email.brief_generator import (
     ensure_article_ids,
     generate_brief,
     generate_brief_full,
+    load_brief_config,
     match_title_to_url,
     render_brief_html,
     source_tier,
@@ -94,17 +95,35 @@ VALID_ARTICLE_INDEX = {
 }
 
 
+def make_message(text, stop_reason="end_turn"):
+    """Return a mock final message: an (empty) thinking block, then the text.
+
+    Opus 5.5 always thinks, so real responses lead with a ``thinking`` block;
+    the synthesis must read content by block type, not position.
+    """
+    thinking = MagicMock(type="thinking", thinking="")
+    blocks = [thinking]
+    if text is not None:
+        blocks.append(MagicMock(type="text", text=text))
+    return MagicMock(content=blocks, stop_reason=stop_reason, stop_details=None)
+
+
 def make_client(texts):
-    """Return a mock Anthropic client whose messages.stream yields the given texts."""
+    """Return a mock Anthropic client whose beta.messages.stream yields the given texts.
+
+    Each entry is either a response text or a ready-made message from
+    ``make_message`` (to control ``stop_reason``).
+    """
     client = MagicMock()
     stream_cms = []
     for text in texts:
         cm = MagicMock()
         cm.__enter__ = MagicMock(return_value=cm)
         cm.__exit__ = MagicMock(return_value=False)
-        cm.get_final_text.return_value = text
+        message = make_message(text) if isinstance(text, str) else text
+        cm.get_final_message.return_value = message
         stream_cms.append(cm)
-    client.messages.stream.side_effect = stream_cms
+    client.beta.messages.stream.side_effect = stream_cms
     return client
 
 
@@ -518,7 +537,7 @@ def test_synthesize_valid():
     assert brief.categories["AI/ML"].themes[0].signal_strength == "HIGH"
     assert brief.categories["AI/ML"].themes[1].relevance_to_reader is None
     assert brief.personal.summary == "Cycling season heats up."
-    assert client.messages.stream.call_count == 1
+    assert client.beta.messages.stream.call_count == 1
 
 
 def test_synthesize_does_not_pass_removed_sampling_kwargs():
@@ -529,10 +548,87 @@ def test_synthesize_does_not_pass_removed_sampling_kwargs():
         SYNTH_CONFIG,
         client=client,
     )
-    _, kwargs = client.messages.stream.call_args
+    _, kwargs = client.beta.messages.stream.call_args
     assert "temperature" not in kwargs
     assert "top_p" not in kwargs
     assert "top_k" not in kwargs
+
+
+def test_synthesize_request_shape_for_opus_5_5():
+    """Opus 5.5: explicit effort, headroom for thinking, refusal fallbacks on."""
+    client = make_client([json.dumps(VALID_SYNTHESIS)])
+    synthesize(
+        {"AI/ML": [{"title": "x", "url": "u", "summary": "s"}]},
+        {**SYNTH_CONFIG, "effort": "high"},
+        client=client,
+    )
+    _, kwargs = client.beta.messages.stream.call_args
+    assert kwargs["output_config"] == {"effort": "high"}
+    assert kwargs["max_tokens"] >= 32000
+    assert kwargs["fallbacks"] == "default"
+    assert "server-side-fallback-2026-07-01" in kwargs["betas"]
+    # Thinking can't be disabled on Opus 5.5 - never send a thinking config.
+    assert "thinking" not in kwargs
+
+
+def test_synthesize_effort_defaults_to_medium():
+    """Without a configured effort the request pins Opus 5.5's medium default."""
+    client = make_client([json.dumps(VALID_SYNTHESIS)])
+    synthesize(
+        {"AI/ML": [{"title": "x", "url": "u", "summary": "s"}]},
+        SYNTH_CONFIG,
+        client=client,
+    )
+    _, kwargs = client.beta.messages.stream.call_args
+    assert kwargs["output_config"] == {"effort": "medium"}
+
+
+def test_synthesize_reads_text_after_thinking_block():
+    """The JSON is read from the text block even when a thinking block leads."""
+    client = make_client([json.dumps(VALID_SYNTHESIS)])
+    brief = synthesize(
+        {"AI/ML": [{"title": "x", "url": "u", "summary": "s"}]},
+        SYNTH_CONFIG,
+        client=client,
+    )
+    assert isinstance(brief, BriefSynthesis)
+
+
+def test_synthesize_refusal_skips_without_retry():
+    """A refusal (after fallbacks) is final: no retry, brief skipped."""
+    client = make_client(
+        [make_message(None, stop_reason="refusal"), json.dumps(VALID_SYNTHESIS)]
+    )
+    brief = synthesize(
+        {"AI/ML": [{"title": "x", "url": "u", "summary": "s"}]},
+        SYNTH_CONFIG,
+        client=client,
+    )
+    assert brief is None
+    assert client.beta.messages.stream.call_count == 1
+
+
+def test_synthesize_retries_after_truncation():
+    """A max_tokens cut-off is retried rather than parsed."""
+    client = make_client(
+        [
+            make_message('{"categories": {', stop_reason="max_tokens"),
+            json.dumps(VALID_SYNTHESIS),
+        ]
+    )
+    brief = synthesize(
+        {"AI/ML": [{"title": "x", "url": "u", "summary": "s"}]},
+        SYNTH_CONFIG,
+        client=client,
+    )
+    assert isinstance(brief, BriefSynthesis)
+    assert client.beta.messages.stream.call_count == 2
+
+
+def test_default_brief_model_is_opus_5_5(monkeypatch):
+    """The shipped brief config targets Claude Opus 5.5."""
+    monkeypatch.delenv("BRIEF_CLAUDE_MODEL", raising=False)
+    assert load_brief_config()["model"] == "claude-opus-5-5"
 
 
 def test_synthesize_strips_json_fences():
@@ -557,14 +653,14 @@ def test_synthesize_retries_then_skips():
         client=client,
     )
     assert brief is None
-    assert client.messages.stream.call_count == 2
+    assert client.beta.messages.stream.call_count == 2
 
 
 def test_synthesize_empty_input_skips():
     """No themed articles means no API call and a None result."""
     client = make_client([json.dumps(VALID_SYNTHESIS)])
     assert synthesize({}, SYNTH_CONFIG, client=client) is None
-    assert client.messages.stream.call_count == 0
+    assert client.beta.messages.stream.call_count == 0
 
 
 # --- schema validation ----------------------------------------------------

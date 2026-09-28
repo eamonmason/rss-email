@@ -193,7 +193,7 @@ class TestComprehensiveEmailFlow(unittest.TestCase):
 
         with patch.dict("os.environ", {
             "CLAUDE_ENABLED": "true",
-            "CLAUDE_MODEL": "claude-haiku-4-5-20251001",
+            "CLAUDE_MODEL": "claude-haiku-4-5",
             "ANTHROPIC_API_KEY": "test-key",
         }):
             rate_limiter = ClaudeRateLimiter()
@@ -267,7 +267,7 @@ class TestComprehensiveEmailFlow(unittest.TestCase):
 
         with patch.dict("os.environ", {
             "CLAUDE_ENABLED": "true",
-            "CLAUDE_MODEL": "claude-haiku-4-5-20251001",
+            "CLAUDE_MODEL": "claude-haiku-4-5",
             "ANTHROPIC_API_KEY": "test-key",
         }):
             rate_limiter = ClaudeRateLimiter()
@@ -347,7 +347,7 @@ class TestComprehensiveEmailFlow(unittest.TestCase):
 
         with patch.dict("os.environ", {
             "CLAUDE_ENABLED": "true",
-            "CLAUDE_MODEL": "claude-haiku-4-5-20251001",
+            "CLAUDE_MODEL": "claude-haiku-4-5",
             "ANTHROPIC_API_KEY": "test-key",
         }):
             rate_limiter = ClaudeRateLimiter()

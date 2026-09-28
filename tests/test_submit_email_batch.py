@@ -17,7 +17,7 @@ def mock_env(monkeypatch):
     monkeypatch.setenv("RSS_KEY", "rss.xml")
     monkeypatch.setenv("LAST_RUN_PARAMETER", "test-lastrun")
     monkeypatch.setenv("ANTHROPIC_API_KEY_PARAMETER", "test-api-key-param")
-    monkeypatch.setenv("CLAUDE_MODEL", "claude-haiku-4-5-20251001")
+    monkeypatch.setenv("CLAUDE_MODEL", "claude-haiku-4-5")
     monkeypatch.setenv("CLAUDE_BATCH_SIZE", "25")
 
 
