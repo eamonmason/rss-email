@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 # that falls back to it (submit_email_batch, submit_podcast_batch,
 # article_grouper, article_processor, podcast_generator, email_articles)
 # stays in sync instead of repeating (and drifting on) the same literal.
-DEFAULT_CLAUDE_MODEL = "claude-haiku-4-5-20251001"
+DEFAULT_CLAUDE_MODEL = "claude-haiku-4-5"
 
 
 class RSSItem(BaseModel):

@@ -44,8 +44,18 @@ from .url_utils import normalise_link, strip_credential_params
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_SYNTHESIS_MODEL = "claude-sonnet-4-6"
-SYNTHESIS_MAX_TOKENS = 8192
+DEFAULT_SYNTHESIS_MODEL = "claude-opus-5-5"
+# Opus 5.5 always thinks and thinking counts toward max_tokens, so leave room
+# for it on top of the ~8k-token JSON reply. Streaming keeps this under SDK
+# HTTP timeouts.
+SYNTHESIS_MAX_TOKENS = 32000
+# Opus 5.5 defaults to "medium" (Opus 5 defaulted to "high"); pinned so a
+# model swap doesn't silently change thinking depth. Override via
+# brief_config.json "effort".
+DEFAULT_SYNTHESIS_EFFORT = "medium"
+# Server-side refusal fallback: if a safety classifier declines the request,
+# the API re-runs it on the model Anthropic recommends for that category.
+REFUSAL_FALLBACK_BETA = "server-side-fallback-2026-07-01"
 WORD_OVERLAP_THRESHOLD = 0.75
 
 # Length caps: stated in the prompt, then enforced on the parsed synthesis
@@ -95,6 +105,7 @@ def load_brief_config() -> Dict[str, Any]:
 
     config.setdefault("enabled", True)
     config.setdefault("model", DEFAULT_SYNTHESIS_MODEL)
+    config.setdefault("effort", DEFAULT_SYNTHESIS_EFFORT)
     config.setdefault("reader_profile", "")
     config.setdefault("personal_interests", "")
     config.setdefault("major_story_floor", True)
@@ -412,15 +423,38 @@ def synthesize(
     prompt = build_prompt(synthesis_input, config, previous_context, date)
     api_timeout = int(os.environ.get("CLAUDE_API_TIMEOUT", "120"))
 
+    effort = config.get("effort", DEFAULT_SYNTHESIS_EFFORT)
+
     for attempt in (1, 2):
         try:
-            with client.messages.stream(
+            with client.beta.messages.stream(
                 model=model,
                 max_tokens=SYNTHESIS_MAX_TOKENS,
+                output_config={"effort": effort},
+                betas=[REFUSAL_FALLBACK_BETA],
+                fallbacks="default",
                 messages=[{"role": "user", "content": prompt}],
                 timeout=api_timeout,
             ) as stream:
-                response_text = stream.get_final_text().strip()
+                message = stream.get_final_message()
+            if message.stop_reason == "refusal":
+                # Fallbacks already ran server-side; retrying won't help.
+                logger.error(
+                    "Brief synthesis refused (%s); skipping brief",
+                    message.stop_details,
+                )
+                return None
+            if message.stop_reason == "max_tokens":
+                logger.warning(
+                    "Brief synthesis hit max_tokens=%d (attempt %d)",
+                    SYNTHESIS_MAX_TOKENS,
+                    attempt,
+                )
+                continue
+            # Read by block type: responses lead with a thinking block.
+            response_text = "".join(
+                block.text for block in message.content if block.type == "text"
+            ).strip()
             brief = _parse_synthesis(response_text, known_categories)
         except (
             anthropic.APIError,

@@ -51,8 +51,10 @@ def _stream_client(text):
     cm = MagicMock()
     cm.__enter__ = MagicMock(return_value=cm)
     cm.__exit__ = MagicMock(return_value=False)
-    cm.get_final_text.return_value = text
-    client.messages.stream.side_effect = [cm]
+    cm.get_final_message.return_value = MagicMock(
+        content=[MagicMock(type="text", text=text)], stop_reason="end_turn"
+    )
+    client.beta.messages.stream.side_effect = [cm]
     return client
 
 
