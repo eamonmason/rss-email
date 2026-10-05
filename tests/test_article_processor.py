@@ -193,7 +193,7 @@ def _maybe_run_claude_integration() -> Optional[Dict[str, Any]]:
         return None
 
     os.environ["CLAUDE_ENABLED"] = "true"
-    os.environ.setdefault("CLAUDE_MODEL", "claude-haiku-4-5-20251001")
+    os.environ.setdefault("CLAUDE_MODEL", "claude-haiku-4-5")
 
     rate_limiter = ClaudeRateLimiter()
     result = process_articles_with_claude(create_sample_articles(), rate_limiter)

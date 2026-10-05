@@ -15,6 +15,7 @@ dependencies = [
     "brotli>=1.2.0",
     "python-dotenv>=1.1.1",
     "httpx>=0.28.1",
+    "w3lib>=2.3",
 ]
 
 [project.optional-dependencies]

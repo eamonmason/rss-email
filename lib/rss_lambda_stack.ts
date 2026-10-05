@@ -35,8 +35,8 @@ const PODCAST_CLOUDFRONT_DOMAIN_PARAMETER = 'rss-podcast-cloudfront-domain';
 const ANTHROPIC_API_KEY_PARAMETER = 'rss-email-anthropic-api-key';
 
 // Keep in sync with DEFAULT_CLAUDE_MODEL in src/rss_email/models.py
-const DEFAULT_CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
-const BRIEF_SYNTHESIS_CLAUDE_MODEL = 'claude-sonnet-4-6';
+const DEFAULT_CLAUDE_MODEL = 'claude-haiku-4-5';
+const BRIEF_SYNTHESIS_CLAUDE_MODEL = 'claude-opus-5-5';
 
 // Keep in sync with DEFAULT_MEMORY_KEY/DEFAULT_WINDOW_DAYS in src/rss_email/brief_memory.py
 const BRIEF_MEMORY_KEY = 'brief-memory/memory.json';
@@ -305,8 +305,12 @@ export class RSSEmailStack extends cdk.Stack {
         DIGEST_ENABLED: DIGEST_ENABLED,
         BRIEF_ENABLED: 'true',
         BRIEF_CLAUDE_MODEL: BRIEF_SYNTHESIS_CLAUDE_MODEL,
-        CLAUDE_MODEL: BRIEF_SYNTHESIS_CLAUDE_MODEL,
-        CLAUDE_API_TIMEOUT: '60',
+        // Only the digest footer label here - the digest itself was
+        // categorised by the batch job on DEFAULT_CLAUDE_MODEL.
+        CLAUDE_MODEL: DEFAULT_CLAUDE_MODEL,
+        // Brief synthesis streams from an always-thinking model; 2 attempts
+        // x 240s stays inside the 600s function timeout.
+        CLAUDE_API_TIMEOUT: '240',
         BRIEF_MEMORY_KEY: BRIEF_MEMORY_KEY,
         BRIEF_MEMORY_DAYS: BRIEF_MEMORY_DAYS,
       },

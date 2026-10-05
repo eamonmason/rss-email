@@ -94,6 +94,59 @@ class TestBatchMetadataReconstruction(unittest.TestCase):
         feed_names = {source.feed_name for source in story.sources}
         self.assertEqual(feed_names, {"Feed 0", "Feed 1", "Feed 2"})
 
+    def test_group_takes_discussion_link_from_any_member(self):
+        """A discussion thread is kept even when the primary lacks one.
+
+        The grouper decides which feed lands first; a mainstream copy of a
+        story usually beats the Hacker News one, so reading ``comments`` off
+        the primary alone would drop most threads.
+        """
+        original_articles = _articles_with_sources(3)
+        # Only the second member has a thread - as when HN covers a story a
+        # mainstream feed also carried.
+        del original_articles[0]["comments"]
+        del original_articles[2]["comments"]
+        original_articles[1]["comments"] = "https://news.ycombinator.com/item?id=9"
+        groups = [[0, 1, 2]]
+        response = {
+            "categories": {
+                "AI/ML": [
+                    {
+                        "group_id": "group_0",
+                        "title": "Combined Story",
+                        "summary": "Three feeds covered this event.",
+                    }
+                ]
+            }
+        }
+
+        enriched = build_processed_articles_from_groups(
+            response, original_articles, groups
+        )
+
+        story = enriched["AI/ML"][0]
+        self.assertEqual(story.comments, "https://news.ycombinator.com/item?id=9")
+        # The article link still comes from the primary, not the HN copy.
+        self.assertEqual(story.link, original_articles[0]["link"])
+
+    def test_group_without_any_discussion_has_no_comments(self):
+        """No member has a thread, so neither does the merged story."""
+        enriched = build_processed_articles_from_groups(
+            {
+                "categories": {
+                    "AI/ML": [
+                        {"group_id": "group_0", "title": "T", "summary": "s"}
+                    ]
+                }
+            },
+            [
+                {k: v for k, v in article.items() if k != "comments"}
+                for article in _articles_with_sources(2)
+            ],
+            [[0, 1]],
+        )
+        self.assertIsNone(enriched["AI/ML"][0].comments)
+
     def test_invalid_group_id_is_skipped(self):
         """Malformed group_id values do not crash and are ignored."""
         original_articles = _articles_with_sources(1)
