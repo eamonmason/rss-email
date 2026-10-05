@@ -32,6 +32,7 @@ import boto3
 import feedparser
 import httpx
 import pydantic
+from bs4 import BeautifulSoup
 from pydantic import BaseModel, Field, HttpUrl
 
 try:
@@ -40,6 +41,13 @@ except ImportError:
     # For local testing or when models module is not available
     RSSItem = None
     FeedList = None
+
+try:
+    from .url_utils import strip_credential_params
+except ImportError:
+    # Run as a script (``python src/rss_email/retrieve_articles.py``): the
+    # package is still installed in the project environment.
+    from rss_email.url_utils import strip_credential_params
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -140,6 +148,17 @@ def get_feed_items(url: str, timestamp: datetime) -> bytes:
                 # and shouldn't page on-call, so log at INFO like 429 below.
                 logger.info(
                     "URL: %s returned 403 Forbidden. This might be a site that aggressively blocks scrapers.",
+                    url,
+                )
+                return b""
+            if response.status_code == 410:
+                # 410 Gone means the feed is permanently removed. Retrying never
+                # helps and it fails every single run, so log at INFO rather than
+                # ERROR to avoid paging on-call every day. The feed should be
+                # removed from feed_urls.json.
+                logger.info(
+                    "URL: %s returned 410 Gone; feed is permanently removed and "
+                    "should be deleted from feed_urls.json",
                     url,
                 )
                 return b""
@@ -283,6 +302,54 @@ else:
             return self.pubdate < other.pubdate
 
 
+def _entry_body(article) -> str:
+    """The entry's HTML body, preferring content over summary."""
+    content = getattr(article, "content", None)
+    if content:
+        value = content[0].get("value") if isinstance(content[0], dict) else None
+        if value:
+            return str(value)
+    return str(getattr(article, "summary", "") or "")
+
+
+def extract_discussion(article, link: str) -> Tuple[str, Optional[str]]:
+    """Resolve an entry to its (article URL, discussion URL) pair.
+
+    Two feed shapes carry a discussion thread:
+
+    * RSS 2.0 ``<comments>`` (Hacker News via hnrss, Lobsters) - ``<link>`` is
+      already the article and ``<comments>`` is the thread, so this is a
+      straight read.
+    * Reddit's Atom feeds have no ``<comments>``; ``<link>`` *is* the thread
+      and the article URL only appears as the ``[link]`` anchor in the post
+      body. For those, the article becomes the primary link and the thread
+      becomes the discussion. Self-posts point ``[link]`` back at the thread,
+      and get no discussion link - the one link already covers both.
+
+    Returns the link unchanged and ``None`` for feeds with neither shape.
+    """
+    comments = getattr(article, "comments", None)
+    if comments:
+        return link, str(comments)
+
+    body = _entry_body(article)
+    if "[comments]" not in body:
+        return link, None
+
+    anchors = {}
+    for tag in BeautifulSoup(body, features="html.parser").find_all("a"):
+        text = tag.get_text(strip=True)
+        if text in ("[link]", "[comments]") and tag.get("href"):
+            anchors.setdefault(text, tag["href"])
+
+    article_url = anchors.get("[link]")
+    thread_url = anchors.get("[comments]") or link
+    if not article_url or article_url == thread_url:
+        # Self-post: the thread is the content, so there is nothing to split.
+        return link, None
+    return article_url, thread_url
+
+
 @pydantic.validate_call(validate_return=True)
 def get_feed(
     url: str,
@@ -307,9 +374,14 @@ def get_feed(
         feed_datetime = datetime.fromtimestamp(mktime(feed_date))
         if feed_datetime > update_date:
             # Create article with proper fields based on model type
+            article_link, discussion = extract_discussion(article, article.link)
+            # Some paid feeds embed a personal access token in every link.
+            article_link = strip_credential_params(article_link)
+            if discussion:
+                discussion = strip_credential_params(discussion)
             article_kwargs = {
                 "title": article.title,
-                "link": article.link,
+                "link": article_link,
                 "pubdate": feed_datetime,
             }
 
@@ -320,9 +392,9 @@ def get_feed(
                     article_kwargs["source_name"] = feed_name
                     article_kwargs["source_url"] = url
 
-            # Add comments link if available
-            if hasattr(article, "comments"):
-                article_kwargs["comments"] = article.comments
+            # Link to the discussion thread, when the feed exposes one.
+            if discussion:
+                article_kwargs["comments"] = discussion
 
             out_article = Article(**article_kwargs)
 

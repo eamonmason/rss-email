@@ -15,6 +15,7 @@ from .article_processor import (
     ProcessedArticle,
     _article_to_source,
     _iter_category_entries,
+    first_comments,
 )
 from .brief_generator import generate_brief_full
 from .brief_memory import (
@@ -25,6 +26,7 @@ from .brief_memory import (
     load_memory,
     render_previous_context,
     save_memory,
+    seen_links,
 )
 from .models import ArticleSource
 
@@ -105,6 +107,7 @@ def build_processed_articles_from_groups(
         if not indices:
             continue
         primary = original_articles[indices[0]] if indices[0] < len(original_articles) else {}
+        members = [original_articles[i] for i in indices if 0 <= i < len(original_articles)]
         sources = _sources_for_indices(indices, original_articles)
         enriched.setdefault(category, []).append(ProcessedArticle(
             title=entry.get("title") or primary.get("title", "Untitled"),
@@ -114,7 +117,7 @@ def build_processed_articles_from_groups(
             pubdate=primary.get("pubDate", ""),
             sources=sources,
             original_description=primary.get("description"),
-            comments=primary.get("comments"),
+            comments=first_comments(members),
         ))
 
     return enriched
@@ -153,7 +156,8 @@ def _maybe_send_brief(
     the brief must never break the main flow or affect last_run.
 
     Loads the rolling brief memory from S3 (see ``brief_memory.py``) to give the
-    synthesis prompt "previously covered" context, and - only on a successful
+    synthesis prompt "previously covered" context (and the links it already
+    featured, which are dropped from today's input), and - only on a successful
     send - writes today's themes back to memory so tomorrow's run can see them.
     A memory load/save failure is swallowed by ``load_memory``/``save_memory``
     themselves and never affects whether the brief is sent.
@@ -173,6 +177,7 @@ def _maybe_send_brief(
             article_count=article_count,
             client=client,
             previous_context=previous_context,
+            seen_links=seen_links(memory),
         )
         if result:
             send_via_ses(to_email, source_email, f"RSS Brief — {today}", result.html)

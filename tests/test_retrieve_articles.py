@@ -15,6 +15,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import feedparser
 import httpx
 from pydantic import HttpUrl
 
@@ -29,6 +30,7 @@ from rss_email.retrieve_articles import (
     get_feed_urls,
     get_update_date,
     is_connected,
+    extract_discussion,
     retrieve_rss_feeds,
     _rate_limited_host_key,
     _throttle_host,
@@ -122,6 +124,33 @@ class TestRetrieveArticles(unittest.TestCase):
 
         self.assertTrue(any("403" in message for message in captured.output))
         self.assertFalse(any(record.levelname == "WARNING" for record in captured.records))
+
+    @patch("rss_email.retrieve_articles.time.sleep")
+    @patch("rss_email.retrieve_articles.httpx.get")
+    def test_get_feed_items_410_skips_without_retry_or_error(self, mock_get, mock_sleep):
+        """A 410 Gone means the feed is permanently removed.
+
+        Retrying fails every run, so it must be skipped without retry and logged
+        at INFO, not ERROR/WARNING (which feed the ErrorWarningCount metric
+        filter and page on-call every single day the feed stays in the config).
+        """
+        mock_response = MagicMock()
+        mock_response.status_code = 410
+        mock_get.return_value = mock_response
+
+        url = "https://queue.acm.org/rss/feeds/queuecontent.xml"
+        timestamp = datetime.now() - timedelta(days=3)
+
+        with self.assertLogs("rss_email.retrieve_articles", level="INFO") as captured:
+            result = get_feed_items(url, timestamp)
+
+        self.assertEqual(result, b"")
+        self.assertEqual(mock_get.call_count, 1)
+        mock_sleep.assert_not_called()
+        self.assertTrue(any("410" in message for message in captured.output))
+        self.assertFalse(
+            any(record.levelname in ("WARNING", "ERROR") for record in captured.records)
+        )
 
     def test_get_feed(self):
         """Test feed parsing and processing from raw feed bytes."""
@@ -326,26 +355,38 @@ class TestRetrieveArticles(unittest.TestCase):
         self.assertIn('[{"title": "Article"}]', content)
         self.assertIsInstance(counts, dict)
 
-    def test_get_specific_problematic_feed(self):
-        """Test the feed URL that was returning 403 Forbidden errors."""
-        # This test will verify that our fix for the 403 error works
+    @patch("rss_email.retrieve_articles.httpx.get")
+    def test_get_specific_problematic_feed(self, mock_get):
+        """Test the feed URL that was returning 403 Forbidden errors.
+
+        Uses a mocked 200 response with RSS content standing in for the fixed
+        (non-403) behaviour, rather than a live request.
+        """
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.content = b"<?xml version='1.0'?><rss><channel/></rss>"
+        mock_get.return_value = mock_response
+
         url = "https://towardsdatascience.com/feed/"
         timestamp = datetime.now() - timedelta(days=3)
 
-        # This should now work without getting a 403 Forbidden error
         result = get_feed_items(url, timestamp)
 
-        # Verify we got a response with actual RSS content
         self.assertNotEqual(result, b"")
         self.assertIn(b"<rss", result)
 
-    def test_originally_problematic_feeds(self):
-        """Test specifically the feeds that were causing issues."""
-        # Only test the feed that was causing a 403 Forbidden error
+    @patch("rss_email.retrieve_articles.httpx.get")
+    def test_originally_problematic_feeds(self, mock_get):
+        """Test specifically the feeds that were causing issues, with mocked responses."""
         feeds = [
             "https://towardsdatascience.com/feed/",
-            "https://www.techmeme.com/feed.xml",  # This feed should work reliably
+            "https://www.techmeme.com/feed.xml",
         ]
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.content = b"<?xml version='1.0'?><rss><channel/></rss>"
+        mock_get.return_value = mock_response
 
         timestamp = datetime.now() - timedelta(days=3)
 
@@ -500,6 +541,145 @@ class TestFeedLimits(unittest.TestCase):
         # Feed-specific date should be ~1 day ago, not 3 days ago
         expected_floor = datetime.now() - timedelta(days=2)
         self.assertGreater(call_update_date, expected_floor)
+
+
+REDDIT_ATOM = """<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <entry>
+    <title>Link post</title>
+    <link href="https://www.reddit.com/r/aws/comments/abc/link_post/" />
+    <updated>{updated}</updated>
+    <content type="html">&lt;div&gt;body&lt;/div&gt; submitted by
+      &lt;a href="https://www.reddit.com/user/x"&gt;/u/x&lt;/a&gt;
+      &lt;span&gt;&lt;a href="https://example.com/article"&gt;[link]&lt;/a&gt;&lt;/span&gt;
+      &lt;span&gt;&lt;a href="https://www.reddit.com/r/aws/comments/abc/link_post/"&gt;[comments]&lt;/a&gt;&lt;/span&gt;
+    </content>
+  </entry>
+  <entry>
+    <title>Self post</title>
+    <link href="https://www.reddit.com/r/aws/comments/def/self_post/" />
+    <updated>{updated}</updated>
+    <content type="html">&lt;div&gt;body&lt;/div&gt; submitted by
+      &lt;a href="https://www.reddit.com/user/y"&gt;/u/y&lt;/a&gt;
+      &lt;span&gt;&lt;a href="https://www.reddit.com/r/aws/comments/def/self_post/"&gt;[link]&lt;/a&gt;&lt;/span&gt;
+      &lt;span&gt;&lt;a href="https://www.reddit.com/r/aws/comments/def/self_post/"&gt;[comments]&lt;/a&gt;&lt;/span&gt;
+    </content>
+  </entry>
+</feed>"""
+
+
+RSS_WITH_COMMENTS = """<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel>
+  <item>
+    <title>Broken comments</title>
+    <link>https://example.com/broken</link>
+    <pubDate>{pubdate}</pubDate>
+    <comments></comments>
+  </item>
+  <item>
+    <title>Good story</title>
+    <link>https://example.com/good</link>
+    <pubDate>{pubdate}</pubDate>
+    <comments>https://news.ycombinator.com/item?id=1</comments>
+  </item>
+</channel></rss>"""
+
+
+class TestDiscussionLinks(unittest.TestCase):
+    """Discussion-thread extraction across the feed shapes we actually poll."""
+
+    @staticmethod
+    def _entry(feed_bytes, index=0):
+        return feedparser.parse(feed_bytes).entries[index]
+
+    def test_rss_comments_element_is_the_discussion(self):
+        """HN/Lobsters style: <link> is the article, <comments> the thread."""
+        entry = self._entry(
+            RSS_WITH_COMMENTS.format(pubdate="Mon, 07 Sep 2026 13:00:48 +0000").encode(),
+            index=1,
+        )
+        self.assertEqual(
+            extract_discussion(entry, entry.link),
+            ("https://example.com/good", "https://news.ycombinator.com/item?id=1"),
+        )
+
+    def test_empty_comments_element_yields_no_discussion(self):
+        """An empty <comments/> must not become an invalid comments URL."""
+        entry = self._entry(
+            RSS_WITH_COMMENTS.format(pubdate="Mon, 07 Sep 2026 13:00:48 +0000").encode()
+        )
+        self.assertEqual(
+            extract_discussion(entry, entry.link),
+            ("https://example.com/broken", None),
+        )
+
+    def test_empty_comments_does_not_discard_the_whole_feed(self):
+        """One malformed item must not take the rest of the feed down with it."""
+        feed = RSS_WITH_COMMENTS.format(
+            pubdate="Mon, 07 Sep 2026 13:00:48 +0000"
+        ).encode()
+        articles = get_feed(
+            "https://example.com/rss", feed, datetime(2026, 9, 1), "Test Feed"
+        )
+        self.assertEqual(len(articles), 2)
+        self.assertIsNone(articles[0].comments)
+        self.assertEqual(
+            str(articles[1].comments), "https://news.ycombinator.com/item?id=1"
+        )
+
+    def test_reddit_link_post_splits_article_and_thread(self):
+        """Reddit link posts: promote the [link] anchor, keep the thread."""
+        entry = self._entry(
+            REDDIT_ATOM.format(updated="2026-09-07T13:00:48+00:00").encode()
+        )
+        self.assertEqual(
+            extract_discussion(entry, entry.link),
+            (
+                "https://example.com/article",
+                "https://www.reddit.com/r/aws/comments/abc/link_post/",
+            ),
+        )
+
+    def test_reddit_self_post_is_left_alone(self):
+        """Self-posts point [link] at the thread; one link covers both."""
+        entry = self._entry(
+            REDDIT_ATOM.format(updated="2026-09-07T13:00:48+00:00").encode(), index=1
+        )
+        self.assertEqual(
+            extract_discussion(entry, entry.link),
+            ("https://www.reddit.com/r/aws/comments/def/self_post/", None),
+        )
+
+    def test_reddit_link_post_through_get_feed(self):
+        """The split survives the full get_feed path, not just the helper."""
+        articles = get_feed(
+            "https://www.reddit.com/r/aws/.rss",
+            REDDIT_ATOM.format(updated="2026-09-07T13:00:48+00:00").encode(),
+            datetime(2026, 9, 1),
+            "Reddit AWS",
+        )
+        self.assertEqual(str(articles[0].link), "https://example.com/article")
+        self.assertEqual(
+            str(articles[0].comments),
+            "https://www.reddit.com/r/aws/comments/abc/link_post/",
+        )
+        self.assertEqual(
+            str(articles[1].link),
+            "https://www.reddit.com/r/aws/comments/def/self_post/",
+        )
+        self.assertIsNone(articles[1].comments)
+
+    def test_feed_without_any_discussion(self):
+        """Ordinary feeds are untouched."""
+        feed = (
+            b'<?xml version="1.0"?><rss version="2.0"><channel><item>'
+            b"<title>T</title><link>https://example.com/a</link>"
+            b"<description>hello</description></item></channel></rss>"
+        )
+        entry = self._entry(feed)
+        self.assertEqual(
+            extract_discussion(entry, entry.link), ("https://example.com/a", None)
+        )
 
 
 if __name__ == "__main__":
