@@ -20,6 +20,7 @@ from rss_email.brief_generator import (
     ensure_article_ids,
     generate_brief,
     generate_brief_full,
+    load_brief_config,
     match_title_to_url,
     render_brief_html,
     source_tier,
@@ -94,17 +95,35 @@ VALID_ARTICLE_INDEX = {
 }
 
 
+def make_message(text, stop_reason="end_turn"):
+    """Return a mock final message: an (empty) thinking block, then the text.
+
+    Opus 5.5 always thinks, so real responses lead with a ``thinking`` block;
+    the synthesis must read content by block type, not position.
+    """
+    thinking = MagicMock(type="thinking", thinking="")
+    blocks = [thinking]
+    if text is not None:
+        blocks.append(MagicMock(type="text", text=text))
+    return MagicMock(content=blocks, stop_reason=stop_reason, stop_details=None)
+
+
 def make_client(texts):
-    """Return a mock Anthropic client whose messages.stream yields the given texts."""
+    """Return a mock Anthropic client whose beta.messages.stream yields the given texts.
+
+    Each entry is either a response text or a ready-made message from
+    ``make_message`` (to control ``stop_reason``).
+    """
     client = MagicMock()
     stream_cms = []
     for text in texts:
         cm = MagicMock()
         cm.__enter__ = MagicMock(return_value=cm)
         cm.__exit__ = MagicMock(return_value=False)
-        cm.get_final_text.return_value = text
+        message = make_message(text) if isinstance(text, str) else text
+        cm.get_final_message.return_value = message
         stream_cms.append(cm)
-    client.messages.stream.side_effect = stream_cms
+    client.beta.messages.stream.side_effect = stream_cms
     return client
 
 
@@ -253,7 +272,7 @@ def test_build_prompt_forbids_inline_citations_in_prose():
         SYNTH_CONFIG,
     )
     assert "never write an id citation" in prompt
-    assert "tldr, relevance_to_reader, week_verdict, implication, and" in prompt
+    assert "why, tldr, relevance_to_reader, implication, and summary" in prompt
     assert "summary are plain-prose fields" in prompt
 
 
@@ -308,7 +327,7 @@ def test_synthesize_canonicalises_and_orders_ai_ml():
     """A response keyed AI_ML validates, canonicalises, and renders AI/ML first."""
     payload = {
         "AI_ML": VALID_SYNTHESIS["AI/ML"],
-        "Technology": {"week_verdict": "v", "themes": []},
+        "Technology": VALID_SYNTHESIS["AI/ML"],
     }
     client = make_client([json.dumps(payload)])
     brief = synthesize(
@@ -318,9 +337,7 @@ def test_synthesize_canonicalises_and_orders_ai_ml():
     )
     assert "AI/ML" in brief.categories
     assert "AI_ML" not in brief.categories
-    html_body = render_brief_html(
-        brief, {}, "2026-06-14", 1, themed_order=["AI/ML", "Technology"]
-    )
+    html_body = render_brief_html(brief, {}, 1, themed_order=["AI/ML", "Technology"])
     assert ">AI/ML</h2>" in html_body
     assert html_body.index(">AI/ML</h2>") < html_body.index(">Technology</h2>")
 
@@ -520,7 +537,7 @@ def test_synthesize_valid():
     assert brief.categories["AI/ML"].themes[0].signal_strength == "HIGH"
     assert brief.categories["AI/ML"].themes[1].relevance_to_reader is None
     assert brief.personal.summary == "Cycling season heats up."
-    assert client.messages.stream.call_count == 1
+    assert client.beta.messages.stream.call_count == 1
 
 
 def test_synthesize_does_not_pass_removed_sampling_kwargs():
@@ -531,10 +548,87 @@ def test_synthesize_does_not_pass_removed_sampling_kwargs():
         SYNTH_CONFIG,
         client=client,
     )
-    _, kwargs = client.messages.stream.call_args
+    _, kwargs = client.beta.messages.stream.call_args
     assert "temperature" not in kwargs
     assert "top_p" not in kwargs
     assert "top_k" not in kwargs
+
+
+def test_synthesize_request_shape_for_opus_5_5():
+    """Opus 5.5: explicit effort, headroom for thinking, refusal fallbacks on."""
+    client = make_client([json.dumps(VALID_SYNTHESIS)])
+    synthesize(
+        {"AI/ML": [{"title": "x", "url": "u", "summary": "s"}]},
+        {**SYNTH_CONFIG, "effort": "high"},
+        client=client,
+    )
+    _, kwargs = client.beta.messages.stream.call_args
+    assert kwargs["output_config"] == {"effort": "high"}
+    assert kwargs["max_tokens"] >= 32000
+    assert kwargs["fallbacks"] == "default"
+    assert "server-side-fallback-2026-07-01" in kwargs["betas"]
+    # Thinking can't be disabled on Opus 5.5 - never send a thinking config.
+    assert "thinking" not in kwargs
+
+
+def test_synthesize_effort_defaults_to_medium():
+    """Without a configured effort the request pins Opus 5.5's medium default."""
+    client = make_client([json.dumps(VALID_SYNTHESIS)])
+    synthesize(
+        {"AI/ML": [{"title": "x", "url": "u", "summary": "s"}]},
+        SYNTH_CONFIG,
+        client=client,
+    )
+    _, kwargs = client.beta.messages.stream.call_args
+    assert kwargs["output_config"] == {"effort": "medium"}
+
+
+def test_synthesize_reads_text_after_thinking_block():
+    """The JSON is read from the text block even when a thinking block leads."""
+    client = make_client([json.dumps(VALID_SYNTHESIS)])
+    brief = synthesize(
+        {"AI/ML": [{"title": "x", "url": "u", "summary": "s"}]},
+        SYNTH_CONFIG,
+        client=client,
+    )
+    assert isinstance(brief, BriefSynthesis)
+
+
+def test_synthesize_refusal_skips_without_retry():
+    """A refusal (after fallbacks) is final: no retry, brief skipped."""
+    client = make_client(
+        [make_message(None, stop_reason="refusal"), json.dumps(VALID_SYNTHESIS)]
+    )
+    brief = synthesize(
+        {"AI/ML": [{"title": "x", "url": "u", "summary": "s"}]},
+        SYNTH_CONFIG,
+        client=client,
+    )
+    assert brief is None
+    assert client.beta.messages.stream.call_count == 1
+
+
+def test_synthesize_retries_after_truncation():
+    """A max_tokens cut-off is retried rather than parsed."""
+    client = make_client(
+        [
+            make_message('{"categories": {', stop_reason="max_tokens"),
+            json.dumps(VALID_SYNTHESIS),
+        ]
+    )
+    brief = synthesize(
+        {"AI/ML": [{"title": "x", "url": "u", "summary": "s"}]},
+        SYNTH_CONFIG,
+        client=client,
+    )
+    assert isinstance(brief, BriefSynthesis)
+    assert client.beta.messages.stream.call_count == 2
+
+
+def test_default_brief_model_is_opus_5_5(monkeypatch):
+    """The shipped brief config targets Claude Opus 5.5."""
+    monkeypatch.delenv("BRIEF_CLAUDE_MODEL", raising=False)
+    assert load_brief_config()["model"] == "claude-opus-5-5"
 
 
 def test_synthesize_strips_json_fences():
@@ -559,14 +653,14 @@ def test_synthesize_retries_then_skips():
         client=client,
     )
     assert brief is None
-    assert client.messages.stream.call_count == 2
+    assert client.beta.messages.stream.call_count == 2
 
 
 def test_synthesize_empty_input_skips():
     """No themed articles means no API call and a None result."""
     client = make_client([json.dumps(VALID_SYNTHESIS)])
     assert synthesize({}, SYNTH_CONFIG, client=client) is None
-    assert client.messages.stream.call_count == 0
+    assert client.beta.messages.stream.call_count == 0
 
 
 # --- schema validation ----------------------------------------------------
@@ -610,14 +704,11 @@ def rendered_html():
         cross_cutting=VALID_SYNTHESIS["cross_cutting"],
         personal=VALID_SYNTHESIS["personal"],
     )
-    return render_brief_html(
-        brief, VALID_ARTICLE_INDEX, "2026-06-14", 7, themed_order=["AI/ML"]
-    )
+    return render_brief_html(brief, VALID_ARTICLE_INDEX, 7, themed_order=["AI/ML"])
 
 
 def test_render_contains_core_sections(rendered_html):
-    """Header, cross-cutting, and personal sections are present."""
-    assert "RSS Brief — 2026-06-14" in rendered_html
+    """Cross-cutting and personal sections are present."""
     assert "Cross-Cutting Signals" in rendered_html
     assert "Personal" in rendered_html
     assert "Why this matters to you:" in rendered_html
@@ -681,9 +772,7 @@ def test_render_resolves_inline_citations_leaked_into_prose():
         cross_cutting=synthesis["cross_cutting"],
         personal=synthesis["personal"],
     )
-    html_body = render_brief_html(
-        brief, VALID_ARTICLE_INDEX, "2026-06-14", 7, themed_order=["AI/ML"]
-    )
+    html_body = render_brief_html(brief, VALID_ARTICLE_INDEX, 7, themed_order=["AI/ML"])
     assert "(article" not in html_body
     # Resolved citations become real links to the cited article's URL.
     assert html_body.count('href="https://x/a"') >= 3  # tldr, relevance, implication
@@ -721,7 +810,7 @@ def test_generate_brief_end_to_end(monkeypatch):
         categories, date="2026-06-14", article_count=4, client=client
     )
     assert html_body is not None
-    assert "RSS Brief — 2026-06-14" in html_body
+    assert "<strong>Articles synthesised:</strong> 4" in html_body
     assert '<a href="https://x/a"' in html_body
     assert "Excluded" not in html_body
 
@@ -747,7 +836,7 @@ def test_generate_brief_full_returns_synthesis_and_index(monkeypatch):
         categories, date="2026-06-14", article_count=3, client=client
     )
     assert result is not None
-    assert "RSS Brief — 2026-06-14" in result.html
+    assert "<strong>Articles synthesised:</strong> 3" in result.html
     assert isinstance(result.synthesis, BriefSynthesis)
     assert "AI/ML" in result.synthesis.categories
     assert result.article_index["1"]["title"] == "Open model beats GPT"

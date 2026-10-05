@@ -26,6 +26,7 @@ from .brief_memory import (
     load_memory,
     render_previous_context,
     save_memory,
+    seen_links,
 )
 from .models import ArticleSource
 
@@ -155,7 +156,8 @@ def _maybe_send_brief(
     the brief must never break the main flow or affect last_run.
 
     Loads the rolling brief memory from S3 (see ``brief_memory.py``) to give the
-    synthesis prompt "previously covered" context, and - only on a successful
+    synthesis prompt "previously covered" context (and the links it already
+    featured, which are dropped from today's input), and - only on a successful
     send - writes today's themes back to memory so tomorrow's run can see them.
     A memory load/save failure is swallowed by ``load_memory``/``save_memory``
     themselves and never affects whether the brief is sent.
@@ -175,6 +177,7 @@ def _maybe_send_brief(
             article_count=article_count,
             client=client,
             previous_context=previous_context,
+            seen_links=seen_links(memory),
         )
         if result:
             send_via_ses(to_email, source_email, f"RSS Brief — {today}", result.html)

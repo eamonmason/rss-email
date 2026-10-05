@@ -2,12 +2,16 @@
 """Test feeds that used to need manual decompression workarounds.
 
 httpx auto-decodes gzip/deflate/br based on the Content-Encoding header, so
-these feeds should now come back as plain XML with no extra handling.
+these feeds should now come back as plain XML with no extra handling. httpx
+does that decoding internally before handing back ``response.content``, so a
+mocked response already carrying decoded XML in ``content`` exercises the
+same code path in ``get_feed_items`` without needing a live connection.
 """
 
 import logging
 import sys
 from datetime import datetime
+from unittest.mock import MagicMock, patch
 
 
 from rss_email.retrieve_articles import get_feed_items
@@ -46,9 +50,27 @@ PROBLEM_FEEDS = [
 ]
 
 
-def test_problematic_feeds():
-    """Test decompression for all problematic feeds."""
+@patch("rss_email.retrieve_articles.httpx.get")
+def test_problematic_feeds(mock_get):
+    """Test decompression for all problematic feeds against a mocked client.
+
+    No live requests are made: httpx does the gzip/deflate/br decoding before
+    ``get_feed_items`` ever sees the response, so a mock standing in for the
+    httpx client and returning already-decoded XML in ``content`` exercises
+    the same downstream handling a real (decompressed) response would.
+    """
     logger.info("Testing %s problematic feeds...", len(PROBLEM_FEEDS))
+
+    def make_response(feed_name):
+        response = MagicMock()
+        response.status_code = 200
+        response.content = (
+            f"<?xml version='1.0'?><rss><channel><title>{feed_name}</title>"
+            "</channel></rss>"
+        ).encode("utf-8")
+        return response
+
+    mock_get.side_effect = [make_response(feed["name"]) for feed in PROBLEM_FEEDS]
 
     success_count = 0
     failed_feeds = []
@@ -122,10 +144,7 @@ def test_problematic_feeds():
     if failed_feeds:
         logger.info("Failed feeds: %s", ", ".join(failed_feeds))
 
-    # Allow up to 2 of the live feeds to be transiently unreachable without
-    # failing the build; this is a decompression smoke test, not a feed monitor.
-    min_success = len(PROBLEM_FEEDS) - 2
-    assert success_count >= min_success, (
+    assert success_count == len(PROBLEM_FEEDS), (
         f"{len(failed_feeds)} feeds failed: {', '.join(failed_feeds)}"
     )
 
@@ -133,7 +152,8 @@ def test_problematic_feeds():
 def main():
     """Run tests for all problematic feeds when script is run directly."""
     try:
-        test_problematic_feeds()
+        # mock.patch injects mock_get itself; pylint can't see that.
+        test_problematic_feeds()  # pylint: disable=no-value-for-parameter
         return 0
     except AssertionError as e:
         logger.error("Test failed: %s", e)

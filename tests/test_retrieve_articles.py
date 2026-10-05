@@ -355,26 +355,38 @@ class TestRetrieveArticles(unittest.TestCase):
         self.assertIn('[{"title": "Article"}]', content)
         self.assertIsInstance(counts, dict)
 
-    def test_get_specific_problematic_feed(self):
-        """Test the feed URL that was returning 403 Forbidden errors."""
-        # This test will verify that our fix for the 403 error works
+    @patch("rss_email.retrieve_articles.httpx.get")
+    def test_get_specific_problematic_feed(self, mock_get):
+        """Test the feed URL that was returning 403 Forbidden errors.
+
+        Uses a mocked 200 response with RSS content standing in for the fixed
+        (non-403) behaviour, rather than a live request.
+        """
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.content = b"<?xml version='1.0'?><rss><channel/></rss>"
+        mock_get.return_value = mock_response
+
         url = "https://towardsdatascience.com/feed/"
         timestamp = datetime.now() - timedelta(days=3)
 
-        # This should now work without getting a 403 Forbidden error
         result = get_feed_items(url, timestamp)
 
-        # Verify we got a response with actual RSS content
         self.assertNotEqual(result, b"")
         self.assertIn(b"<rss", result)
 
-    def test_originally_problematic_feeds(self):
-        """Test specifically the feeds that were causing issues."""
-        # Only test the feed that was causing a 403 Forbidden error
+    @patch("rss_email.retrieve_articles.httpx.get")
+    def test_originally_problematic_feeds(self, mock_get):
+        """Test specifically the feeds that were causing issues, with mocked responses."""
         feeds = [
             "https://towardsdatascience.com/feed/",
-            "https://www.techmeme.com/feed.xml",  # This feed should work reliably
+            "https://www.techmeme.com/feed.xml",
         ]
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.content = b"<?xml version='1.0'?><rss><channel/></rss>"
+        mock_get.return_value = mock_response
 
         timestamp = datetime.now() - timedelta(days=3)
 
