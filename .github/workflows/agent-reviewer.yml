@@ -3,19 +3,32 @@ name: Agent Reviewer
 on:
   pull_request_review_comment:
     types: [created]
-
-permissions:
-  contents: read
-  pull-requests: write
+  issue_comment:
+    types: [created]
 
 jobs:
   call-reviewer:
-    if: ${{ contains(github.event.comment.body, '@agent') }}
-    uses: eamonmason/ai-workflows/.github/workflows/reusable-reviewer.yml@main
+    # Handles both a review comment on a diff line and a plain comment on the
+    # PR conversation. author_association exists on both events, so one check
+    # covers them.
+    if: >-
+      contains(github.event.comment.body, '@agent')
+      && github.event.comment.author_association == 'OWNER'
+      && (github.event.pull_request != null || github.event.issue.pull_request != null)
+    # Must be at least what reusable-reviewer.yml declares, or the call fails
+    # validation before it runs: the repo default is `read`, so anything not
+    # listed here is granted `none`.
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    uses: eamonmason/ai-workflows/.github/workflows/reusable-reviewer.yml@d74f701d0f3ef995f9b5eb9e7b00ac4ba7a29ede  # v1.1.0
     with:
-      pull_request_number: ${{ github.event.pull_request.number }}
-      pull_request_title: ${{ github.event.pull_request.title }}
+      pull_request_number: ${{ format('{0}', github.event.pull_request.number || github.event.issue.number) }}
+      pull_request_title: ${{ github.event.pull_request.title || github.event.issue.title }}
       comment_body: ${{ github.event.comment.body }}
-      head_ref: ${{ github.event.pull_request.head.ref }}
+      head_ref: ${{ github.event.pull_request.head.ref || '' }}
     secrets:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      APP_ID: ${{ secrets.APP_ID }}
+      APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}

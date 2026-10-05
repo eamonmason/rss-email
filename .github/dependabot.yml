@@ -38,3 +38,10 @@ updates:
       github-actions:
         patterns: ["*"]
     open-pull-requests-limit: 10
+    ignore:
+      # The agent workflows pin ai-workflows to a 40-char SHA on purpose: that
+      # repo has no branch protection, so the pin is the control. Dependabot
+      # would otherwise bump it weekly, and because dependency auto-merge is
+      # enabled here, a bump to the agent engine could merge itself without
+      # anyone reading the diff. Bump this deliberately, by hand.
+      - dependency-name: "eamonmason/ai-workflows"

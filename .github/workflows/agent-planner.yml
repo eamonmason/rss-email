@@ -6,16 +6,38 @@ on:
   issue_comment:
     types: [created]
 
-permissions:
-  contents: read
-  issues: write
-
 jobs:
   call-planner:
-    if: ${{ !github.event.issue.pull_request && github.actor != 'github-actions[bot]' && (github.event_name == 'issues' || (github.event_name == 'issue_comment' && !contains(github.event.comment.body, '@agent execute'))) }}
-    uses: eamonmason/ai-workflows/.github/workflows/reusable-planner.yml@main
+    # This repo is public, so anyone can open an issue or comment. The OWNER
+    # check is what stops a stranger reaching a job that holds
+    # ANTHROPIC_API_KEY and contents: write. Note the two trigger paths read
+    # DIFFERENT fields: an `issues` event has no github.event.comment, so
+    # copying the executor's condition here would silently evaluate to null
+    # and gate nothing.
+    if: >-
+      !github.event.issue.pull_request
+      && github.actor != 'github-actions[bot]'
+      && !contains(github.event.issue.labels.*.name, 'renovate')
+      && (
+           (github.event_name == 'issues'
+            && github.event.issue.author_association == 'OWNER')
+           || (github.event_name == 'issue_comment'
+               && github.event.comment.author_association == 'OWNER'
+               && !contains(github.event.comment.body, '@agent execute'))
+         )
+    # Must be at least what reusable-planner.yml declares, or the call fails
+    # validation before it runs: the repo default is `read`, so anything not
+    # listed here is granted `none`. The planner needs write because it now
+    # commits a spec and opens a PR rather than just commenting.
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    uses: eamonmason/ai-workflows/.github/workflows/reusable-planner.yml@d74f701d0f3ef995f9b5eb9e7b00ac4ba7a29ede  # v1.1.0
     with:
-      issue_number: ${{ toJSON(github.event.issue.number) }}
+      issue_number: ${{ format('{0}', github.event.issue.number) }}
       issue_title: ${{ github.event.issue.title }}
     secrets:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      APP_ID: ${{ secrets.APP_ID }}
+      APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
