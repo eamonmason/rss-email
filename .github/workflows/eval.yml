@@ -49,17 +49,30 @@ jobs:
         # The eval script sets PROMPTFOO_PYTHON=../.venv/bin/python so the provider
         # runs synthesize() via uv's venv at the repo root.
         # One retry: "Could not extract JSON from llm-rubric response" is a transient
-        # promptfoo grader-parse failure unrelated to brief quality.
+        # promptfoo grader-parse failure unrelated to brief quality. Each attempt
+        # writes its own file so a failed first attempt isn't overwritten by a
+        # passing retry, and a retry is flagged rather than passing silently.
         run: |
-          npm run eval -- --output eval-results.json || {
-            echo "First attempt failed; retrying once…"
-            npm run eval -- --output eval-results.json
-          }
+          npm run eval -- --output eval-results-1.json && exit 0
+          echo "::warning title=Brief eval retried::First attempt failed (see the attempt 1 annotations); retrying once"
+          npm run eval -- --output eval-results-2.json
+
+      - name: Annotate failed assertions
+        # The console table only says [FAIL]; the reason is in the results JSON.
+        # Annotations are readable through the check-runs API without the logs.
+        if: always()
+        working-directory: eval
+        run: |
+          for n in 1 2; do
+            f="eval-results-$n.json"
+            [ -f "$f" ] && jq -r --arg attempt "attempt $n" -f annotate_failures.jq "$f"
+          done
+          exit 0
 
       - name: Upload eval results
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: brief-eval-results
-          path: eval/eval-results.json
+          path: eval/eval-results-*.json
           if-no-files-found: warn
