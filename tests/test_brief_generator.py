@@ -259,6 +259,10 @@ def test_build_prompt_includes_source_and_rules():
     assert "personal interests" in prompt.lower()
     assert "Source ranking:" in prompt
     assert "never drop a genuinely major story" in prompt
+    # Major stories outrank niche themes for capped slots, and an
+    # aggregator-only major story is not dropped by the source ranking.
+    assert "Major stories claim theme slots first" in prompt
+    assert "never a reason to drop a major story" in prompt
     assert "cite articles ONLY by their numeric ID" in prompt
     # High-tier source is presented before the deprioritised one.
     assert prompt.index("From HN") < prompt.index("Aggregated")

@@ -85,7 +85,10 @@ MAJOR_STORY_RULE = (
     "because it is not work-relevant - industry-shifting announcements, major outages or "
     "incidents, large acquisitions or IPOs, and high-impact societal tech stories must "
     "appear as themes (set relevance_to_reader to null when they do not bear on the "
-    "reader's job). This is a personal feed as much as a work feed."
+    "reader's job). This is a personal feed as much as a work feed. Major stories claim "
+    "theme slots first: when the theme caps force a choice, drop a niche GENERAL theme, "
+    "never a major story. A major story carried only by an aggregator or wire source "
+    "(e.g. Techmeme) is still covered, citing that source."
 )
 
 RUTHLESS_RULE = (
@@ -99,7 +102,9 @@ SOURCE_RULE = (
     "Google News) when choosing which articles to feature. When the same story appears from "
     "multiple sources, feature the primary source (the company's own announcement or press "
     "release, the original blog post or paper, the vendor advisory) over trade-press "
-    "rewrites, and otherwise the higher-quality community source."
+    "rewrites, and otherwise the higher-quality community source. Source ranking decides "
+    "which copy of a story to cite and breaks ties between stories of similar weight - it "
+    "is never a reason to drop a major story."
 )
 
 FIDELITY_RULE = (
