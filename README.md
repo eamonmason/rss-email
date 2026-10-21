@@ -179,6 +179,15 @@ RSS sources are configured in `feed_urls.json` with this structure:
 }
 ```
 
+#### Mastodon source
+An optional `mastodon` block adds link posts from your Mastodon home timeline as articles (the
+shared page is the article, the post is its discussion link):
+```json
+{"mastodon": {"base_url": "https://mastodon.social", "max_articles": 15}}
+```
+Create the access token (`read:statuses` scope) as an SSM SecureString named
+`rss-email-mastodon-token`. Without the block or the token the source is skipped.
+
 ### CDK Pre-requisites
 
 If you have not run CDK in the target account and region, then bootstrap the CDK deploy by running:

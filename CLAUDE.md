@@ -239,6 +239,18 @@ RSS sources are configured in `feed_urls.json` with this structure:
 }
 ```
 
+### Mastodon Source
+An optional top-level `mastodon` block adds link posts from a Mastodon home timeline as articles
+(the shared page is the article, the post is its discussion link). It is separate from `feeds` so
+it is never fetched as RSS:
+```json
+{"mastodon": {"base_url": "https://mastodon.social", "max_articles": 15}}
+```
+`max_articles` is kept per 24-hour window; `enabled: false` switches it off. The access token
+(`read:statuses` scope) is an SSM SecureString named `rss-email-mastodon-token`, created by hand.
+A missing block or token disables the source quietly; an API failure logs a warning and never
+blocks the RSS feeds. See `src/rss_email/mastodon_source.py`.
+
 ## Testing Strategy
 
 - Unit tests in `/tests/` directory cover all core modules

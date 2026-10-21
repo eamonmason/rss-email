@@ -33,6 +33,8 @@ const LAST_RUN_PARAMETER = 'rss-email-lastrun';
 const PODCAST_LAST_RUN_PARAMETER = 'rss-podcast-lastrun';
 const PODCAST_CLOUDFRONT_DOMAIN_PARAMETER = 'rss-podcast-cloudfront-domain';
 const ANTHROPIC_API_KEY_PARAMETER = 'rss-email-anthropic-api-key';
+// SecureString, created by hand; the Mastodon source is skipped if absent.
+const MASTODON_TOKEN_PARAMETER = 'rss-email-mastodon-token';
 
 // Keep in sync with DEFAULT_CLAUDE_MODEL in src/rss_email/models.py
 const DEFAULT_CLAUDE_MODEL = 'claude-haiku-4-5';
@@ -147,7 +149,10 @@ export class RSSEmailStack extends cdk.Stack {
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
               actions: ['ssm:GetParameter'],
-              resources: [`arn:aws:ssm:*:*:parameter/${ANTHROPIC_API_KEY_PARAMETER}`],
+              resources: [
+                `arn:aws:ssm:*:*:parameter/${ANTHROPIC_API_KEY_PARAMETER}`,
+                `arn:aws:ssm:*:*:parameter/${MASTODON_TOKEN_PARAMETER}`,
+              ],
             }),
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
@@ -253,6 +258,7 @@ export class RSSEmailStack extends cdk.Stack {
         KEY: KEY,
         FEED_URLS_BUCKET: bucket.bucketName,
         FEED_URLS_KEY: 'feed_urls.json',
+        MASTODON_TOKEN_PARAMETER: MASTODON_TOKEN_PARAMETER,
       },
       role: role,
       layers: [layer],
