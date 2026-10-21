@@ -150,7 +150,8 @@ def to_article(
             link=strip_credential_params(card["url"]),
             description=description,
             comments=status.get("url") or None,
-            pubdate=seen_at,
+            # Naive UTC, like the RSS feed articles it is sorted against.
+            pubdate=seen_at.astimezone(timezone.utc).replace(tzinfo=None),
             source_name=config.name,
             source_url=str(config.base_url),
         )
