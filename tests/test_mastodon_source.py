@@ -91,7 +91,14 @@ class TestSelect:
         boost = make_status("10", age_hours=2, reblog=inner)
         (article,) = ms.select_articles([boost], CONFIG, NOW)
         assert str(article.comments).endswith("/9")
-        assert article.pubdate == NOW - timedelta(hours=2)
+        assert article.pubdate == (NOW - timedelta(hours=2)).replace(tzinfo=None)
+
+    def test_pubdate_sorts_against_naive_feed_articles(self):
+        (article,) = ms.select_articles([make_status()], CONFIG, NOW)
+        feed_item = ms.RSSItem(
+            title="t", link="https://example.com/x", pubdate=datetime(2026, 10, 21, 9, 0)
+        )
+        assert sorted([article, feed_item], reverse=True)[0] is article
 
     def test_cap_applies_per_24h_window(self):
         recent = [make_status(str(i), url=f"https://e.com/{i}", age_hours=1) for i in range(4)]
