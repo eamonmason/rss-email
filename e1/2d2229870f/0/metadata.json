@@ -1,0 +1,50 @@
+{
+  "cli_version": "0.10.5",
+  "checkpoint_id": "e12d2229870f",
+  "session_id": "bc883dcf-e955-4365-9cd3-4cebcd5b94e1",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-26T11:04:55.528182Z",
+  "branch": "fix/podcast-re-spellings",
+  "checkpoints_count": 7,
+  "files_touched": [
+    "src/rss_email/podcast_tts.py",
+    "tests/test_podcast_tts.py"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-5-5",
+  "turn_id": "5e34f92da408",
+  "checkpoint_transcript_start": 1159,
+  "transcript_lines_at_start": 1159,
+  "compact_transcript_start": 129,
+  "token_usage": {
+    "input_tokens": 44,
+    "cache_creation_tokens": 17277,
+    "cache_read_tokens": 7405297,
+    "output_tokens": 13639,
+    "api_call_count": 22
+  },
+  "session_metrics": {
+    "turn_count": 23
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-26T11:04:55.425225Z",
+    "agent_lines": 46,
+    "agent_removed": 2,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 46,
+    "total_lines_changed": 48,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.10.5",
+  "checkpoint_id": "e12d2229870f",
+  "strategy": "manual-commit",
+  "branch": "fix/podcast-re-spellings",
+  "checkpoints_count": 7,
+  "files_touched": [
+    "src/rss_email/podcast_tts.py",
+    "tests/test_podcast_tts.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/e1/2d2229870f/0/metadata.json",
+      "transcript": "/e1/2d2229870f/0/full.jsonl",
+      "compact_transcript": "/e1/2d2229870f/0/transcript.jsonl",
+      "content_hash": "/e1/2d2229870f/0/content_hash.txt",
+      "prompt": "/e1/2d2229870f/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 44,
+    "cache_creation_tokens": 17277,
+    "cache_read_tokens": 7405297,
+    "output_tokens": 13639,
+    "api_call_count": 22
+  }
+}
