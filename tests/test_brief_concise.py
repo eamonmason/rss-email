@@ -233,11 +233,12 @@ def test_old_memory_without_must_read_still_loads():
     assert seen_links(memory) == set()
 
 
+@patch("rss_email.retrieve_and_send_email.save_narration_input")
 @patch("rss_email.retrieve_and_send_email.save_memory")
 @patch("rss_email.retrieve_and_send_email.send_via_ses")
 @patch("rss_email.retrieve_and_send_email.generate_brief_full")
 @patch("rss_email.retrieve_and_send_email.load_memory")
-def test_maybe_send_brief_passes_seen_links(mock_load, mock_generate, _send, _save):
+def test_maybe_send_brief_passes_seen_links(mock_load, mock_generate, _send, _save, _narration):
     """The send flow hands memory's featured links to the brief generator."""
     brief = BriefSynthesis(categories={"AI/ML": {"themes": [_theme("A", ["1"])]}})
     mock_load.return_value = BriefMemory(days=[build_day_record(brief, INDEX, "2026-09-20")])
@@ -246,3 +247,24 @@ def test_maybe_send_brief_passes_seen_links(mock_load, mock_generate, _send, _sa
     _maybe_send_brief({"AI/ML": []}, MagicMock(), "to@x", "from@x", "bucket")
 
     assert mock_generate.call_args.kwargs["seen_links"] == {"https://blog.example/saml"}
+
+
+@patch("rss_email.retrieve_and_send_email.save_narration_input")
+@patch("rss_email.retrieve_and_send_email.save_memory")
+@patch("rss_email.retrieve_and_send_email.send_via_ses")
+@patch("rss_email.retrieve_and_send_email.generate_brief_full")
+@patch("rss_email.retrieve_and_send_email.load_memory")
+def test_maybe_send_brief_saves_narration_input(mock_load, mock_generate, _send, _save, mock_narration):
+    """A sent brief also stores the narration input the podcast stage reads."""
+    brief = BriefSynthesis(
+        must_read=[{"id": "1", "why": "Important."}],
+        categories={"AI/ML": {"themes": [_theme("A", ["1"])]}},
+    )
+    mock_load.return_value = BriefMemory()
+    mock_generate.return_value = MagicMock(html="<p>x</p>", synthesis=brief, article_index=INDEX)
+
+    _maybe_send_brief({"AI/ML": []}, MagicMock(), "to@x", "from@x", "bucket")
+
+    bucket, narration = mock_narration.call_args.args
+    assert bucket == "bucket"
+    assert narration["must_read"][0]["why"] == "Important."

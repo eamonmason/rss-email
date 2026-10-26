@@ -16,3 +16,6 @@ test_podcast.mp3
 .claude/settings.local.json
 .claude
 .entire
+
+# Local voice samples from generate_test_podcast.py
+/*.mp3

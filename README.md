@@ -88,7 +88,7 @@ uv run python src/cli_article_processor.py
 ### Core Components
 - **retrieve_articles.py**: Lambda function that fetches RSS feeds and stores aggregated data in S3
 - **email_articles.py**: Lambda function that processes stored articles and sends formatted emails via SES (triggered by Step Functions)
-- **podcast_generator.py**: Audio podcast generation utilities using Claude AI and AWS Polly (used by Step Functions workflow)
+- **generate_podcast.py**, **podcast_script.py**, **podcast_tts.py**, **podcast_generator.py**: Single-narrator podcast built from the RSS Brief (Claude script, Phonon speech, feed publishing)
 - **article_processor.py**: Claude AI integration for intelligent article categorization and summarization
 - **lib/rss_lambda_stack.ts**: Main CDK infrastructure stack defining all AWS resources including Step Functions workflow
 - **cli_article_processor.py**: CLI tool for testing article processing with Claude API locally
@@ -103,21 +103,20 @@ uv run python src/cli_article_processor.py
 **Daily at 7:30 AM (weekdays):**
 1. **Step Functions workflow** orchestrates the daily newsletter process:
    - **Step 1**: Retrieve articles from S3
-   - **Step 2 (Parallel)**: Process email and podcast simultaneously using Message Batches API
-     - **Email Branch**: Submit batch → Poll for completion → Generate and send email
-     - **Podcast Branch**: Submit batch → Poll for completion → Generate audio and update podcast feed
-2. **Message Batches API** provides 50% cost savings through asynchronous batch processing
+   - **Step 2 (Email branch)**: Submit batch → Poll for completion → Generate and send the digest and RSS Brief
+   - **Step 3 (Podcast)**: Narrate the brief with Claude and Phonon, then update the podcast feed
+2. **Message Batches API** provides 50% cost savings for the email digest's asynchronous batch processing
 3. Error handling and logging via SNS and CloudWatch with automated alerts
 
 ### AWS Services Used
-- **Step Functions**: Orchestrates daily newsletter workflow with parallel email and podcast processing
+- **Step Functions**: Orchestrates the daily workflow: email digest and brief, then the podcast
 - **Lambda**: Serverless execution for individual workflow steps
 - **S3**: Storage for RSS data, configuration, and podcast audio files
 - **SES**: Email sending and receiving
 - **SNS**: Error notifications
 - **CloudWatch**: Logging and monitoring
 - **EventBridge**: Scheduled triggers for workflows
-- **Polly**: Text-to-speech for podcast generation
+- **ECR / Lambda container image**: Hosts the Phonon text-to-speech podcast function
 - **Parameter Store**: Environment configuration
 - **CloudFront**: Content delivery for podcast RSS feed
 
@@ -128,8 +127,8 @@ The system runs on the following schedule (all times in UTC):
 - **RSS Retrieval**: Every 3 hours (`0 */3 * * *`) - Fetches latest articles from configured RSS feeds and stores in S3
 - **Daily Newsletter Workflow**: 7:30 AM, Monday-Friday (`30 7 * * 2-6`) - Triggers Step Functions workflow that:
   - Retrieves aggregated articles from S3
-  - Processes email and podcast in parallel using Message Batches API
-  - Sends email and publishes podcast episode
+  - Processes the email digest using Message Batches API and sends it with the brief
+  - Publishes the podcast episode narrating the brief
 
 **Manual Triggering:**
 
@@ -296,176 +295,65 @@ The system will automatically fall back to the original HTML generation.
 
 ## Podcast Generation
 
-The RSS Email system includes an optional podcast generation feature that creates audio versions of the daily news digest using Claude AI and AWS Polly.
+The podcast is a single-narrator, Economist-style audio edition of the daily
+**RSS Brief**. It does not re-summarise the raw feed: the brief has already chosen
+what matters, so the narration is written from the brief's "Read these" list, themes,
+cross-cutting signals and personal items.
 
-### Features
+### How it works
 
-#### Two-Host Conversational Format
+1. `retrieve_and_send_email` sends the brief and, on success, stores a flattened
+   narration input (titles, sources, why-it-matters; no ids or URLs) at
+   `podcast/narration-input.json`.
+2. After the email branch, the `GeneratePodcast` Lambda (`generate_podcast.py`):
+   - skips cleanly if there is no brief for today or today's episode already exists;
+   - asks Claude (`PODCAST_CLAUDE_MODEL`, default `claude-sonnet-5-5`) to write a
+     1,100-1,400 word narration (`podcast_script.py`), reusing the brief's fidelity rules;
+   - voices it with [Gradium Phonon](https://gradium.ai/blog/gradium-releases-phonon)
+     through the `ptts` package (`podcast_tts.py`) and encodes it as 24 kHz mono MP3;
+   - uploads `podcasts/episodes/rss-brief-{date}.mp3`, updates `podcasts/feed.xml` and
+     invalidates the CloudFront cache (`podcast_generator.py`).
 
-- Podcast features two distinct AI hosts: **Marco** (enthusiastic, detail-oriented) and **Joanna** (analytical, asks clarifying questions)
-- Natural dialogue format makes technical news more engaging and accessible
-- Hosts discuss stories, provide context, and offer insights
+### Speech model
 
-#### Intelligent Script Generation
+Phonon is a small (31M parameter) CPU-friendly text-to-speech model that needs no
+PyTorch. Only the public Apache-2.0 `gradium/phonon-31m-en` weights are used; the 40M
+models are gated and non-commercial. The Lambda is a container image
+(`docker/podcast/Dockerfile`) with the weights baked in at build time, so there is no
+runtime download. Pick the voice with `PODCAST_VOICE` (default `Hugh`; `Toby` and `Harper` are also baked into the image). To change it,
+set `PODCAST_VOICE` at deploy time or edit the default in `lib/rss_lambda_stack.ts`.
 
-- Claude AI generates 5-10 minute podcast scripts from the day's articles
-- Content is organized by theme (AI/ML, Cybersecurity, Business, etc.)
-- Technical concepts are explained in accessible terms
-- Scripts prioritize high-impact stories and connect related topics
+Try voices locally without AWS or Anthropic credentials:
 
-#### High-Quality Audio Synthesis
-
-- AWS Polly Neural voices provide natural-sounding speech
-- Marco uses "Matthew" voice (US English, conversational)
-- Joanna uses "Joanna" voice (US English, analytical)
-- Automatic text chunking handles scripts of any length (bypasses Polly's 3000-char limit)
-
-#### Podcast RSS Feed
-
-- Standard podcast RSS 2.0 feed with iTunes tags
-- Compatible with all major podcast apps (Apple Podcasts, Spotify, etc.)
-- Feed URL: `https://{your-bucket}.s3.amazonaws.com/podcasts/feed.xml`
-- Maintains history of last 10 episodes
-
-### Architecture
-
-The podcast generation is integrated into the Step Functions workflow:
-
+```bash
+uv run python generate_test_podcast.py Hugh sample.mp3
 ```
-EventBridge (7:30 AM weekdays)
-  ↓
-┌─────────────────────────────────────────────────┐
-│ Step Functions: DailyRSSNewsletterWorkflow      │
-│                                                  │
-│  Step 1: Retrieve Articles from S3              │
-│                                                  │
-│  Step 2: Parallel Processing                    │
-│    ┌──────────────────┐  ┌──────────────────┐  │
-│    │ Email Branch     │  │ Podcast Branch   │  │
-│    │ (Message Batch)  │  │ (Message Batch)  │  │
-│    └────────┬─────────┘  └────────┬─────────┘  │
-│             │                     │             │
-│             v                     v             │
-│      ┌──────────────┐      ┌──────────────┐    │
-│      │ Claude API   │      │ Claude API   │    │
-│      │ Script Gen   │      │ Script Gen   │    │
-│      └──────────────┘      └──────┬───────┘    │
-│                                    │            │
-│                                    v            │
-│                             ┌──────────────┐   │
-│                             │  AWS Polly   │   │
-│                             │  Synthesis   │   │
-│                             └──────┬───────┘   │
-│                                    │            │
-│                                    v            │
-│                             ┌──────────────┐   │
-│                             │  S3 Storage  │   │
-│                             │  RSS Feed    │   │
-│                             │  CloudFront  │   │
-│                             └──────────────┘   │
-└─────────────────────────────────────────────────┘
-```
+
+### Podcast RSS feed
+
+- Standard podcast RSS 2.0 feed with iTunes tags, the 10 most recent episodes
+- Served through CloudFront; the domain is in SSM parameter `rss-podcast-cloudfront-domain`
+- Add the feed URL to a podcast app (Apple Podcasts: Library, Edit, Add a Show by URL)
 
 ### Configuration
 
-#### Environment Variables
+Set in `lib/rss_lambda_stack.ts` on the `GeneratePodcast` Lambda:
 
-The podcast function uses these environment variables (configured in CDK):
-
-- `BUCKET`: S3 bucket for storing podcast audio files
-- `KEY`: S3 key for the aggregated RSS feed file
-- `PODCAST_LAST_RUN_PARAMETER`: SSM parameter name for tracking last run (default: `rss-podcast-lastrun`)
-- `ANTHROPIC_API_KEY_PARAMETER`: SSM parameter containing the Anthropic API key
-- `CLAUDE_MODEL`: Claude model to use for script generation (default: `claude-haiku-4-5`)
-- `CLAUDE_MAX_TOKENS`: Maximum tokens for script generation (default: `4000`)
-
-#### IAM Permissions
-
-The podcast Lambda function requires:
-
-- **S3**: Read access to RSS feed, write access to `podcasts/` prefix
-- **Polly**: `polly:SynthesizeSpeech` permission
-- **SSM**: Read/write access to the last run parameter
-
-### Cost Analysis
-
-Daily cost estimate for 1 podcast per day:
-
-| Service | Usage | Unit Cost | Daily Cost | Monthly Cost |
-|---------|-------|-----------|------------|--------------|
-| Lambda | 10 min × 128 MB | $0.0000166667/GB-sec | $0.0013 | $0.04 |
-| Claude API | ~2,000 tokens | $0.25-$1.00/M tokens | $0.0005-$0.002 | $0.015-$0.06 |
-| AWS Polly (Neural) | ~8,000 chars | $16/M chars | $0.128 | $3.84 |
-| S3 Storage | 8 MB/day = 240 MB/mo | $0.023/GB | $0.0001 | $0.006 |
-| **Total** | | | **~$0.13** | **~$3.95** |
-
-**Cost Optimization Tips:**
-
-- Polly Neural voices account for ~87% of costs
-- Consider Standard voices (75% cheaper) for lower cost at slightly reduced quality
-- Audio files stored in S3 indefinitely (minimal cost)
-- No charges for RSS feed downloads from S3
-
-### Usage
-
-#### Subscribing to the Podcast
-
-Once deployed, subscribe to the podcast feed using the URL:
-
-```
-https://{your-bucket-name}.s3.amazonaws.com/podcasts/feed.xml
-```
-
-Add this URL to your podcast app:
-
-- **Apple Podcasts**: Library → Edit → Add a Show by URL
-- **Spotify**: Not supported for custom RSS feeds (requires Spotify for Podcasters)
-- **Pocket Casts**: Discover → Search → Enter feed URL
-- **Overcast**: + → Add URL
-
-#### Trigger
-
-Podcast generation is triggered automatically as part of the Step Functions workflow that runs at 7:30 AM (weekdays). The podcast branch processes in parallel with email generation using the Message Batches API, providing 50% cost savings.
-
-### Monitoring
-
-CloudWatch logs include:
-
-- Script generation success/failure
-- Script length (character count)
-- Number of speaker segments detected
-- Number of audio chunks synthesized
-- S3 upload status
-- RSS feed update status
+- `BUCKET`, `ANTHROPIC_API_KEY_PARAMETER`
+- `PODCAST_CLAUDE_MODEL`, `PODCAST_VOICE`
+- `PODCAST_CLOUDFRONT_DISTRIBUTION_ID`, `PODCAST_CLOUDFRONT_DOMAIN_PARAMETER`
 
 ### Troubleshooting
 
-**No audio generated:**
+- **No episode:** check the `GeneratePodcast` logs. "No brief for ..." means the brief was
+  disabled, empty or failed that day.
+- **Feed not updating:** check S3 write access to `podcasts/feed.xml` and the CloudFront
+  invalidation permission.
+- **Voice or pacing:** adjust `PODCAST_VOICE` or the prompt in `podcast_script.py`.
 
-- Check CloudWatch logs for errors
-- Verify Polly permissions in IAM role
-- Ensure Claude API key is valid in SSM Parameter Store
+### Disabling the podcast
 
-**Podcast feed not updating:**
-
-- Check S3 permissions for writing to `podcasts/feed.xml`
-- Verify feed URL is accessible (S3 bucket policy may need public read access)
-- Check CloudWatch logs for XML generation errors
-
-**Audio quality issues:**
-
-- Neural voices provide best quality but cost more
-- Standard voices are 75% cheaper with slightly robotic sound
-- Voice selection is configurable in `podcast_generator.py` constants
-
-### Disabling Podcast Generation
-
-To disable podcast generation while keeping email functionality:
-
-1. Modify the Step Functions workflow definition in `lib/rss_lambda_stack.ts` to remove the podcast branch from the parallel state
-2. Redeploy with `cdk deploy`
-
-The email functionality will continue to work independently in the Step Functions workflow.
+Remove the `Generate Podcast` task from the workflow in `lib/rss_lambda_stack.ts` and redeploy.
 
 ## Deployment
 
