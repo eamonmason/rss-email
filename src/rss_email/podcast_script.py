@@ -57,8 +57,8 @@ TEXT-TO-SPEECH RULES (the script is read aloud by a speech model):
 - Plain prose in short paragraphs separated by blank lines. No markdown, headings,
   bullets, numbered lists, URLs, brackets or stage directions.
 - Write numbers, symbols and abbreviations as they should be spoken: "forty per cent",
-  "two billion dollars", "A.I." only if the name needs it, otherwise "artificial
-  intelligence"; spell out unusual acronyms the first time.
+  "two billion dollars". Write AI as "AI" (never "A.I."); spell out unusual acronyms the
+  first time.
 - Keep sentences under about thirty words so the narrator can breathe.
 - Name the publication when it adds credibility ("according to Reuters"), never
   say "link" or "article" in the sense of a web page.

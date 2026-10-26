@@ -20,6 +20,16 @@ MP3_BITRATE_KBPS = 64
 
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
 
+# Phonon reads "A.I." and "A. I." letter by letter with a long pause, but says plain "AI" fluently.
+_PRONUNCIATIONS = [(re.compile(r"\bA\.\s?I\b\.?"), "AI")]
+
+
+def normalise_for_speech(text: str) -> str:
+    """Rewrite spellings the speech model mispronounces (for example "A.I." to "AI")."""
+    for pattern, replacement in _PRONUNCIATIONS:
+        text = pattern.sub(replacement, text)
+    return text
+
 
 def split_paragraphs(script: str) -> List[str]:
     """Split a script into non-empty paragraphs on blank lines."""
@@ -64,7 +74,7 @@ def synthesize_speech(script: str) -> Optional[bytes]:
     The voice comes from ``PODCAST_VOICE``. Paragraphs are separated by a longer
     pause than sentence chunks so the delivery has some shape.
     """
-    paragraphs = split_paragraphs(script)
+    paragraphs = split_paragraphs(normalise_for_speech(script))
     if not paragraphs:
         logger.warning("Empty narration script; nothing to synthesise")
         return None
