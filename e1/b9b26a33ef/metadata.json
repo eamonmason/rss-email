@@ -1,0 +1,57 @@
+{
+  "cli_version": "0.10.5",
+  "checkpoint_id": "e1b9b26a33ef",
+  "strategy": "manual-commit",
+  "branch": "feat/podcast-from-brief",
+  "checkpoints_count": 6,
+  "files_touched": [
+    ".gitignore",
+    "CLAUDE.md",
+    "README.md",
+    "docker/podcast/Dockerfile",
+    "generate_test_podcast.py",
+    "lib/rss_lambda_stack.ts",
+    "pyproject.toml",
+    "src/rss_email/check_podcast_batch_status.py",
+    "src/rss_email/generate_podcast.py",
+    "src/rss_email/podcast_generator.py",
+    "src/rss_email/podcast_script.py",
+    "src/rss_email/podcast_tts.py",
+    "src/rss_email/retrieve_and_generate_podcast.py",
+    "src/rss_email/retrieve_and_send_email.py",
+    "src/rss_email/submit_podcast_batch.py",
+    "test_podcast_local.py",
+    "tests/test_brief_concise.py",
+    "tests/test_generate_podcast.py",
+    "tests/test_podcast_batch_modules.py",
+    "tests/test_podcast_feed.py",
+    "tests/test_podcast_generator.py",
+    "tests/test_podcast_script.py",
+    "tests/test_podcast_script_prompt.py",
+    "tests/test_podcast_tts.py",
+    "uv.lock"
+  ],
+  "sessions": [
+    {
+      "metadata": "/e1/b9b26a33ef/0/metadata.json",
+      "transcript": "/e1/b9b26a33ef/0/full.jsonl",
+      "compact_transcript": "/e1/b9b26a33ef/0/transcript.jsonl",
+      "content_hash": "/e1/b9b26a33ef/0/content_hash.txt",
+      "prompt": "/e1/b9b26a33ef/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 108,
+    "cache_creation_tokens": 166217,
+    "cache_read_tokens": 8505855,
+    "output_tokens": 50810,
+    "api_call_count": 54,
+    "subagent_tokens": {
+      "input_tokens": 20,
+      "cache_creation_tokens": 99403,
+      "cache_read_tokens": 624179,
+      "output_tokens": 7624,
+      "api_call_count": 10
+    }
+  }
+}

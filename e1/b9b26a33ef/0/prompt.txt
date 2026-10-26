@@ -1,0 +1,205 @@
+the podcast has not had much attention and it should be generated instead from the content of the RSS brief. Note that there are better models available now, e.g. see the latest ollama announcement on phenom. see if a model either this or similar can be used natively in AWS.
+
+
+ Speech models
+ 
+Ollama now supports speech models on macOS, with support for Windows and Linux coming soon. The first speech model is Phonon, a family of small, state-of-the-art text-to-speech (TTS)  models from Gradium.
+ 
+Download Ollama
+ 
+Once you download or upgrade Ollama to version 0.40.11, run a speech model:
+ 
+ollama run phonon "Hello from Ollama."
+ 
+Choose from dozens of voices with --voice:
+ 
+ollama run phonon --voice Hugh "Once upon a time, a little alpaca lived at the top of a very tall mountain."
+ 
+Accelerated by MLX, Ollama runs Phonon 35% faster than the next fastest option on a MacBook Pro with M5 Max, with the same accuracy as the reference implementation.
+ 
+ Throughput chart
+ 
+ 
+Apps can use it through the OpenAI-compatible /v1/audio/speech endpoint. You can also pipe in a chat model’s reply and hear it as it’s written:
+ 
+ollama run gemma4 --hidethinking "Tell me a fun fact about owls in two sentences." | ollama run phonon
+ 
+Hear the voices and learn more:
+ Listen to examples on Ollama’s blog
+ Speech documentation
+ Phonon model page
+ 
+❤️ Ollama
+You are receiving this email because you opted in to receive updates from Ollama
+Ollama, 744 High Street, Palo Alto, CA 94301
+Unsubscribe
+
+--
+
+finally the podcast format can be annoying. instead of a back and forth between two people, turn it more into an economist-style audio file with a single reader
+
+---
+
+<task-notification>
+<task-id>a61fb64100cc23ed9</task-id>
+<tool-use-id>toolu_011GtXWwZCjYeRXQPauPEA6Z</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-eamon-code-rss-email/bc883dcf-e955-4365-9cd3-4cebcd5b94e1/tasks/a61fb64100cc23ed9.output</output-file>
+<status>completed</status>
+<summary>Agent "Explore podcast and brief code" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The podcast and the brief are separate pipelines today, and the podcast never sees the brief. One caveat: I didn't read every line of `brief_generator.py` (995 lines), so the render helpers and the retry and refusal handling are skimmed.
+
+## 1. `podcast_generator.py` (627 lines)
+- **Prompt:** `PODCAST_PROMPT` (L32-74) is for "Eamon's Daily Tech News", 5-10 minutes, hosts Marco and Joanna.
+  - It forbids brackets, stage directions and announcer intro/outro, and ends with "Articles to cover:".
+  - It asks for "Marco:" / "Joanna:" line prefixes.
+  - It says "grouped by theme" and "conclude with lighter articles".
+- **Prompt builder:** `create_podcast_script_prompt(articles: List[Dict]) -&gt; str` (L293-309) appends only `Title:` and `Description:` for each article, separated by `---`. Sources and links are not included.
+- **Model:**
+  - `generate_script(articles) -&gt; Optional[str]` (L313-347) is a direct, synchronous call to `anthropic.Anthropic(api_key=...).messages.create`.
+  - Model is `CLAUDE_MODEL` or `DEFAULT_CLAUDE_MODEL`, which is `claude-haiku-4-5` (L23-26 and `models.py`). `max_tokens` is `CLAUDE_MAX_TOKENS`, default 4000.
+  - It isn't used in production; the production path is the batch flow below. It is only covered by tests.
+- **Speaker parsing:** `parse_speaker_segments(script) -&gt; List[Tuple[str, str]]` (L95-142).
+  - Regex line-prefix match, case-insensitive. Default speaker is Marco; unlabelled lines continue the current speaker; blank lines are skipped.
+- **Voices and SSML:**
+  - Constants are at L77-88: `MARCO_VOICE="Matthew"`, `JOANNA_VOICE="Joanna"`, rates 120% and 122%.
+  - `enhance_text_with_ssml(text, speaker) -&gt; str` (L186-229) XML-escapes the text, adds `&lt;break&gt;` tags after punctuation, and wraps it in `&lt;speak&gt;&lt;prosody rate&gt;`.
+- **Chunking:**
+  - `chunk_text(text, max_chars=3000)` (L146) and `chunk_ssml_text(ssml_text, speaker, max_chars)` (L233) split at sentence boundaries.
+  - `chunk_ssml_text` re-wraps each chunk in valid SSML. `POLLY_NEURAL_CHAR_LIMIT` is 3000.
+- **Synthesis:** `synthesize_speech(script) -&gt; Optional[bytes]` (L351-407).
+  - Per segment it calls `polly.synthesize_speech` with `Engine="neural"`, mp3 output, `TextType=ssml`.
+  - It concatenates the raw mp3 bytes, and returns `None` on any `ClientError` or if there are no segments.
+- **S3 and domain:**
+  - `upload_to_s3(bucket, key, data, content_type) -&gt; bool` (L411).
+  - `get_cloudfront_domain(parameter_name) -&gt; Optional[str]` (L428).
+- **Feed update:** `update_podcast_feed(bucket, audio_url, title, description, pub_date, *, audio_size, cloudfront_domain=None, distribution_id=None) -&gt; bool` (L495-616).
+  - It reads `podcasts/feed.xml`, rebuilds the whole RSS 2.0 document with iTunes tags, puts the new item first and keeps 9 old items (10 total, L585), then uploads.
+  - Channel metadata and the pretty-printing are at L541-594.
+  - The item's guid is the audio URL. The enclosure is `audio/mpeg` with `length=audio_size`.
+- **Invalidation:** `invalidate_cloudfront_cache(distribution_id, paths) -&gt; bool` (L454-491), called from L607-611 with `['/podcasts/feed.xml']`.
+- **Handlers:** the old single Lambda handler is gone (L619-622). Production uses three Lambdas:
+  - `submit_podcast_batch.py` (L21-105): reads the same S3 `articles.json`, runs `filter_items` since the podcast's own `PODCAST_LAST_RUN_PARAMETER`, sorts newest first and takes the top 100. It builds the prompt and submits a one-request Anthropic Message Batch (`custom_id="podcast-script"`, `max_tokens=4000`).
+  - `check_podcast_batch_status.py` (90 lines): polls the batch.
+  - `retrieve_and_generate_podcast.py` (L21-126):
+    1. Fetches the batch script (L54-66).
+    2. Runs `synthesize_speech` (L69).
+    3. Uploads to `podcasts/episodes/rss-digest-{ts}.mp3` (L75-81).
+    4. Builds the URL from the CloudFront domain SSM parameter (L84-91).
+    5. Runs `update_podcast_feed` with title "RSS Digest - {date}" and a static description (L94-110).
+    6. Calls `set_last_run` (L113).
+
+## 2. Invocation (`lib/rss_lambda_stack.ts`)
+- **Schedule:** the `dailyNewsletterRule` cron is `30 7 * * 2-6` (L560-562). It targets the Step Functions state machine `DailyRSSNewsletterWorkflow` (L536-546), with a 25-hour timeout.
+- **Workflow:** `retrieveArticlesTask` → `Parallel` ("Process Email and Podcast", L525-529) → success.
+  - The email branch is isolated with its own catch.
+  - The podcast branch (L461-523) runs Submit Podcast Batch → Check Status → a 60s wait while polling, a 5m wait after 5 polls (`POLL_BACKOFF_THRESHOLD`, L380) → Retrieve and Generate Podcast. It is isolated with its own catch that sends an SNS notification.
+  - So the podcast branch runs in parallel with the email branch, and nothing is shared between them.
+- **Lambdas:** all use Python 3.13 and the shared role and layer.
+
+| Lambda | Memory | Timeout | Env vars |
+|---|---|---|---|
+| Submit (L324-339) | 512 MB | 300s | `RSS_BUCKET`, `RSS_KEY`, `PODCAST_LAST_RUN_PARAMETER`, `ANTHROPIC_API_KEY_PARAMETER`, `CLAUDE_MODEL`=haiku |
+| Check (L341-351) | default | 30s | `ANTHROPIC_API_KEY_PARAMETER` |
+| Retrieve (L353-368) | 512 MB | 300s | `ANTHROPIC_API_KEY_PARAMETER`, `BUCKET`, `PODCAST_CLOUDFRONT_DISTRIBUTION_ID`, `PODCAST_CLOUDFRONT_DOMAIN_PARAMETER`, `PODCAST_LAST_RUN_PARAMETER` |
+
+- **IAM** (shared role):
+  - `polly:SynthesizeSpeech` on `*` (L645-649).
+  - SSM get/put on the podcast last-run parameter (L652-657).
+  - SSM get on the CloudFront domain parameter (L660-664).
+  - `cloudfront:CreateInvalidation` on the distribution (L667-671).
+  - The Anthropic key SSM read is at L147-151.
+  - There is no Bedrock permission anywhere, and `grep -i bedrock` finds nothing.
+- **CloudFront and S3:**
+  - The CloudFront distribution uses an Origin Access Control (OAC) (L224-239) and a bucket policy restricted to `podcasts/*` (L674-686).
+  - Episodes are deleted after 14 days (L61-64).
+  - The domain is published to the SSM parameter `rss-podcast-cloudfront-domain` (L688-692).
+- **Which articles:** the podcast and the email both read `articles.json` via `get_feed_file` and `filter_items`, but with separate last-run parameters.
+  - The email path goes through `submit_email_batch.py` (L98-100), which also does grouping and categorisation, and it stores batch metadata to S3.
+  - The podcast takes raw title and description for the 100 newest items, uncategorised.
+- **Digest and brief:**
+  - `DIGEST_ENABLED='false'` (L48) pauses the digest email, while `BRIEF_ENABLED='true'` (L306).
+  - The brief runs inside the email branch, in `RetrieveAndSendEmailFunction` (512 MB, 600s, L296-321).
+
+## 3. The brief
+- **Models** (`models.py`):
+  - `MustRead(id, why)` (L200).
+  - `BriefTheme(theme, signal_strength HIGH|STRATEGIC|GENERAL, tldr, top_articles: ids, relevance_to_reader)` (L163).
+  - `BriefCategory(week_verdict, themes)` (L177).
+  - `CrossCuttingSignal(signal, categories_involved, implication)` (L184).
+  - `PersonalBlock(top_stories, summary)` (L192).
+  - `BriefSynthesis(must_read, categories: Dict[str, BriefCategory], cross_cutting, personal: Optional)` (L211-217).
+- **Result container:** `BriefResult(NamedTuple)` (`brief_generator.py` L911) has `html`, `synthesis: BriefSynthesis` and `article_index: Dict[id, {title, url, source, comments}]`. The index lets a consumer resolve the ids in `top_articles` and `must_read` to titles and sources.
+- **Entry points:** `generate_brief_full(categories, *, date, article_count, client, previous_context, seen_links) -&gt; Optional[BriefResult]` (L919-969). `generate_brief` (L972) returns the HTML only.
+- **Where a podcast could consume it:** `_maybe_send_brief` (`retrieve_and_send_email.py` L146-190). `result` is available at L174-181, after the SES send (L183) and the memory save (L186-188). It is wrapped in a swallow-all `except` (L189), so a podcast hook there would be best-effort.
+  - Hooking in there means the podcast would live in the retrieve-and-send Lambda, which has a 600s timeout.
+  - Polly synthesis and the S3 and CloudFront steps would need to move into, or be called from, that Lambda. It already shares the role that has Polly and CloudFront permissions.
+  - It runs only for days with themed or personal content; it returns `None` if disabled, empty, or synthesis fails.
+- **Model call:** `synthesize` (L388+) makes a streamed call, `client.beta.messages.stream`, with model `claude-opus-5-5`, `max_tokens=32000`, `output_config={"effort": ...}`, the refusal-fallback beta, and 2 attempts. It reads `CLAUDE_API_TIMEOUT` (240 in the stack).
+- **Brief input:** `build_synthesis_input` (L197-253) keeps only themed and personal categories, drops sponsored and previously-seen links, and assigns numeric ids.
+- **Prompt conventions** (`brief_prompt.py`):
+  - A `PROMPT_TEMPLATE` with `{PLACEHOLDER}` fields substituted via `str.replace`, so the literal JSON braces survive.
+  - Separate rule constants (`MAJOR_STORY_RULE`, `SOURCE_RULE`, `FIDELITY_RULE`, `PREVIOUS_CONTEXT_RULE`).
+  - Output is JSON only, with numeric-id citations kept out of prose fields.
+- **`brief_config.json`:** `model` claude-opus-5-5, `effort` medium, `reader_profile`, `personal_interests`, `must_read_min` 5 / `max` 8, `max_themes_per_category` 3, `max_total_themes` 12, `cross_cutting_max` 3.
+  - `themed_categories`: AI/ML, Technology, Cybersecurity, Business, Programming, Politics.
+  - `personal_categories`: Cycling.
+  - Prioritised and deprioritised source lists.
+- **Memory:** `brief_memory.py` has `DEFAULT_MEMORY_KEY="brief-memory/memory.json"`, a 14-day window, and `render_previous_context`. The models are `BriefMemoryDay` and `BriefMemoryTheme`.
+
+## 4. Tests, dependencies and docs
+- **`tests/test_podcast_generator.py`** (257 lines) uses `unittest`. It patches `rss_email.podcast_generator.boto3.client` and `rss_email.podcast_generator.anthropic.Anthropic`.
+  - Tests cover `generate_script` (success and API error), speaker parsing, chunking, Polly voice switching, `upload_to_s3`, and feed update (new and existing).
+  - Nothing mocks the Polly output beyond what `boto3.client` returns.
+- **`tests/test_podcast_batch_modules.py`** (461 lines) patches `anthropic.Anthropic` and `boto3.client` in each of the three batch modules.
+  - It also patches `get_last_run`, `get_feed_file`, `filter_items`, `synthesize_speech`, `upload_to_s3`, `update_podcast_feed` and `set_last_run`.
+  - It covers success, no articles, a null `batch_id`, and failure cases. The last test checks that `podcast_generator` imports without a parent package.
+- **`tests/test_podcast_script_prompt.py`** (126 lines) tests `create_podcast_script_prompt` directly with no mocks.
+- **Brief tests:** `test_brief_generator.py`, `test_brief_memory.py`, `test_brief_concise.py`, `test_brief_discussion_links.py`.
+- **`pyproject.toml`:**
+  - Requires Python 3.13 or later.
+  - Dependencies: `boto3`, `feedparser`, `beautifulsoup4`, `pydantic&gt;=2.10.6`, `anthropic&gt;=1.0.0`, `regex`, `brotli`, `python-dotenv`, `httpx`, `w3lib`.
+  - Dev: `pytest`, `moto`, `pylint`, `flake8`.
+  - The Lambda layer is built from `uv.lock`.
+- **Docs:**
+  - `README.md` has a "Podcast Generation" section (L288+), plus L91, L106-132 and L364-419. It describes Marco (Matthew) and Joanna.
+  - `CLAUDE.md` has "Podcast Development Patterns" (L487+). Line 101 says podcast scripts stay on haiku.
+  - Local helper scripts are `generate_test_podcast.py` and `test_podcast_local.py` at the repo root.
+
+## 5. Anthropic access
+- **Calls:** everything goes directly to the Anthropic API via the `anthropic` SDK. Bedrock is not used and nothing in the stack grants bedrock permission.
+- **API key:**
+  - The key is read from SSM SecureString `rss-email-anthropic-api-key`, whose name is passed in the `ANTHROPIC_API_KEY_PARAMETER` env var. The Lambda calls `ssm.get_parameter(WithDecryption=True)`.
+  - `get_anthropic_api_key()` (`article_processor.py` L103-130) checks, in order: an explicit argument, the `ANTHROPIC_API_KEY` env var, then SSM.
+  - The brief uses that helper, or the client that `retrieve_and_send_email` passes in (L233-237).
+  - The podcast modules fetch the key from SSM themselves. The `retrieve_and_generate_podcast` module also creates an `Anthropic` client, but only to fetch the batch.</result>
+<usage><subagent_tokens>104912</subagent_tokens><tool_uses>11</tool_uses><duration_ms>93952</duration_ms></usage>
+</task-notification>
+
+---
+
+<bash-input>uv run python generate_test_podcast.py Hugh sample.mp3</bash-input><bash-stdout>warning: The `UV_NATIVE_TLS` environment variable is deprecated and will be removed in a future release. Use `UV_SYSTEM_CERTS` instead.
+Wrote sample.mp3 (278784 bytes) with voice Hugh</bash-stdout><bash-stderr></bash-stderr>
+
+---
+
+<bash-input>uv run python generate_test_podcast.py Hugh sample.mp3</bash-input><bash-stdout>st.py Hugh sample.mp3                          uv            generate_test_podcast.py      sample.mp3
+warning: The `UV_NATIVE_TLS` environment variable is deprecated and will be removed in a future release. Use `UV_SYSTEM_CERTS` instead.
+Wrote sample.mp3 (278784 bytes) with voice Hugh</bash-stdout><bash-stderr></bash-stderr>
+
+---
+
+i don't hear anything
+
+---
+
+<bash-input>uv run python generate_test_podcast.py Toby toby.mp3</bash-input><bash-stdout>warning: The `UV_NATIVE_TLS` environment variable is deprecated and will be removed in a future release. Use `UV_SYSTEM_CERTS` instead.
+Wrote toby.mp3 (269184 bytes) with voice Toby</bash-stdout><bash-stderr></bash-stderr>
+
+---
+
+let's go with hugh for now but make it configurable and. easy to change
+
+---
+
+playback works

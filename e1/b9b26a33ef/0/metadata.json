@@ -1,0 +1,140 @@
+{
+  "cli_version": "0.10.5",
+  "checkpoint_id": "e1b9b26a33ef",
+  "session_id": "bc883dcf-e955-4365-9cd3-4cebcd5b94e1",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-26T08:02:57.808796Z",
+  "branch": "feat/podcast-from-brief",
+  "checkpoints_count": 6,
+  "save_step_count": 6,
+  "files_touched": [
+    ".gitignore",
+    "CLAUDE.md",
+    "README.md",
+    "docker/podcast/Dockerfile",
+    "generate_test_podcast.py",
+    "lib/rss_lambda_stack.ts",
+    "pyproject.toml",
+    "src/rss_email/check_podcast_batch_status.py",
+    "src/rss_email/generate_podcast.py",
+    "src/rss_email/podcast_generator.py",
+    "src/rss_email/podcast_script.py",
+    "src/rss_email/podcast_tts.py",
+    "src/rss_email/retrieve_and_generate_podcast.py",
+    "src/rss_email/retrieve_and_send_email.py",
+    "src/rss_email/submit_podcast_batch.py",
+    "test_podcast_local.py",
+    "tests/test_brief_concise.py",
+    "tests/test_generate_podcast.py",
+    "tests/test_podcast_batch_modules.py",
+    "tests/test_podcast_feed.py",
+    "tests/test_podcast_generator.py",
+    "tests/test_podcast_script.py",
+    "tests/test_podcast_script_prompt.py",
+    "tests/test_podcast_tts.py",
+    "uv.lock"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-5-5",
+  "turn_id": "115b97772fca",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 108,
+    "cache_creation_tokens": 166217,
+    "cache_read_tokens": 8505855,
+    "output_tokens": 50810,
+    "api_call_count": 54,
+    "subagent_tokens": {
+      "input_tokens": 20,
+      "cache_creation_tokens": 99403,
+      "cache_read_tokens": 624179,
+      "output_tokens": 7624,
+      "api_call_count": 10
+    }
+  },
+  "session_metrics": {
+    "turn_count": 6
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-26T08:02:57.738044Z",
+    "agent_lines": 1118,
+    "agent_removed": 2593,
+    "human_added": 10,
+    "human_modified": 10,
+    "human_removed": 0,
+    "total_committed": 1136,
+    "total_lines_changed": 3731,
+    "agent_percentage": 99.46395068346288,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 1138,
+      "agent_lines_removed": 2601
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 1138,
+      "agent_lines_removed": 2601
+    },
+    {
+      "checkpoint_number": 4,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 1138,
+      "agent_lines_removed": 2601
+    },
+    {
+      "checkpoint_number": 5,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 1138,
+      "agent_lines_removed": 2601
+    },
+    {
+      "checkpoint_number": 6,
+      "user_lines_added": 12,
+      "user_lines_removed": 6,
+      "agent_lines_added": 1138,
+      "agent_lines_removed": 2601,
+      "user_added_per_file": {
+        ".gitignore": 3,
+        "CLAUDE.md": 1,
+        "README.md": 2,
+        "docker/podcast/Dockerfile": 4,
+        "lib/rss_lambda_stack.ts": 2
+      },
+      "user_removed_per_file": {
+        "CLAUDE.md": 1,
+        "README.md": 2,
+        "docker/podcast/Dockerfile": 2,
+        "lib/rss_lambda_stack.ts": 1
+      }
+    },
+    {
+      "checkpoint_number": 7,
+      "user_lines_added": 4,
+      "user_lines_removed": 2,
+      "agent_lines_added": 1142,
+      "agent_lines_removed": 2601,
+      "user_added_per_file": {
+        "docker/podcast/Dockerfile": 4
+      },
+      "user_removed_per_file": {
+        "docker/podcast/Dockerfile": 2
+      }
+    }
+  ]
+}
