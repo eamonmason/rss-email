@@ -16,9 +16,9 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@aws-sdk/client-sns": "^3.1152.0",
-    "aws-cdk": "^2.1145.0",
-    "aws-cdk-lib": "^2.273.0",
+    "@aws-sdk/client-sns": "^3.1156.0",
+    "aws-cdk": "^2.1146.1",
+    "aws-cdk-lib": "^2.274.0",
     "constructs": "^10.x",
     "dotenv": "^18.x",
     "fast-xml-parser": "^5.11.2",
