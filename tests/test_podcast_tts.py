@@ -11,6 +11,7 @@ from rss_email.podcast_tts import (
     SAMPLE_RATE,
     chunk_paragraph,
     encode_mp3,
+    normalise_for_speech,
     split_paragraphs,
     synthesize_speech,
 )
@@ -74,3 +75,22 @@ def test_synthesize_speech_synth_error_returns_none(fake_ptts):
     fake_ptts.synth.side_effect = RuntimeError("boom")
 
     assert synthesize_speech("Hello there.") is None
+
+
+@pytest.mark.parametrize("spoken", ["A.I.", "A. I.", "A.I", "A. I"])
+def test_normalise_for_speech_collapses_dotted_ai(spoken):
+    assert normalise_for_speech(f"Prices for {spoken} models fell. {spoken} is cheap.") == (
+        "Prices for AI models fell. AI is cheap."
+    )
+
+
+def test_normalise_for_speech_leaves_other_text_alone():
+    text = "Said A. Smith. The air is fresh, and AI is fine. P.I. work."
+
+    assert normalise_for_speech(text) == text
+
+
+def test_synthesize_speech_sends_normalised_text(fake_ptts):
+    synthesize_speech("A.I. news today.")
+
+    assert fake_ptts.synth.call_args.args[0] == "AI news today."
