@@ -98,10 +98,11 @@ local `pip` bundling — acceptable for `synth`/`diff`, never for a real deploy.
 - **models.py**: Shared Pydantic models for consistent data validation across the application
 - **lib/rss_lambda_stack.ts**: Main CDK infrastructure stack defining all AWS resources
 - **cli_article_processor.py**: CLI tool for testing article processing with Claude API locally
-- **brief_generator.py**: Synthesises the companion "RSS Brief" email ("Read these" list, themes, signal strength, cross-cutting signals) from a day's categorised articles via a single streamed Claude Opus 5.5 call (`claude-opus-5-5`; `effort` set in `brief_config.json`, server-side refusal fallback enabled). Opus 5.5 always thinks, so read response content by block type and leave `max_tokens` headroom for thinking. Bulk categorisation, grouping and podcast scripts stay on `claude-haiku-4-5`
+- **brief_generator.py**: Synthesises the companion "RSS Brief" email ("Read these" list, themes, signal strength, cross-cutting signals) from a day's categorised articles via a single streamed Claude Opus 5.5 call (`claude-opus-5-5`; `effort` set in `brief_config.json`, server-side refusal fallback enabled). Opus 5.5 always thinks, so read response content by block type and leave `max_tokens` headroom for thinking. Bulk categorisation and grouping stay on `claude-haiku-4-5`; the podcast narration uses `claude-sonnet-5-5`
 - **brief_prompt.py**: Prompt text and editorial rules (selection, length caps, fidelity) for the RSS Brief synthesis call
 - **url_utils.py**: Credential-param stripping (via `w3lib`) and link normalisation shared by ingest and the brief
 - **brief_memory.py**: Persists a rolling window of recent RSS Brief days to S3 so the synthesis prompt can avoid repeating stories and frame multi-day stories as developments — see "Brief Memory" below
+- **podcast_script.py / podcast_tts.py / generate_podcast.py / podcast_generator.py**: Single-narrator podcast narrating the day's RSS Brief (Claude script, Phonon speech, feed publishing) - see "Podcast Development Patterns"
 - **json_repair.py**: JSON repair utilities for handling malformed API responses
 - **json_utils.py**: JSON extraction and validation utilities with Pydantic integration
 
@@ -488,397 +489,55 @@ except ImportError:
 
 ### Overview
 
-The podcast generation feature (`podcast_generator.py`) creates audio podcasts from RSS articles using Claude AI for script generation and AWS Polly for text-to-speech synthesis.
-
-### Key Components
-
-#### Script Generation with Claude
-
-- Use Claude Haiku 4.5 for cost-effective script generation
-- Token limits: 4,000 tokens (lower than email processing to control costs)
-- Prompt must specify clear speaker labels ("Marco:", "Joanna:")
-- Scripts should be 5-10 minutes in length
-
-```python
-@pydantic.validate_call(validate_return=True)
-def generate_script(articles: List[Dict[str, Any]]) -> Optional[str]:
-    # Generate conversational podcast script
-    # Returns script with speaker labels or None on error
-```
-
-#### Speaker Parsing
-
-Parse scripts to identify speaker segments and their text:
-
-```python
-@pydantic.validate_call(validate_return=True)
-def parse_speaker_segments(script: str) -> List[Tuple[str, str]]:
-    """
-    Extract (speaker, text) tuples from script.
-    Handles multi-line segments without speaker labels.
-    """
-    # Implementation splits on "Marco:" and "Joanna:" labels
-    # Returns list of (speaker_name, dialogue_text) tuples
-```
-
-#### Text Chunking for Polly
-
-AWS Polly Neural voices have a 3,000 character limit per request. Handle this with chunking:
-
-```python
-@pydantic.validate_call(validate_return=True)
-def chunk_text(text: str, max_chars: int = POLLY_NEURAL_CHAR_LIMIT) -> List[str]:
-    """
-    Split text at sentence boundaries to stay under char limit.
-    Never splits mid-sentence.
-    """
-    # Use regex to split on sentence endings: . ! ?
-    # Preserve separators
-    # Combine sentences until reaching max_chars
-```
-
-**Critical**: Always chunk text before passing to Polly to avoid runtime failures.
-
-#### Voice Synthesis with Multiple Voices
-
-Synthesize audio with distinct voices for each speaker:
-
-```python
-# Voice constants
-POLLY_NEURAL_CHAR_LIMIT = 3000
-MARCO_VOICE = "Matthew"  # US English male, conversational
-JOANNA_VOICE = "Joanna"      # US English male, analytical
-
-@pydantic.validate_call(validate_return=True)
-def synthesize_speech(script: str) -> Optional[bytes]:
-    """
-    1. Parse script into speaker segments
-    2. For each segment:
-       - Choose voice based on speaker
-       - Chunk text if needed
-       - Synthesize each chunk
-    3. Concatenate all audio chunks
-    """
-    # Returns combined MP3 audio as bytes
-```
-
-#### RSS Feed Generation
-
-Generate standard podcast RSS 2.0 feed with iTunes tags:
-
-```python
-@pydantic.validate_call(validate_return=True)
-def update_podcast_feed(
-    bucket: str,
-    audio_url: str,
-    title: str,
-    description: str,
-    pub_date: str,
-    *,
-    audio_size: int,
-    cloudfront_domain: Optional[str] = None,
-    distribution_id: Optional[str] = None
-) -> bool:
-    """
-    Create or update podcast RSS feed.
-    - Read existing feed from S3 (if exists)
-    - Add new episode at top
-    - Keep last 10 episodes
-    - Generate XML with iTunes tags
-    - Upload to S3 at podcasts/feed.xml
-    - Invalidate CloudFront cache if distribution_id provided
-    """
-```
-
-**Important:** The RSS 2.0 specification requires the `<enclosure>` element to have three attributes:
-1. `url` - URL to the media file
-2. `length` - File size in bytes (required for podcast apps)
-3. `type` - MIME type (e.g., "audio/mpeg")
-
-```python
-# Enclosure (audio file)
-enclosure = SubElement(item, 'enclosure')
-enclosure.set('url', audio_url)
-enclosure.set('length', str(audio_size))  # Required by RSS 2.0 spec
-enclosure.set('type', 'audio/mpeg')
-```
-
-Many podcast apps will fail to download episodes if the `length` attribute is missing.
-
-### Error Handling
-
-#### Graceful Degradation
-
-Always handle errors gracefully and log with context:
-
-```python
-try:
-    message = client.messages.create(...)
-    return message.content[0].text
-except (anthropic.APIError, anthropic.APIConnectionError, RuntimeError, ValueError) as e:
-    logger.error("Error generating script with Claude: %s", e)
-    return None
-```
-
-#### Polly Error Handling
-
-```python
-try:
-    response = polly.synthesize_speech(
-        Text=chunk,
-        OutputFormat="mp3",
-        VoiceId=voice_id,
-        Engine="neural"
-    )
-    audio_chunks.append(response["AudioStream"].read())
-except ClientError as e:
-    logger.error("Error synthesizing speech chunk: %s", e)
-    return None
-```
-
-### Testing Patterns
-
-#### Testing Speaker Parsing
-
-```python
-def test_parse_speaker_segments():
-    script = """Marco: Welcome to the show!
-Joanna: Thanks Marco. Let's dive in."""
-
-    segments = parse_speaker_segments(script)
-
-    assert len(segments) == 2
-    assert segments[0] == ("Marco", "Welcome to the show!")
-    assert segments[1] == ("Joanna", "Thanks Marco. Let's dive in.")
-```
-
-#### Testing Text Chunking
-
-```python
-def test_chunk_text_long():
-    long_text = "This is sentence one. " * 200  # ~4400 chars
-
-    chunks = chunk_text(long_text, max_chars=3000)
-
-    assert len(chunks) > 1
-    for chunk in chunks:
-        assert len(chunk) <= 3000
-```
-
-#### Testing Voice Switching
-
-```python
-@patch('podcast_generator.boto3.client')
-def test_synthesize_speech_with_voice_switching(mock_boto3):
-    mock_polly = MagicMock()
-    mock_boto3.return_value = mock_polly
-    mock_polly.synthesize_speech.return_value = {
-        "AudioStream": MagicMock(read=lambda: b"audio chunk")
-    }
-
-    script = "Marco: Hello!\nJoanna: Hi there!"
-    audio = synthesize_speech(script)
-
-    # Should call synthesize_speech twice (once per speaker)
-    assert mock_polly.synthesize_speech.call_count == 2
-
-    # Verify different voices used
-    calls = mock_polly.synthesize_speech.call_args_list
-    voices = [call[1]['VoiceId'] for call in calls]
-    assert MARCO_VOICE in voices
-    assert JOANNA_VOICE in voices
-```
-
-#### Testing RSS Feed Generation
-
-```python
-@patch('podcast_generator.boto3.client')
-def test_update_podcast_feed_new(mock_boto3):
-    mock_s3 = MagicMock()
-    mock_boto3.return_value = mock_s3
-
-    # Simulate no existing feed
-    class NoSuchKey(Exception):
-        pass
-    mock_s3.exceptions.NoSuchKey = NoSuchKey
-    mock_s3.get_object.side_effect = NoSuchKey("Not found")
-
-    success = update_podcast_feed(
-        bucket="test-bucket",
-        audio_url="https://example.com/audio.mp3",
-        title="Test Episode",
-        description="Test Description",
-        pub_date="2025-01-01T12:00:00"
-    )
-
-    assert success
-    # Verify RSS feed uploaded to correct location
-    assert mock_s3.put_object.call_args[1]['Key'] == 'podcasts/feed.xml'
-```
-
-### Cost Optimization
-
-#### Token Management
-
-- Use Claude Haiku 4.5 (most cost-effective model)
-- Set conservative token limits (4,000 for podcasts vs 100,000 for email)
-- Limit script length to 5-10 minutes to control Polly costs
-
-#### Voice Selection
-
-```python
-# Neural voices (high quality, higher cost)
-MARCO_VOICE = "Matthew"  # $16/M chars
-JOANNA_VOICE = "Joanna"
-
-# Alternative: Standard voices (lower quality, 75% cheaper)
-# MARCO_VOICE = "Matthew" with Engine="standard"  # $4/M chars
-```
-
-#### Monitoring Costs
-
-Log key metrics for cost tracking:
-
-```python
-logger.info("Script generated successfully (length: %d chars)", len(script))
-logger.info("Found %d speaker segments", len(segments))
-logger.info("Synthesizing %d chunks for %s", len(text_chunks), speaker)
-logger.info("Audio synthesized successfully (%d bytes)", len(audio_data))
-```
-
-### CloudFront Cache Invalidation
-
-The podcast feed is distributed via CloudFront for better performance and reliability. To ensure podcast apps receive updates immediately, the system automatically invalidates the CloudFront cache when feed.xml is updated.
-
-#### Implementation Pattern
-
-```python
-@pydantic.validate_call(validate_return=True)
-def invalidate_cloudfront_cache(distribution_id: str, paths: List[str]) -> bool:
-    """
-    Invalidate CloudFront cache for specified paths.
-
-    Args:
-        distribution_id: CloudFront distribution ID
-        paths: List of paths to invalidate (e.g., ['/podcasts/feed.xml'])
-
-    Returns:
-        True if invalidation was successful, False otherwise
-    """
-    cloudfront = boto3.client("cloudfront")
-    try:
-        response = cloudfront.create_invalidation(
-            DistributionId=distribution_id,
-            InvalidationBatch={
-                'Paths': {
-                    'Quantity': len(paths),
-                    'Items': paths
-                },
-                'CallerReference': str(datetime.now().timestamp())
-            }
-        )
-        invalidation_id = response['Invalidation']['Id']
-        logger.info(
-            "Created CloudFront invalidation %s for distribution %s, paths: %s",
-            invalidation_id,
-            distribution_id,
-            paths
-        )
-        return True
-    except ClientError as e:
-        logger.error(
-            "Failed to create CloudFront invalidation for distribution %s: %s",
-            distribution_id,
-            e
-        )
-        return False
-```
-
-#### Usage in update_podcast_feed()
-
-```python
-def update_podcast_feed(
-    bucket: str,
-    audio_url: str,
-    title: str,
-    description: str,
-    pub_date: str,
-    *,
-    cloudfront_domain: Optional[str] = None,
-    distribution_id: Optional[str] = None
-) -> bool:
-    # ... upload feed to S3 ...
-
-    # Invalidate CloudFront cache if distribution ID is provided
-    if distribution_id:
-        if invalidate_cloudfront_cache(distribution_id, ['/podcasts/feed.xml']):
-            logger.info("CloudFront cache invalidated successfully")
-        else:
-            logger.warning("Failed to invalidate CloudFront cache, feed may be stale")
-
-    return True
-```
-
-#### CDK Configuration
-
-The CDK stack must:
-1. Create CloudFront distribution before Lambda function
-2. Pass distribution ID as environment variable
-3. Grant `cloudfront:CreateInvalidation` permission to Lambda role
-
-```typescript
-// Pass distribution ID to Lambda
-environment: {
-  PODCAST_CLOUDFRONT_DISTRIBUTION_ID: podcastDistribution.distributionId,
-}
-
-// Grant CloudFront invalidation permissions
-role.addToPolicy(new iam.PolicyStatement({
-  effect: iam.Effect.ALLOW,
-  actions: ['cloudfront:CreateInvalidation'],
-  resources: [`arn:aws:cloudfront::${this.account}:distribution/${podcastDistribution.distributionId}`]
-}));
-```
-
-### Common Pitfalls
-
-1. **Forgetting to chunk text**: Always chunk before calling Polly or you'll hit the 3000-char limit
-2. **Not handling speaker labels**: Ensure Claude prompt explicitly requests "Marco:" and "Joanna:" labels
-3. **Missing newlines in test scripts**: Parser looks for line breaks between speakers
-4. **Catching too broad exceptions**: Use specific exception types (ClientError, APIError, etc.)
-5. **Not preserving sentence boundaries**: Split on sentence endings, not arbitrary character counts
-6. **CloudFront cache**: Always invalidate CloudFront cache after updating feed.xml to ensure immediate availability
-
-### Integration with Existing System
-
-The podcast generator reuses functions from `email_articles.py`:
-
-```python
-from .email_articles import get_feed_file, filter_items, get_last_run, set_last_run
-
-def generate_podcast(event, context):
-    # Reuse existing RSS feed retrieval
-    run_date = get_last_run(last_run_param)
-    rss_file = get_feed_file(bucket, rss_key)
-    filtered_items = filter_items(rss_file, run_date)
-
-    # Podcast-specific processing
-    script = generate_script(filtered_items)
-    audio = synthesize_speech(script)
-
-    # Store and update feed
-    upload_to_s3(bucket, s3_key, audio, "audio/mpeg")
-    update_podcast_feed(bucket, audio_url, title, description, pub_date)
-
-    # Update state using shared function
-    set_last_run(last_run_param)
-```
-
-### Future Enhancements
-
-Consider these patterns for future improvements:
-
-1. **SSML Support**: Use Speech Synthesis Markup Language for more natural pauses, emphasis
-2. **Audio Post-Processing**: Add intro/outro music, normalize volume levels
-3. **Compression**: Compress MP3 files to reduce storage and bandwidth costs
-4. **Local Testing CLI**: Create `cli_podcast_generator.py` similar to `cli_article_processor.py`
+The podcast is a single-narrator, Economist-style audio edition of the **RSS Brief**, not a
+second summary of the raw feed. The brief has already done the editorial selection, so the
+podcast narrates it. There is no two-host dialogue, no speaker labels and no Polly.
+
+Flow: `retrieve_and_send_email._maybe_send_brief` sends the brief, then saves a flattened
+narration input to `podcast/narration-input.json` (`podcast_script.build_narration_input`,
+best-effort, no article ids or URLs). The Step Functions workflow runs email first, then the
+`GeneratePodcast` Lambda (`generate_podcast.py`), which reads that input and:
+
+1. skips unless the input is dated today and `podcasts/episodes/rss-brief-{date}.mp3` does
+   not already exist (so manual re-triggers don't duplicate an episode);
+2. writes the narration with one direct Claude call (`podcast_script.generate_narration`,
+   model `PODCAST_CLAUDE_MODEL`, default `claude-sonnet-5-5`; read text blocks by type);
+3. synthesises MP3 (`podcast_tts.synthesize_speech`);
+4. uploads, updates `podcasts/feed.xml` and invalidates CloudFront (`podcast_generator.py`).
+
+Failures raise so the stage's catch publishes an SNS alert; "no brief today" is a clean skip.
+
+### Narration prompt
+
+`podcast_script.NARRATION_PROMPT` follows the `brief_prompt.py` conventions: placeholders are
+substituted with `str.replace`, and `brief_prompt.FIDELITY_RULE` is reused so the audio makes
+no stronger claims than the brief. The prompt asks for plain TTS-safe prose (no markdown,
+URLs, brackets or speaker labels), British spelling, and 1,100-1,400 words.
+
+### Speech synthesis (Gradium Phonon)
+
+- `podcast_tts.py` uses the `ptts` package (no PyTorch, CPU-only) with the public Apache-2.0
+  `gradium/phonon-31m-en` weights. **Do not switch to the 40M models: they are gated and CC BY-NC.**
+- Text is split into paragraphs, then sentence chunks (`chunk_paragraph`, never mid-sentence).
+  Chunks are joined with short pauses and encoded to 24 kHz mono MP3 via `lameenc`.
+- Voice is `PODCAST_VOICE` (default `Hugh`; `Toby` and `Harper` are baked into the image; set `PODCAST_VOICE` at deploy time or edit `lib/rss_lambda_stack.ts` - voices not listed in the Dockerfile's `PODCAST_VOICES` fail offline). Try voices with
+  `uv run python generate_test_podcast.py <voice> out.mp3`.
+- `ptts`, `lameenc` and `numpy` live in the `podcast` dependency group (included in `dev`), so
+  they stay out of the shared Lambda layer. The Lambda is a container image
+  (`docker/podcast/Dockerfile`) with the model weights baked in (`HF_HOME`, then
+  `HF_HUB_OFFLINE=1`), so there is no runtime download.
+- `synthesize_speech(script) -> Optional[bytes]` is the seam: swapping the engine (for example
+  to Polly Long-form) means replacing that one function.
+
+### RSS feed and CloudFront
+
+`update_podcast_feed` keeps the 10 most recent episodes and writes the RSS 2.0 `<enclosure>`
+with `url`, `length` (bytes, required by podcast apps) and `type`. It invalidates
+`/podcasts/feed.xml` when a distribution id is supplied, so apps see new episodes immediately.
+The Lambda role needs `cloudfront:CreateInvalidation` and S3 write access to `podcasts/*`.
+
+### Testing
+
+Tests mock `ptts` (fake module in `sys.modules`), Anthropic and boto3. See
+`tests/test_podcast_script.py`, `tests/test_podcast_tts.py`, `tests/test_generate_podcast.py`
+and `tests/test_podcast_feed.py`.

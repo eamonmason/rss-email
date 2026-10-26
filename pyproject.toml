@@ -42,7 +42,15 @@ pythonpath = "src"
 init-hook = "import sys; sys.path.insert(0, 'src')"
 
 [dependency-groups]
+# Speech synthesis only runs in the podcast container image (docker/podcast/);
+# kept out of the shared Lambda layer, but installed for local dev and tests.
+podcast = [
+    "ptts>=0.4.2",
+    "lameenc>=1.8.1",
+    "numpy>=2.0",
+]
 dev = [
+    {include-group = "podcast"},
     "flake8>=7.3.0",
     "moto>=5.1.6",
     "pre-commit>=4.5.0",

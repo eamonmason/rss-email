@@ -30,12 +30,15 @@ const SNS_ERROR_ALERTS = 'rss-error-alerts';
 const RSS_RULE_SET_NAME = 'RSSRuleSet';
 const LAST_RUN_PARAMETER = 'rss-email-lastrun';
 
-const PODCAST_LAST_RUN_PARAMETER = 'rss-podcast-lastrun';
 const PODCAST_CLOUDFRONT_DOMAIN_PARAMETER = 'rss-podcast-cloudfront-domain';
 const ANTHROPIC_API_KEY_PARAMETER = 'rss-email-anthropic-api-key';
 
 // Keep in sync with DEFAULT_CLAUDE_MODEL in src/rss_email/models.py
 const DEFAULT_CLAUDE_MODEL = 'claude-haiku-4-5';
+// Narration quality matters more than cost for one call a day.
+const PODCAST_CLAUDE_MODEL = 'claude-sonnet-5-5';
+// Must be one of the voices baked into docker/podcast/Dockerfile (PODCAST_VOICES).
+const PODCAST_VOICE = process.env.PODCAST_VOICE ?? 'Hugh';
 const BRIEF_SYNTHESIS_CLAUDE_MODEL = 'claude-opus-5-5';
 
 // Keep in sync with DEFAULT_MEMORY_KEY/DEFAULT_WINDOW_DAYS in src/rss_email/brief_memory.py
@@ -239,7 +242,7 @@ export class RSSEmailStack extends cdk.Stack {
     });
 
     // Old RSSPodcastFunction removed - replaced by Step Functions workflow
-    // with SubmitPodcastBatch, CheckPodcastBatchStatus, and RetrieveAndGeneratePodcast
+    // with the GeneratePodcast stage that runs after the email branch
 
     // ===== Message Batches API Lambda Functions =====
 
@@ -320,51 +323,25 @@ export class RSSEmailStack extends cdk.Stack {
       timeout: cdk.Duration.seconds(600)
     });
 
-    // Podcast Batch Processing Functions
-    const submitPodcastBatchFunction = new lambda.Function(this, 'SubmitPodcastBatchFunction', {
-      code: lambda.Code.fromAsset('src'),
-      handler: 'rss_email.submit_podcast_batch.lambda_handler',
-      runtime: lambda.Runtime.PYTHON_3_13,
-      environment: {
-        RSS_BUCKET: bucket.bucketName,
-        RSS_KEY: KEY,
-        PODCAST_LAST_RUN_PARAMETER: PODCAST_LAST_RUN_PARAMETER,
-        ANTHROPIC_API_KEY_PARAMETER: ANTHROPIC_API_KEY_PARAMETER,
-        CLAUDE_MODEL: DEFAULT_CLAUDE_MODEL,
-      },
-      role: role,
-      layers: [layer],
-      memorySize: 512,
-      timeout: cdk.Duration.seconds(300)
-    });
-
-    const checkPodcastBatchStatusFunction = new lambda.Function(this, 'CheckPodcastBatchStatusFunction', {
-      code: lambda.Code.fromAsset('src'),
-      handler: 'rss_email.check_podcast_batch_status.lambda_handler',
-      runtime: lambda.Runtime.PYTHON_3_13,
-      environment: {
-        ANTHROPIC_API_KEY_PARAMETER: ANTHROPIC_API_KEY_PARAMETER,
-      },
-      role: role,
-      layers: [layer],
-      timeout: cdk.Duration.seconds(30)
-    });
-
-    const retrieveAndGeneratePodcastFunction = new lambda.Function(this, 'RetrieveAndGeneratePodcastFunction', {
-      code: lambda.Code.fromAsset('src'),
-      handler: 'rss_email.retrieve_and_generate_podcast.lambda_handler',
-      runtime: lambda.Runtime.PYTHON_3_13,
+    // Podcast: narrates the day's RSS Brief with Gradium Phonon (ptts), which
+    // needs the model weights and a CPU-heavy synth loop, so it ships as a
+    // container image (weights baked in at build time, no runtime download).
+    const generatePodcastFunction = new lambda.DockerImageFunction(this, 'GeneratePodcastFunction', {
+      code: lambda.DockerImageCode.fromImageAsset('.', {
+        file: 'docker/podcast/Dockerfile',
+        exclude: ['node_modules', 'cdk.out', '.venv', '.git', 'tests', 'eval', 'assets'],
+      }),
       environment: {
         ANTHROPIC_API_KEY_PARAMETER: ANTHROPIC_API_KEY_PARAMETER,
         BUCKET: bucket.bucketName,
         PODCAST_CLOUDFRONT_DISTRIBUTION_ID: podcastDistribution.distributionId,
         PODCAST_CLOUDFRONT_DOMAIN_PARAMETER: PODCAST_CLOUDFRONT_DOMAIN_PARAMETER,
-        PODCAST_LAST_RUN_PARAMETER: PODCAST_LAST_RUN_PARAMETER,
+        PODCAST_CLAUDE_MODEL: PODCAST_CLAUDE_MODEL,
+        PODCAST_VOICE: PODCAST_VOICE,
       },
       role: role,
-      layers: [layer],
-      memorySize: 512,
-      timeout: cdk.Duration.seconds(300)
+      memorySize: 3008,
+      timeout: cdk.Duration.seconds(900),
     });
 
     // ===== Step Functions State Machine =====
@@ -458,83 +435,37 @@ export class RSSEmailStack extends cdk.Stack {
       resultPath: '$.emailBranchError',
     });
 
-    // Podcast Branch Tasks
-    const submitPodcastBatchTask = withRetry(new tasks.LambdaInvoke(this, 'Submit Podcast Batch', {
-      lambdaFunction: submitPodcastBatchFunction,
-      resultPath: '$.podcastBatch',
-    }));
-
-    const checkPodcastStatusTask = withRetry(new tasks.LambdaInvoke(this, 'Check Podcast Status', {
-      lambdaFunction: checkPodcastBatchStatusFunction,
-      inputPath: '$.podcastBatch.Payload',
-      resultPath: '$.podcastBatch',
-    }));
-
-    const waitPodcastShort = new sfn.Wait(this, 'Wait Podcast 60s', {
-      time: sfn.WaitTime.duration(cdk.Duration.seconds(60)),
-    });
-
-    const waitPodcastLong = new sfn.Wait(this, 'Wait Podcast 5m', {
-      time: sfn.WaitTime.duration(cdk.Duration.minutes(5)),
-    });
-
-    const retrieveAndGeneratePodcastTask = withRetry(new tasks.LambdaInvoke(this, 'Retrieve and Generate Podcast', {
-      lambdaFunction: retrieveAndGeneratePodcastFunction,
-      inputPath: '$.podcastBatch.Payload',
-      outputPath: '$.Payload',
-    }));
-
-    const podcastPollBackoffChoice = new sfn.Choice(this, 'Podcast Poll Backoff?')
-      .when(
-        sfn.Condition.numberLessThan('$.podcastBatch.Payload.poll_count', POLL_BACKOFF_THRESHOLD),
-        waitPodcastShort.next(checkPodcastStatusTask)
-      )
-      .otherwise(waitPodcastLong.next(checkPodcastStatusTask));
-
-    const podcastChoice = new sfn.Choice(this, 'Is Podcast Batch Complete?')
-      .when(
-        sfn.Condition.stringEquals('$.podcastBatch.Payload.processing_status', 'ended'),
-        retrieveAndGeneratePodcastTask
-      )
-      .otherwise(podcastPollBackoffChoice);
-
-    const podcastBranch = submitPodcastBatchTask
-      .next(checkPodcastStatusTask)
-      .next(podcastChoice);
-
-    // Isolate the podcast branch the same way as the email branch above.
-    const podcastBranchIsolated = new sfn.Parallel(this, 'Podcast Branch Isolated', {
+    // Podcast stage: runs after the email branch because it narrates the brief
+    // that branch just produced. No brief today -> the Lambda skips cleanly.
+    const generatePodcastTask = withRetry(new tasks.LambdaInvoke(this, 'Generate Podcast', {
+      lambdaFunction: generatePodcastFunction,
       resultPath: '$.podcastResult',
-    }).branch(podcastBranch);
+    }));
 
-    const notifyPodcastFailure = new tasks.SnsPublish(this, 'Notify Podcast Branch Failure', {
+    const notifyPodcastFailure = new tasks.SnsPublish(this, 'Notify Podcast Failure', {
       topic: error_alerts_topic,
-      subject: 'RSS workflow: podcast branch failed',
-      message: sfn.TaskInput.fromJsonPathAt('$.podcastBranchError.Cause'),
+      subject: 'RSS workflow: podcast failed',
+      message: sfn.TaskInput.fromJsonPathAt('$.podcastError.Cause'),
     });
 
-    const podcastBranchFailed = new sfn.Pass(this, 'Podcast Branch Failed', {
+    const podcastFailed = new sfn.Pass(this, 'Podcast Failed', {
       parameters: { status: 'failed', branch: 'podcast' },
     });
 
-    podcastBranchIsolated.addCatch(notifyPodcastFailure.next(podcastBranchFailed), {
-      resultPath: '$.podcastBranchError',
+    generatePodcastTask.addCatch(notifyPodcastFailure.next(podcastFailed), {
+      resultPath: '$.podcastError',
     });
-
-    // Parallel Processing
-    const parallelState = new sfn.Parallel(this, 'Process Email and Podcast', {
-      resultPath: '$.results',
-    })
-      .branch(emailBranchIsolated)
-      .branch(podcastBranchIsolated);
 
     // Success State
     const successState = new sfn.Succeed(this, 'Workflow Complete');
 
-    // Define complete workflow: Retrieve Articles -> Parallel Processing -> Success
+    // Define complete workflow: Retrieve Articles -> Email Branch -> Podcast -> Success
+    emailBranchFailed.next(generatePodcastTask);
     const definition = retrieveArticlesTask
-      .next(parallelState)
+      .next(emailBranchIsolated)
+      .next(generatePodcastTask)
       .next(successState);
+    podcastFailed.next(successState);
 
     // Create State Machine
     const stateMachine = new sfn.StateMachine(this, 'DailyRSSNewsletterWorkflow', {
@@ -551,9 +482,7 @@ export class RSSEmailStack extends cdk.Stack {
     submitEmailBatchFunction.grantInvoke(stateMachine);
     checkEmailBatchStatusFunction.grantInvoke(stateMachine);
     retrieveAndSendEmailFunction.grantInvoke(stateMachine);
-    submitPodcastBatchFunction.grantInvoke(stateMachine);
-    checkPodcastBatchStatusFunction.grantInvoke(stateMachine);
-    retrieveAndGeneratePodcastFunction.grantInvoke(stateMachine);
+    generatePodcastFunction.grantInvoke(stateMachine);
 
     // Update EventBridge rule to trigger Step Function instead of Lambda
     // Replace the emailerEventRule to trigger the state machine
@@ -641,20 +570,6 @@ def lambda_handler(event, context):
 
     // Subscribe Lambda to SNS topic
     receive_topic.addSubscription(new sns_subscriptions.LambdaSubscription(manualTriggerFunction));
-
-    // Add Polly permissions to the role
-    role.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: ['polly:SynthesizeSpeech'],
-      resources: ['*']
-    }));
-
-    // Add SSM permission for podcast last run
-    role.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: ['ssm:PutParameter', 'ssm:GetParameter'],
-      resources: [`arn:aws:ssm:*:*:parameter/${PODCAST_LAST_RUN_PARAMETER}`],
-    }));
 
     // Add SSM permission for CloudFront domain parameter
     role.addToPolicy(new iam.PolicyStatement({
@@ -810,38 +725,14 @@ def lambda_handler(event, context):
       filterPattern: logs.FilterPattern.anyTerm('ERROR', 'WARNING', 'Error', 'Warning', 'error', 'warning'),
     });
 
-    const submitPodcastBatchLogGroup = new logs.LogGroup(this, 'submitPodcastBatchLogGroup', {
-      logGroupName: `/aws/lambda/${submitPodcastBatchFunction.functionName}`,
+    const generatePodcastLogGroup = new logs.LogGroup(this, 'generatePodcastLogGroup', {
+      logGroupName: `/aws/lambda/${generatePodcastFunction.functionName}`,
       retention: logs.RetentionDays.ONE_MONTH,
       removalPolicy: cdk.RemovalPolicy.DESTROY
     });
 
-    new logs.SubscriptionFilter(this, 'SubmitPodcastBatchLogSubscription', {
-      logGroup: submitPodcastBatchLogGroup,
-      destination: new destinations.LambdaDestination(logForwarderFunction),
-      filterPattern: logs.FilterPattern.anyTerm('ERROR', 'WARNING', 'Error', 'Warning', 'error', 'warning'),
-    });
-
-    const checkPodcastBatchStatusLogGroup = new logs.LogGroup(this, 'checkPodcastBatchStatusLogGroup', {
-      logGroupName: `/aws/lambda/${checkPodcastBatchStatusFunction.functionName}`,
-      retention: logs.RetentionDays.ONE_MONTH,
-      removalPolicy: cdk.RemovalPolicy.DESTROY
-    });
-
-    new logs.SubscriptionFilter(this, 'CheckPodcastBatchStatusLogSubscription', {
-      logGroup: checkPodcastBatchStatusLogGroup,
-      destination: new destinations.LambdaDestination(logForwarderFunction),
-      filterPattern: logs.FilterPattern.anyTerm('ERROR', 'WARNING', 'Error', 'Warning', 'error', 'warning'),
-    });
-
-    const retrieveAndGeneratePodcastLogGroup = new logs.LogGroup(this, 'retrieveAndGeneratePodcastLogGroup', {
-      logGroupName: `/aws/lambda/${retrieveAndGeneratePodcastFunction.functionName}`,
-      retention: logs.RetentionDays.ONE_MONTH,
-      removalPolicy: cdk.RemovalPolicy.DESTROY
-    });
-
-    new logs.SubscriptionFilter(this, 'RetrieveAndGeneratePodcastLogSubscription', {
-      logGroup: retrieveAndGeneratePodcastLogGroup,
+    new logs.SubscriptionFilter(this, 'GeneratePodcastLogSubscription', {
+      logGroup: generatePodcastLogGroup,
       destination: new destinations.LambdaDestination(logForwarderFunction),
       filterPattern: logs.FilterPattern.anyTerm('ERROR', 'WARNING', 'Error', 'Warning', 'error', 'warning'),
     });

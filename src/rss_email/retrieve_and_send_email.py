@@ -29,6 +29,7 @@ from .brief_memory import (
     seen_links,
 )
 from .models import ArticleSource
+from .podcast_script import build_narration_input, save_narration_input
 
 logger = logging.getLogger(__name__)
 
@@ -186,6 +187,12 @@ def _maybe_send_brief(
             today_record = build_day_record(result.synthesis, result.article_index, today)
             updated_memory = append_and_prune(memory, today_record, window_days)
             save_memory(bucket, updated_memory, memory_key)
+
+            # The podcast stage narrates this same brief; best-effort like the memory save.
+            save_narration_input(
+                bucket,
+                build_narration_input(result.synthesis, result.article_index, today),
+            )
     except Exception as exc:  # pylint: disable=broad-except
         logger.error("Brief generation/send failed (digest already sent): %s", exc)
 
