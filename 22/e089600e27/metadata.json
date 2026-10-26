@@ -3,7 +3,7 @@
   "checkpoint_id": "22e089600e27",
   "strategy": "manual-commit",
   "branch": "fix/podcast-ai-pronunciation",
-  "checkpoints_count": 8,
+  "checkpoints_count": 9,
   "files_touched": [
     "src/rss_email/podcast_script.py",
     "src/rss_email/podcast_tts.py",
@@ -16,13 +16,20 @@
       "compact_transcript": "/22/e089600e27/0/transcript.jsonl",
       "content_hash": "/22/e089600e27/0/content_hash.txt",
       "prompt": "/22/e089600e27/0/prompt.txt"
+    },
+    {
+      "metadata": "/22/e089600e27/1/metadata.json",
+      "transcript": "/22/e089600e27/1/full.jsonl",
+      "compact_transcript": "/22/e089600e27/1/transcript.jsonl",
+      "content_hash": "/22/e089600e27/1/content_hash.txt",
+      "prompt": "/22/e089600e27/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 70,
-    "cache_creation_tokens": 100115,
-    "cache_read_tokens": 10199434,
-    "output_tokens": 20441,
-    "api_call_count": 35
+    "input_tokens": 276,
+    "cache_creation_tokens": 384134,
+    "cache_read_tokens": 31919872,
+    "output_tokens": 94736,
+    "api_call_count": 139
   }
 }

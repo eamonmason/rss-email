@@ -1,0 +1,5 @@
+what is the URL for the podcast? Is it mapped to something in masonvanes.com?
+
+---
+
+I get could not download podcast feed when trying to access https://dy6242k5k6olr.cloudfront.net/podcasts/feed.xml. is there password protection?

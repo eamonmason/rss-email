@@ -1,0 +1,57 @@
+{
+  "cli_version": "0.10.5",
+  "checkpoint_id": "22e089600e27",
+  "session_id": "cacc3524-a14d-4d81-a2a9-388eb7620c7a",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-26T10:26:09.150668Z",
+  "branch": "fix/podcast-ai-pronunciation",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/rss_email/podcast_script.py",
+    "src/rss_email/podcast_tts.py"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-5-5",
+  "turn_id": "49c382d114df",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 206,
+    "cache_creation_tokens": 284019,
+    "cache_read_tokens": 21720438,
+    "output_tokens": 74295,
+    "api_call_count": 104
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-26T10:26:09.05894Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 3,
+    "total_committed": 0,
+    "total_lines_changed": 3,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 33,
+      "user_lines_removed": 3,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "src/rss_email/podcast_script.py": 2,
+        "src/rss_email/podcast_tts.py": 11,
+        "tests/test_podcast_tts.py": 20
+      },
+      "user_removed_per_file": {
+        "src/rss_email/podcast_script.py": 2,
+        "src/rss_email/podcast_tts.py": 1
+      }
+    }
+  ]
+}
