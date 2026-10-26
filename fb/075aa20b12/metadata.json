@@ -1,0 +1,48 @@
+{
+  "cli_version": "0.10.5",
+  "checkpoint_id": "fb075aa20b12",
+  "strategy": "manual-commit",
+  "branch": "feat/podcast-from-brief",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".github/workflows/eval.yml",
+    "CLAUDE.md",
+    "README.md",
+    "eval/README.md",
+    "eval/annotate_failures.jq",
+    "eval/package-lock.json",
+    "eval/package.json",
+    "generate_test_podcast.py",
+    "lib/rss_lambda_stack.ts",
+    "package-lock.json",
+    "package.json",
+    "src/rss_email/brief_config.json",
+    "src/rss_email/brief_prompt.py",
+    "src/rss_email/mastodon_source.py",
+    "src/rss_email/podcast_tts.py",
+    "src/rss_email/retrieve_articles.py",
+    "tests/test_brief_generator.py",
+    "tests/test_generate_podcast.py",
+    "tests/test_mastodon_source.py",
+    "tests/test_podcast_feed.py",
+    "tests/test_podcast_script.py",
+    "tests/test_podcast_tts.py",
+    "uv.lock"
+  ],
+  "sessions": [
+    {
+      "metadata": "/fb/075aa20b12/0/metadata.json",
+      "transcript": "/fb/075aa20b12/0/full.jsonl",
+      "compact_transcript": "/fb/075aa20b12/0/transcript.jsonl",
+      "content_hash": "/fb/075aa20b12/0/content_hash.txt",
+      "prompt": "/fb/075aa20b12/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 24,
+    "cache_creation_tokens": 8983,
+    "cache_read_tokens": 2552365,
+    "output_tokens": 4462,
+    "api_call_count": 12
+  }
+}

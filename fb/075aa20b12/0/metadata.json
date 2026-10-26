@@ -1,0 +1,71 @@
+{
+  "cli_version": "0.10.5",
+  "checkpoint_id": "fb075aa20b12",
+  "session_id": "bc883dcf-e955-4365-9cd3-4cebcd5b94e1",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-26T08:06:26.230379Z",
+  "branch": "feat/podcast-from-brief",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".github/workflows/eval.yml",
+    "CLAUDE.md",
+    "README.md",
+    "eval/README.md",
+    "eval/annotate_failures.jq",
+    "eval/package-lock.json",
+    "eval/package.json",
+    "generate_test_podcast.py",
+    "lib/rss_lambda_stack.ts",
+    "package-lock.json",
+    "package.json",
+    "src/rss_email/brief_config.json",
+    "src/rss_email/brief_prompt.py",
+    "src/rss_email/mastodon_source.py",
+    "src/rss_email/podcast_tts.py",
+    "src/rss_email/retrieve_articles.py",
+    "tests/test_brief_generator.py",
+    "tests/test_generate_podcast.py",
+    "tests/test_mastodon_source.py",
+    "tests/test_podcast_feed.py",
+    "tests/test_podcast_script.py",
+    "tests/test_podcast_tts.py",
+    "uv.lock"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-5-5",
+  "turn_id": "d1bf9530dc40",
+  "checkpoint_transcript_start": 594,
+  "transcript_lines_at_start": 594,
+  "compact_transcript_start": 62,
+  "token_usage": {
+    "input_tokens": 24,
+    "cache_creation_tokens": 8983,
+    "cache_read_tokens": 2552365,
+    "output_tokens": 4462,
+    "api_call_count": 12
+  },
+  "session_metrics": {
+    "turn_count": 7
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-26T08:06:26.160219Z",
+    "agent_lines": 1237,
+    "agent_removed": 5468,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 1237,
+    "total_lines_changed": 6705,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
