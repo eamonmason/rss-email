@@ -1,4 +1,5 @@
 """Tests for the podcast publishing helpers (podcast_generator.py)."""
+# pylint: disable=missing-function-docstring,redefined-outer-name,unused-argument
 
 from unittest.mock import MagicMock, patch
 

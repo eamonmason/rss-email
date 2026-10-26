@@ -1,4 +1,5 @@
 """Tests for single-narrator Phonon synthesis (podcast_tts.py)."""
+# pylint: disable=missing-function-docstring,redefined-outer-name,unused-argument
 
 import sys
 from unittest.mock import MagicMock

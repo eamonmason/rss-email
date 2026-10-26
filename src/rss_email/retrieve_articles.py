@@ -49,6 +49,11 @@ except ImportError:
     # package is still installed in the project environment.
     from rss_email.url_utils import strip_credential_params
 
+try:
+    from .mastodon_source import retrieve_mastodon_articles
+except ImportError:
+    from rss_email.mastodon_source import retrieve_mastodon_articles
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -522,6 +527,17 @@ def retrieve_rss_feeds(feed_file: str, update_date: datetime) -> Tuple[str, Dict
             feed_articles = sorted(feed_articles, reverse=True)[:max_articles]
         per_url_counts[item_url] = len(feed_articles)
         filtered_entries.extend(feed_articles)
+
+    try:
+        feed_data = _load_feed_json(feed_file)
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        # The Mastodon source is optional and must never block the RSS feeds.
+        logger.warning("Could not re-read %s for Mastodon config: %s", feed_file, exc)
+        feed_data = {}
+    mastodon_name, mastodon_articles = retrieve_mastodon_articles(feed_data, update_date)
+    if mastodon_name:
+        per_url_counts[mastodon_name] = len(mastodon_articles)
+        filtered_entries.extend(mastodon_articles)
     return generate_articles_json(sorted(filtered_entries, reverse=True)), per_url_counts
 
 

@@ -98,7 +98,7 @@ local `pip` bundling — acceptable for `synth`/`diff`, never for a real deploy.
 - **models.py**: Shared Pydantic models for consistent data validation across the application
 - **lib/rss_lambda_stack.ts**: Main CDK infrastructure stack defining all AWS resources
 - **cli_article_processor.py**: CLI tool for testing article processing with Claude API locally
-- **brief_generator.py**: Synthesises the companion "RSS Brief" email ("Read these" list, themes, signal strength, cross-cutting signals) from a day's categorised articles via a single streamed Claude Opus 5.5 call (`claude-opus-5-5`; `effort` set in `brief_config.json`, server-side refusal fallback enabled). Opus 5.5 always thinks, so read response content by block type and leave `max_tokens` headroom for thinking. Bulk categorisation and grouping stay on `claude-haiku-4-5`; the podcast narration uses `claude-sonnet-5-5`
+- **brief_generator.py**: Synthesises the companion "RSS Brief" email ("Read these" list, themes, signal strength, cross-cutting signals) from a day's categorised articles via a single streamed Claude Opus 5.5 call (`claude-opus-5-5`; `effort` set in `brief_config.json` - `high`, because at `medium` the model only sometimes counts a societal story from a low-ranked source as major and drops it under the theme caps; server-side refusal fallback enabled). Opus 5.5 always thinks, so read response content by block type and leave `max_tokens` headroom for thinking. Bulk categorisation and grouping stay on `claude-haiku-4-5`; the podcast narration uses `claude-sonnet-5-5`
 - **brief_prompt.py**: Prompt text and editorial rules (selection, length caps, fidelity) for the RSS Brief synthesis call
 - **url_utils.py**: Credential-param stripping (via `w3lib`) and link normalisation shared by ingest and the brief
 - **brief_memory.py**: Persists a rolling window of recent RSS Brief days to S3 so the synthesis prompt can avoid repeating stories and frame multi-day stories as developments — see "Brief Memory" below
@@ -239,6 +239,18 @@ RSS sources are configured in `feed_urls.json` with this structure:
   ]
 }
 ```
+
+### Mastodon Source
+An optional top-level `mastodon` block adds link posts from a Mastodon home timeline as articles
+(the shared page is the article, the post is its discussion link). It is separate from `feeds` so
+it is never fetched as RSS:
+```json
+{"mastodon": {"base_url": "https://mastodon.social", "max_articles": 15}}
+```
+`max_articles` is kept per 24-hour window; `enabled: false` switches it off. The access token
+(`read:statuses` scope) is an SSM SecureString named `rss-email-mastodon-token`, created by hand.
+A missing block or token disables the source quietly; an API failure logs a warning and never
+blocks the RSS feeds. See `src/rss_email/mastodon_source.py`.
 
 ## Testing Strategy
 

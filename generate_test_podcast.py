@@ -10,6 +10,7 @@ import sys
 
 sys.path.append("src")
 
+# pylint: disable=wrong-import-position
 from rss_email.podcast_tts import DEFAULT_VOICE, synthesize_speech  # noqa: E402
 
 SAMPLE_SCRIPT = """Good morning. It is Tuesday the twenty-seventh of October, and this is the briefing.

@@ -1,5 +1,5 @@
 """Tests for the brief-sourced narration script (podcast_script.py)."""
-# pylint: disable=redefined-outer-name
+# pylint: disable=missing-function-docstring,redefined-outer-name,unused-argument
 
 import json
 from unittest.mock import MagicMock, patch

@@ -1,5 +1,5 @@
 """Tests for the podcast Lambda handler (generate_podcast.py)."""
-# pylint: disable=redefined-outer-name
+# pylint: disable=missing-function-docstring,redefined-outer-name,unused-argument
 
 from datetime import datetime
 from unittest.mock import patch

@@ -50,7 +50,7 @@ def encode_mp3(samples, sample_rate: int = SAMPLE_RATE) -> bytes:
     import lameenc  # pylint: disable=import-outside-toplevel
 
     pcm = (np.clip(samples, -1.0, 1.0) * 32767).astype(np.int16)
-    encoder = lameenc.Encoder()
+    encoder = lameenc.Encoder()  # pylint: disable=c-extension-no-member
     encoder.set_bit_rate(MP3_BITRATE_KBPS)
     encoder.set_in_sample_rate(sample_rate)
     encoder.set_channels(1)

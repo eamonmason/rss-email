@@ -45,6 +45,13 @@ Each run makes a handful of Claude calls (one synthesis per fixture + the llm-ru
 grader), so it is not wired into the per-push CI gate. It runs weekly and on demand via
 [`.github/workflows/eval.yml`](../.github/workflows/eval.yml).
 
+In CI a failed run is retried once. Each attempt's results are uploaded separately
+(`eval-results-1.json`, `eval-results-2.json` in the `brief-eval-results` artifact), and
+`annotate_failures.jq` turns every failed assertion's reason into a run annotation, so
+the cause is visible on the run page (and via the check-runs API) without opening the
+logs. A run that passed only on the retry carries a "Brief eval retried" warning; treat
+it as a flaky pass, not a clean one.
+
 ## Add a fixture
 
 A fixture is one day's digest in the same shape `build_synthesis_input` produces:
