@@ -19,6 +19,8 @@ from rss_email.models import (
 from rss_email.podcast_script import (
     build_narration_input,
     build_prompt,
+    clean_script,
+    find_ai_tells,
     generate_narration,
     load_narration_input,
     render_material,
@@ -141,3 +143,37 @@ def test_load_missing_returns_none_and_save_failure_returns_false(mock_boto3_cli
 
     assert load_narration_input("bucket") is None
     assert save_narration_input("bucket", {}) is False
+
+
+def test_prompt_includes_ai_writing_rules(synthesis, article_index):
+    prompt = build_prompt(build_narration_input(synthesis, article_index, "2026-10-27"))
+
+    assert "Signs of AI writing" in prompt
+    assert "not just X, but Y" in prompt
+    assert "{AI_WRITING_RULE}" not in prompt
+
+
+def test_clean_script_replaces_dashes_with_commas():
+    assert clean_script("Prices fell — sharply – again.") == "Prices fell, sharply, again."
+
+
+def test_find_ai_tells_flags_stock_phrases_only():
+    flagged = find_ai_tells(
+        "This is a testament to the vibrant sector. It's important to note that it is not just cheap but fast. "
+        "The key landscape painter stands as an exception."
+    )
+
+    assert flagged == [
+        "it's important to note", "not just cheap but", "stands as", "testament", "vibrant",
+    ]
+    assert find_ai_tells("Prices fell by forty per cent, Reuters reported.") == []
+
+
+def test_generate_narration_cleans_and_warns(caplog):
+    text = MagicMock(type="text", text="A testament — of sorts.")
+
+    with caplog.at_level("WARNING"):
+        script = generate_narration({"date": "d"}, _client_returning(text))
+
+    assert script == "A testament, of sorts."
+    assert "testament" in caplog.text

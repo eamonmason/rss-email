@@ -523,7 +523,13 @@ Failures raise so the stage's catch publishes an SNS alert; "no brief today" is 
 
 `podcast_script.NARRATION_PROMPT` follows the `brief_prompt.py` conventions: placeholders are
 substituted with `str.replace`, and `brief_prompt.FIDELITY_RULE` is reused so the audio makes
-no stronger claims than the brief. The prompt asks for plain TTS-safe prose (no markdown,
+no stronger claims than the brief, and `AI_WRITING_RULE` (after Wikipedia's "Signs of AI
+writing") steers away from machine-prose tells: inflated significance, promotional words,
+`-ing` tails, vague attributions, "not just X but Y", reflexive triplets, summary endings.
+After generation `clean_script` turns em dashes into commas and `find_ai_tells` logs a
+warning when stock phrases slip through (narrow on purpose; it does not rewrite or retry).
+`podcast_tts.normalise_for_speech` rewrites "A.I." to "AI", which Phonon says without a
+pause. The prompt asks for plain TTS-safe prose (no markdown,
 URLs, brackets or speaker labels), British spelling, and 1,100-1,400 words.
 
 ### Speech synthesis (Gradium Phonon)

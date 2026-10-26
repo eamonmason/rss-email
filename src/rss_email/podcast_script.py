@@ -10,6 +10,7 @@ in S3 by the email Lambda and read back by the podcast Lambda.
 import json
 import logging
 import os
+import re
 from typing import Any, Dict, List, Optional
 
 import boto3
@@ -53,6 +54,8 @@ SHAPE:
 
 {FIDELITY_RULE}
 
+{AI_WRITING_RULE}
+
 TEXT-TO-SPEECH RULES (the script is read aloud by a speech model):
 - Plain prose in short paragraphs separated by blank lines. No markdown, headings,
   bullets, numbered lists, URLs, brackets or stage directions.
@@ -67,8 +70,60 @@ EDITORIAL MATERIAL:
 {material}
 """
 
+AI_WRITING_RULE = """\
+PLAIN, HUMAN PROSE (avoid the recognisable tells of machine writing, after Wikipedia's
+"Signs of AI writing"):
+- Be specific. Prefer the concrete fact (a number, a name, a date, what actually
+  happened) over a flattering general description. If a story has no concrete detail,
+  say less about it.
+- No inflated significance. Do not call things pivotal, crucial, vital, a testament, a
+  turning point or a shift in the landscape, and do not tie small stories to grand trends
+  unless the source does. Let the facts carry the weight.
+- No promotional adjectives (vibrant, groundbreaking, renowned, rich, diverse array,
+  boasts, showcasing). Say "has" or "offers", not "boasts" or "features"; say "is", not
+  "serves as" or "stands as".
+- Do not tack a participle phrase onto a sentence to add meaning ("..., highlighting its
+  importance", "..., underscoring the shift", "..., fostering innovation").
+- Name your sources. Never say "observers", "experts", "critics" or "industry reports"
+  without saying who; if the source is unclear, leave the claim out.
+- Avoid "not just X, but Y", "not only X but Y" and "it is not X, it is Y" constructions,
+  and the "X rather than Y" reflex.
+- Do not default to lists of three. Use the number of items the facts have.
+- No stock advice such as "it is important to note" or "it is worth remembering", and no
+  hedges that claim details are limited or not widely documented.
+- Do not summarise the piece or finish on a vague hopeful or speculative line. End with
+  one concrete thing to watch (a named event, date or decision) and a plain sign-off.
+- Avoid these words unless the source itself uses them: delve, tapestry, testament,
+  pivotal, underscore, showcase, vibrant, multifaceted, interplay, intricate,
+  meticulous, leverage, foster, landscape, quietly.
+- Vary sentence length naturally. No em dashes: use a full stop or a comma.
+"""
+
 MIN_WORDS = 1100
 MAX_WORDS = 1400
+
+
+# Phrase-level tells from Wikipedia's "Signs of AI writing". Deliberately narrow: single
+# words that are ordinary in news ("key", "landscape") are left to the prompt, not the lint.
+_AI_TELLS = re.compile(
+    r"\b(?:delv(?:e|es|ed|ing)|tapestry|testament|pivotal|multifaceted|interplay|"
+    r"meticulous(?:ly)?|underscor(?:e|es|ed|ing)|showcas(?:e|es|ed|ing)|vibrant|"
+    r"stands as|serves as|evolving landscape|turning point|marks a shift|"
+    r"it(?:'s| is) (?:important|worth) (?:to note|noting|remembering)|"
+    r"not (?:just|only) [^.,;]{1,60}? but|in (?:summary|conclusion)|"
+    r"observers (?:have|say)|experts (?:say|argue)|industry reports)\b",
+    re.IGNORECASE,
+)
+
+
+def clean_script(script: str) -> str:
+    """Remove punctuation that reads badly aloud: em and en dashes become commas."""
+    return re.sub(r"\s*[\u2014\u2013]\s*", ", ", script)
+
+
+def find_ai_tells(script: str) -> List[str]:
+    """Return the distinct machine-writing tells found in ``script`` (lower-cased)."""
+    return sorted({match.group(0).lower() for match in _AI_TELLS.finditer(script)})
 
 
 def _record(article_index: Dict[str, Dict[str, str]], article_id: str) -> Optional[Dict[str, str]]:
@@ -163,6 +218,7 @@ def build_prompt(narration_input: Dict[str, Any]) -> str:
         ("{min_words}", str(MIN_WORDS)),
         ("{max_words}", str(MAX_WORDS)),
         ("{FIDELITY_RULE}", FIDELITY_RULE),
+        ("{AI_WRITING_RULE}", AI_WRITING_RULE),
         ("{material}", render_material(narration_input)),
     ):
         prompt = prompt.replace(placeholder, value)
@@ -219,5 +275,9 @@ def generate_narration(narration_input: Dict[str, Any], client: Any) -> Optional
     if not script:
         logger.error("Claude returned no narration text")
         return None
+    script = clean_script(script)
+    tells = find_ai_tells(script)
+    if tells:
+        logger.warning("Narration contains likely AI-writing tells: %s", ", ".join(tells))
     logger.info("Narration generated (%d words)", len(script.split()))
     return script
