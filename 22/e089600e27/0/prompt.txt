@@ -1,0 +1,1676 @@
+merged
+
+---
+
+<pasted_content id="9410">
+2026-10-26T08:23:08.8037227Z Current runner version: '2.338.0'
+2026-10-26T08:23:08.8052955Z ##[group]Runner Image Provisioner
+2026-10-26T08:23:08.8053552Z Hosted Compute Agent
+2026-10-26T08:23:08.8053900Z Version: 20261021.618
+2026-10-26T08:23:08.8054261Z Commit: 21505ad2541d5be6135ed84fc33697146cf75b8e
+2026-10-26T08:23:08.8054755Z Build Date: 2026-10-21T00:45:21Z
+2026-10-26T08:23:08.8055155Z Worker ID: {dd2d7ed4-235c-4182-abbc-f22ef88c387f}
+2026-10-26T08:23:08.8055774Z Region: southcentralus
+2026-10-26T08:23:08.8056125Z Cloud: Azure
+2026-10-26T08:23:08.8056443Z ##[endgroup]
+2026-10-26T08:23:08.8057242Z ##[group]Operating System
+2026-10-26T08:23:08.8057654Z Ubuntu
+2026-10-26T08:23:08.8057991Z 26.04.1
+2026-10-26T08:23:08.8058302Z LTS
+2026-10-26T08:23:08.8058603Z ##[endgroup]
+2026-10-26T08:23:08.8059206Z ##[group]Runner Image
+2026-10-26T08:23:08.8059551Z Image: ubuntu-26.04
+2026-10-26T08:23:08.8059869Z Version: 20261012.163.1
+2026-10-26T08:23:08.8060631Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261012.163/images/ubuntu/Ubuntu2604-Readme.md
+2026-10-26T08:23:08.8061551Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261012.163
+2026-10-26T08:23:08.8062095Z ##[endgroup]
+2026-10-26T08:23:08.8062771Z ##[group]GITHUB_TOKEN Permissions
+2026-10-26T08:23:08.8064107Z Contents: read
+2026-10-26T08:23:08.8064442Z Metadata: read
+2026-10-26T08:23:08.8064870Z ##[endgroup]
+2026-10-26T08:23:08.8066282Z Secret source: Actions
+2026-10-26T08:23:08.8066879Z Cache mode: write
+2026-10-26T08:23:08.8067271Z Prepare workflow directory
+2026-10-26T08:23:08.8267462Z Prepare all required actions
+2026-10-26T08:23:08.8297767Z Getting action download info
+2026-10-26T08:23:09.0809034Z Download action repository 'actions/checkout@v7' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-10-26T08:23:09.1453539Z Download action repository 'actions/setup-python@v7' (SHA:6d4fd22b20465ccc0f7354476588e8df7c9ca0e0)
+2026-10-26T08:23:09.6259562Z Download action repository 'astral-sh/setup-uv@v7' (SHA:37802adc94f370d6bfd71619e3f0bf239e1f3b78)
+2026-10-26T08:23:10.1160408Z Download action repository 'actions/setup-node@v7' (SHA:949feb2413d6458794dcd2491c4babbbce0c15c1)
+2026-10-26T08:23:10.5868972Z Download action repository 'aws-actions/configure-aws-credentials@v6' (SHA:e1253824e5c10ff9df46874f81ed3ec929e19cfd)
+2026-10-26T08:23:11.0383504Z Complete job name: deploy
+2026-10-26T08:23:11.0810757Z ##[group]Run actions/checkout@v7
+2026-10-26T08:23:11.0811092Z with:
+2026-10-26T08:23:11.0811303Z   repository: eamonmason/rss-email
+2026-10-26T08:23:11.0813004Z   token: ***
+2026-10-26T08:23:11.0813196Z   ssh-strict: true
+2026-10-26T08:23:11.0813401Z   ssh-user: git
+2026-10-26T08:23:11.0813606Z   persist-credentials: true
+2026-10-26T08:23:11.0813819Z   clean: true
+2026-10-26T08:23:11.0814027Z   sparse-checkout-cone-mode: true
+2026-10-26T08:23:11.0814257Z   fetch-depth: 1
+2026-10-26T08:23:11.0814455Z   fetch-tags: false
+2026-10-26T08:23:11.0814657Z   show-progress: true
+2026-10-26T08:23:11.0814864Z   lfs: false
+2026-10-26T08:23:11.0815068Z   submodules: false
+2026-10-26T08:23:11.0815268Z   set-safe-directory: true
+2026-10-26T08:23:11.0815500Z   allow-unsafe-pr-checkout: false
+2026-10-26T08:23:11.0815927Z ##[endgroup]
+2026-10-26T08:23:11.1520716Z Syncing repository: eamonmason/rss-email
+2026-10-26T08:23:11.1521702Z ##[group]Getting Git version info
+2026-10-26T08:23:11.1522071Z Working directory is '/home/runner/work/rss-email/rss-email'
+2026-10-26T08:23:11.1522564Z [command]/usr/bin/git version
+2026-10-26T08:23:11.1522776Z git version 2.55.0
+2026-10-26T08:23:11.1523474Z ##[endgroup]
+2026-10-26T08:23:11.1526987Z Temporarily overriding HOME='/home/runner/work/_temp/581233e3-d396-4067-b986-dfe48690a94a' before making global git config changes
+2026-10-26T08:23:11.1527760Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-26T08:23:11.1528420Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/rss-email/rss-email
+2026-10-26T08:23:11.1558281Z Deleting the contents of '/home/runner/work/rss-email/rss-email'
+2026-10-26T08:23:11.1560355Z ##[group]Determining repository object format
+2026-10-26T08:23:11.1561650Z ##[endgroup]
+2026-10-26T08:23:11.1562132Z ##[group]Initializing the repository
+2026-10-26T08:23:11.1564881Z [command]/usr/bin/git init /home/runner/work/rss-email/rss-email
+2026-10-26T08:23:11.1647332Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-10-26T08:23:11.1648155Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-10-26T08:23:11.1648514Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-10-26T08:23:11.1648799Z hint: call:
+2026-10-26T08:23:11.1648972Z hint:
+2026-10-26T08:23:11.1649209Z hint: 	git config --global init.defaultBranch <name>
+2026-10-26T08:23:11.1649445Z hint:
+2026-10-26T08:23:11.1649680Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-10-26T08:23:11.1650022Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-10-26T08:23:11.1650315Z hint:
+2026-10-26T08:23:11.1650502Z hint: 	git branch -m <name>
+2026-10-26T08:23:11.1650698Z hint:
+2026-10-26T08:23:11.1650949Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-10-26T08:23:11.1655519Z Initialized empty Git repository in /home/runner/work/rss-email/rss-email/.git/
+2026-10-26T08:23:11.1662002Z [command]/usr/bin/git remote add origin https://github.com/eamonmason/rss-email
+2026-10-26T08:23:11.1700791Z ##[endgroup]
+2026-10-26T08:23:11.1701323Z ##[group]Disabling automatic garbage collection
+2026-10-26T08:23:11.1703174Z [command]/usr/bin/git config --local gc.auto 0
+2026-10-26T08:23:11.1729467Z ##[endgroup]
+2026-10-26T08:23:11.1729942Z ##[group]Setting up auth
+2026-10-26T08:23:11.1730284Z Removing SSH command configuration
+2026-10-26T08:23:11.1733385Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-26T08:23:11.1765224Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-26T08:23:11.2095519Z Removing HTTP extra header
+2026-10-26T08:23:11.2100488Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-26T08:23:11.2127510Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-26T08:23:11.2328313Z Removing includeIf entries pointing to credentials config files
+2026-10-26T08:23:11.2331848Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-26T08:23:11.2357435Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-26T08:23:11.2558786Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-eb0780da-5a15-43c5-b8f4-bee0a92020fb.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-10-26T08:23:11.2587155Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/rss-email/rss-email/.git.path /home/runner/work/_temp/git-credentials-eb0780da-5a15-43c5-b8f4-bee0a92020fb.config
+2026-10-26T08:23:11.2611978Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/rss-email/rss-email/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-eb0780da-5a15-43c5-b8f4-bee0a92020fb.config
+2026-10-26T08:23:11.2638813Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-eb0780da-5a15-43c5-b8f4-bee0a92020fb.config
+2026-10-26T08:23:11.2662949Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-eb0780da-5a15-43c5-b8f4-bee0a92020fb.config
+2026-10-26T08:23:11.2687804Z ##[endgroup]
+2026-10-26T08:23:11.2688149Z ##[group]Fetching the repository
+2026-10-26T08:23:11.2691746Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +7a6cbbe88602bc0d72a6b058fb7443b6d56f7014:refs/remotes/origin/main
+2026-10-26T08:23:11.8546725Z From https://github.com/eamonmason/rss-email
+2026-10-26T08:23:11.8547501Z  * [new ref]         7a6cbbe88602bc0d72a6b058fb7443b6d56f7014 -> origin/main
+2026-10-26T08:23:11.8556292Z [command]/usr/bin/git branch --list --remote origin/main
+2026-10-26T08:23:11.8578581Z   origin/main
+2026-10-26T08:23:11.8585097Z [command]/usr/bin/git rev-parse refs/remotes/origin/main
+2026-10-26T08:23:11.8603724Z 7a6cbbe88602bc0d72a6b058fb7443b6d56f7014
+2026-10-26T08:23:11.8606863Z ##[endgroup]
+2026-10-26T08:23:11.8607216Z ##[group]Determining the checkout info
+2026-10-26T08:23:11.8607657Z ##[endgroup]
+2026-10-26T08:23:11.8611013Z [command]/usr/bin/git sparse-checkout disable
+2026-10-26T08:23:11.8653582Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-10-26T08:23:11.8678790Z ##[group]Checking out the ref
+2026-10-26T08:23:11.8681746Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2026-10-26T08:23:11.8803747Z Switched to a new branch 'main'
+2026-10-26T08:23:11.8805325Z branch 'main' set up to track 'origin/main'.
+2026-10-26T08:23:11.8809571Z ##[endgroup]
+2026-10-26T08:23:11.8844796Z [command]/usr/bin/git log -1 --format=%H
+2026-10-26T08:23:11.8866107Z 7a6cbbe88602bc0d72a6b058fb7443b6d56f7014
+2026-10-26T08:23:11.9121160Z ##[group]Run actions/setup-python@v7
+2026-10-26T08:23:11.9121320Z with:
+2026-10-26T08:23:11.9121433Z   python-version: 3.13
+2026-10-26T08:23:11.9121557Z   check-latest: false
+2026-10-26T08:23:11.9123019Z   token: ***
+2026-10-26T08:23:11.9123195Z   mirror: https://raw.githubusercontent.com/actions/python-versions/main
+2026-10-26T08:23:11.9123412Z   update-environment: true
+2026-10-26T08:23:11.9123550Z   allow-prereleases: false
+2026-10-26T08:23:11.9123680Z   freethreaded: false
+2026-10-26T08:23:11.9123801Z ##[endgroup]
+2026-10-26T08:23:11.9813843Z ##[group]Installed versions
+2026-10-26T08:23:11.9874302Z Successfully set up CPython (3.13.16)
+2026-10-26T08:23:11.9874680Z ##[endgroup]
+2026-10-26T08:23:11.9986286Z ##[group]Run astral-sh/setup-uv@v7
+2026-10-26T08:23:11.9986462Z with:
+2026-10-26T08:23:11.9986588Z   activate-environment: false
+2026-10-26T08:23:11.9986772Z   working-directory: /home/runner/work/rss-email/rss-email
+2026-10-26T08:23:11.9988373Z   github-token: ***
+2026-10-26T08:23:11.9988494Z   enable-cache: auto
+2026-10-26T08:23:11.9988804Z   cache-dependency-glob: **/*requirements*.txt
+**/*requirements*.in
+**/*constraints*.txt
+**/*constraints*.in
+**/pyproject.toml
+**/uv.lock
+**/*.py.lock
+
+2026-10-26T08:23:11.9989358Z   restore-cache: true
+2026-10-26T08:23:11.9989538Z   save-cache: true
+2026-10-26T08:23:11.9989714Z   prune-cache: true
+2026-10-26T08:23:11.9989908Z   cache-python: false
+2026-10-26T08:23:11.9990096Z   ignore-nothing-to-cache: false
+2026-10-26T08:23:11.9990339Z   ignore-empty-workdir: false
+2026-10-26T08:23:11.9990586Z   add-problem-matchers: true
+2026-10-26T08:23:11.9990828Z   resolution-strategy: highest
+2026-10-26T08:23:11.9991046Z env:
+2026-10-26T08:23:11.9991304Z   pythonLocation: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T08:23:11.9991642Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.13.16/x64/lib/pkgconfig
+2026-10-26T08:23:11.9991973Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T08:23:11.9992276Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T08:23:11.9992574Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T08:23:11.9992868Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.13.16/x64/lib
+2026-10-26T08:23:11.9993125Z ##[endgroup]
+2026-10-26T08:23:12.1060079Z Trying to find version for uv in: /home/runner/work/rss-email/rss-email/uv.toml
+2026-10-26T08:23:12.1060643Z Could not find file: /home/runner/work/rss-email/rss-email/uv.toml
+2026-10-26T08:23:12.1061102Z Trying to find version for uv in: /home/runner/work/rss-email/rss-email/pyproject.toml
+2026-10-26T08:23:12.1076428Z Could not determine uv version from uv.toml or pyproject.toml. Falling back to latest.
+2026-10-26T08:23:12.1086338Z Fetching version data from https://raw.githubusercontent.com/astral-sh/versions/main/v1/uv.ndjson ...
+2026-10-26T08:23:12.2696414Z Downloading uv from "https://releases.astral.sh/github/uv/releases/download/0.13.5/uv-x86_64-unknown-linux-gnu.tar.gz" ...
+2026-10-26T08:23:12.4535477Z [command]/usr/bin/tar xz --warning=no-unknown-keyword --overwrite -C /home/runner/work/_temp/ebb1b68b-9312-4e5d-9429-b20aa0c0c82c -f /home/runner/work/_temp/958e2841-9195-41e3-bd7d-ca4dd0e4ebb1
+2026-10-26T08:23:12.7308984Z Added /home/runner/.local/bin to the path
+2026-10-26T08:23:12.7312153Z Added /opt/hostedtoolcache/uv/0.13.5/x86_64 to the path
+2026-10-26T08:23:12.7312951Z Set UV_PYTHON_INSTALL_DIR to /home/runner/work/_temp/uv-python-dir
+2026-10-26T08:23:12.7314137Z Added /home/runner/work/_temp/uv-python-dir to the path
+2026-10-26T08:23:12.7320732Z Set UV_CACHE_DIR to /home/runner/work/_temp/setup-uv-cache
+2026-10-26T08:23:12.7321144Z Successfully installed uv version 0.13.5
+2026-10-26T08:23:13.1685849Z Searching files using cache dependency glob: /home/runner/work/rss-email/rss-email/**/*requirements*.txt,/home/runner/work/rss-email/rss-email/**/*requirements*.in,/home/runner/work/rss-email/rss-email/**/*constraints*.txt,/home/runner/work/rss-email/rss-email/**/*constraints*.in,/home/runner/work/rss-email/rss-email/**/pyproject.toml,/home/runner/work/rss-email/rss-email/**/uv.lock,/home/runner/work/rss-email/rss-email/**/*.py.lock
+2026-10-26T08:23:13.1804583Z /home/runner/work/rss-email/rss-email/pyproject.toml
+2026-10-26T08:23:13.1849610Z /home/runner/work/rss-email/rss-email/uv.lock
+2026-10-26T08:23:13.1855998Z Found 2 files to hash.
+2026-10-26T08:23:13.1914498Z Trying to restore cache from GitHub Actions cache with key: setup-uv-2-x86_64-unknown-linux-gnu-ubuntu-26.04-3.13.16-pruned-934b2e8287e07377aea38baa6cf3620fc02e5187fb3363fae9f8b4a8d3777940
+2026-10-26T08:23:13.3402107Z Cache hit for: setup-uv-2-x86_64-unknown-linux-gnu-ubuntu-26.04-3.13.16-pruned-934b2e8287e07377aea38baa6cf3620fc02e5187fb3363fae9f8b4a8d3777940
+2026-10-26T08:23:13.6652741Z Received 1090 of 1090 (100.0%), 0.0 MBs/sec
+2026-10-26T08:23:13.6653315Z Cache Size: ~0 MB (1090 B)
+2026-10-26T08:23:13.6669175Z [command]/usr/bin/tar -xf /home/runner/work/_temp/39608d16-8b04-4ae7-b9aa-6856f81e0270/cache.tzst -P -C /home/runner/work/rss-email/rss-email --use-compress-program unzstd
+2026-10-26T08:23:13.6740143Z Cache restored successfully
+2026-10-26T08:23:13.6744561Z cache restored from GitHub Actions cache with key: setup-uv-2-x86_64-unknown-linux-gnu-ubuntu-26.04-3.13.16-pruned-934b2e8287e07377aea38baa6cf3620fc02e5187fb3363fae9f8b4a8d3777940
+2026-10-26T08:23:13.7396274Z ##[group]Run actions/setup-node@v7
+2026-10-26T08:23:13.7396447Z with:
+2026-10-26T08:23:13.7396573Z   node-version: 20
+2026-10-26T08:23:13.7396701Z   check-latest: false
+2026-10-26T08:23:13.7398205Z   token: ***
+2026-10-26T08:23:13.7398349Z   package-manager-cache: true
+2026-10-26T08:23:13.7398498Z env:
+2026-10-26T08:23:13.7398647Z   pythonLocation: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T08:23:13.7398899Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.13.16/x64/lib/pkgconfig
+2026-10-26T08:23:13.7399136Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T08:23:13.7399361Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T08:23:13.7399575Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T08:23:13.7399800Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.13.16/x64/lib
+2026-10-26T08:23:13.7400060Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-10-26T08:23:13.7417491Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-10-26T08:23:13.7417673Z ##[endgroup]
+2026-10-26T08:23:13.8269878Z Attempting to download 20...
+2026-10-26T08:23:14.6877178Z Acquiring 20.20.2 - x64 from https://github.com/actions/node-versions/releases/download/20.20.2-23521894959/node-20.20.2-linux-x64.tar.gz
+2026-10-26T08:23:15.1231693Z Extracting ...
+2026-10-26T08:23:15.1324352Z [command]/usr/bin/tar xz --strip 1 --warning=no-unknown-keyword --overwrite -C /home/runner/work/_temp/7d572215-ec1c-4e02-8ca8-7e6f5370b41b -f /home/runner/work/_temp/cb11ef3e-bed1-42e8-b90b-250938ba64b6
+2026-10-26T08:23:15.6005713Z Adding to the cache ...
+2026-10-26T08:23:17.1164413Z ##[group]Environment details
+2026-10-26T08:23:17.2620720Z node: v20.20.2
+2026-10-26T08:23:17.2621002Z npm: 10.8.2
+2026-10-26T08:23:17.2621182Z yarn: 1.22.22
+2026-10-26T08:23:17.2621822Z ##[endgroup]
+2026-10-26T08:23:17.2784183Z ##[group]Run npm ci
+2026-10-26T08:23:17.2784362Z [36;1mnpm ci[0m
+2026-10-26T08:23:17.2916362Z shell: /usr/bin/bash -e {0}
+2026-10-26T08:23:17.2916522Z env:
+2026-10-26T08:23:17.2916687Z   pythonLocation: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T08:23:17.2916937Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.13.16/x64/lib/pkgconfig
+2026-10-26T08:23:17.2917186Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T08:23:17.2917417Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T08:23:17.2917633Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T08:23:17.2917852Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.13.16/x64/lib
+2026-10-26T08:23:17.2918072Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-10-26T08:23:17.2918281Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-10-26T08:23:17.2918451Z ##[endgroup]
+2026-10-26T08:23:20.8387625Z 
+2026-10-26T08:23:20.8393283Z added 67 packages, and audited 89 packages in 3s
+2026-10-26T08:23:20.8393493Z 
+2026-10-26T08:23:20.8393624Z 11 packages are looking for funding
+2026-10-26T08:23:20.8393829Z   run `npm fund` for details
+2026-10-26T08:23:20.8394419Z 
+2026-10-26T08:23:20.8394517Z found 0 vulnerabilities
+2026-10-26T08:23:20.8580107Z ##[group]Run aws-actions/configure-aws-credentials@v6
+2026-10-26T08:23:20.8580299Z with:
+2026-10-26T08:23:20.8580482Z   role-to-assume: arn:aws:iam::002681522526:role/rss-email-github-actions-deploy
+2026-10-26T08:23:20.8580718Z   aws-region: eu-west-1
+2026-10-26T08:23:20.8580867Z   role-session-name: rss-email-deploy-40291733888
+2026-10-26T08:23:20.8581047Z   audience: sts.amazonaws.com
+2026-10-26T08:23:20.8581186Z env:
+2026-10-26T08:23:20.8581330Z   pythonLocation: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T08:23:20.8581561Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.13.16/x64/lib/pkgconfig
+2026-10-26T08:23:20.8581792Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T08:23:20.8581999Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T08:23:20.8582205Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T08:23:20.8582414Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.13.16/x64/lib
+2026-10-26T08:23:20.8582648Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-10-26T08:23:20.8582854Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-10-26T08:23:20.8583019Z ##[endgroup]
+2026-10-26T08:23:21.1206030Z Assuming role with OIDC
+2026-10-26T08:23:21.4574330Z Authenticated as assumedRoleId AROAQBH6UZFPDNUESFOI7:rss-email-deploy-40291733888
+2026-10-26T08:23:21.8080396Z ##[group]Run set -euo pipefail
+2026-10-26T08:23:21.8080609Z [36;1mset -euo pipefail[0m
+2026-10-26T08:23:21.8080830Z [36;1mresponse=$(aws ssm get-parameters --names $PARAMETERS --output json)[0m
+2026-10-26T08:23:21.8081059Z [36;1m[0m
+2026-10-26T08:23:21.8081223Z [36;1m# Fail loudly rather than deploying with blanks - an empty[0m
+2026-10-26T08:23:21.8081488Z [36;1m# EMAIL_RECIPIENTS would wipe the SES receipt rule's recipient list.[0m
+2026-10-26T08:23:21.8081752Z [36;1minvalid=$(jq -r '.InvalidParameters | join(", ")' <<< "$response")[0m
+2026-10-26T08:23:21.8081966Z [36;1mif [ -n "$invalid" ]; then[0m
+2026-10-26T08:23:21.8082156Z [36;1m  echo "::error::Missing Parameter Store parameters: $invalid"[0m
+2026-10-26T08:23:21.8082359Z [36;1m  exit 1[0m
+2026-10-26T08:23:21.8082611Z [36;1mfi[0m
+2026-10-26T08:23:21.8082723Z [36;1m[0m
+2026-10-26T08:23:21.8082852Z [36;1mwhile IFS=$'\t' read -r name value; do[0m
+2026-10-26T08:23:21.8083046Z [36;1m  key=${name#rss-email-}[0m
+2026-10-26T08:23:21.8083246Z [36;1m  # Account id and region are not sensitive, and masking the region[0m
+2026-10-26T08:23:21.8083476Z [36;1m  # would garble every ARN in the deploy log.[0m
+2026-10-26T08:23:21.8083651Z [36;1m  case "$key" in[0m
+2026-10-26T08:23:21.8083802Z [36;1m    AWS_ACCOUNT_ID|AWS_REGION) ;;[0m
+2026-10-26T08:23:21.8083971Z [36;1m    *) echo "::add-mask::$value" ;;[0m
+2026-10-26T08:23:21.8084127Z [36;1m  esac[0m
+2026-10-26T08:23:21.8084259Z [36;1m  echo "$key=$value" >> "$GITHUB_ENV"[0m
+2026-10-26T08:23:21.8084425Z [36;1m  echo "Loaded $key"[0m
+2026-10-26T08:23:21.8084628Z [36;1mdone < <(jq -r '.Parameters[] | [.Name, .Value] | @tsv' <<< "$response")[0m
+2026-10-26T08:23:21.8133890Z shell: /usr/bin/bash -e {0}
+2026-10-26T08:23:21.8134037Z env:
+2026-10-26T08:23:21.8134211Z   pythonLocation: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T08:23:21.8134452Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.13.16/x64/lib/pkgconfig
+2026-10-26T08:23:21.8134705Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T08:23:21.8134927Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T08:23:21.8135146Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T08:23:21.8135373Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.13.16/x64/lib
+2026-10-26T08:23:21.8135747Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-10-26T08:23:21.8135963Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-10-26T08:23:21.8136144Z   AWS_DEFAULT_REGION: eu-west-1
+2026-10-26T08:23:21.8136292Z   AWS_REGION: eu-west-1
+2026-10-26T08:23:21.8136695Z   AWS_ACCESS_KEY_ID: ***
+2026-10-26T08:23:21.8136887Z   AWS_SECRET_ACCESS_KEY: ***
+2026-10-26T08:23:21.8139203Z   AWS_SESSION_TOKEN: ***
+2026-10-26T08:23:21.8139569Z   PARAMETERS: rss-email-AWS_ACCOUNT_ID rss-email-AWS_REGION rss-email-EMAIL_RECIPIENTS rss-email-SOURCE_DOMAIN rss-email-SOURCE_EMAIL_ADDRESS rss-email-TO_EMAIL_ADDRESS
+2026-10-26T08:23:21.8139951Z ##[endgroup]
+2026-10-26T08:23:24.5981545Z Loaded AWS_ACCOUNT_ID
+2026-10-26T08:23:24.5981798Z Loaded AWS_REGION
+2026-10-26T08:23:24.5986172Z Loaded EMAIL_RECIPIENTS
+2026-10-26T08:23:24.5987050Z Loaded SOURCE_DOMAIN
+2026-10-26T08:23:24.5987855Z Loaded SOURCE_EMAIL_ADDRESS
+2026-10-26T08:23:24.5988258Z Loaded TO_EMAIL_ADDRESS
+2026-10-26T08:23:24.6485361Z ##[group]Run npx cdk deploy RSSEmailStack --require-approval never
+2026-10-26T08:23:24.6485820Z [36;1mnpx cdk deploy RSSEmailStack --require-approval never[0m
+2026-10-26T08:23:24.6534952Z shell: /usr/bin/bash -e {0}
+2026-10-26T08:23:24.6535107Z env:
+2026-10-26T08:23:24.6535276Z   pythonLocation: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T08:23:24.6535597Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.13.16/x64/lib/pkgconfig
+2026-10-26T08:23:24.6535847Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T08:23:24.6536086Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T08:23:24.6536309Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T08:23:24.6536538Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.13.16/x64/lib
+2026-10-26T08:23:24.6536765Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-10-26T08:23:24.6536982Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-10-26T08:23:24.6537202Z   AWS_DEFAULT_REGION: eu-west-1
+2026-10-26T08:23:24.6537359Z   AWS_REGION: eu-west-1
+2026-10-26T08:23:24.6537626Z   AWS_ACCESS_KEY_ID: ***
+2026-10-26T08:23:24.6537862Z   AWS_SECRET_ACCESS_KEY: ***
+2026-10-26T08:23:24.6540174Z   AWS_SESSION_TOKEN: ***
+2026-10-26T08:23:24.6540319Z   AWS_ACCOUNT_ID: 002681522526
+2026-10-26T08:23:24.6540747Z   EMAIL_RECIPIENTS: ***
+2026-10-26T08:23:24.6540941Z   SOURCE_DOMAIN: ***
+2026-10-26T08:23:24.6541108Z   SOURCE_EMAIL_ADDRESS: ***
+2026-10-26T08:23:24.6541274Z   TO_EMAIL_ADDRESS: ***
+2026-10-26T08:23:24.6541534Z ##[endgroup]
+2026-10-26T08:23:25.4137292Z (node:2286) Warning: NodeVersionSupportWarning: The AWS SDK for JavaScript (v3)
+2026-10-26T08:23:25.4137926Z versions published after the first week of January 2027
+2026-10-26T08:23:25.4138380Z will require node >=22. You are running node v20.20.2.
+2026-10-26T08:23:25.4138609Z 
+2026-10-26T08:23:25.4138832Z To continue receiving updates to AWS services, bug fixes,
+2026-10-26T08:23:25.4139421Z and security updates please upgrade to node >=22.
+2026-10-26T08:23:25.4139653Z 
+2026-10-26T08:23:25.4139922Z More information can be found at: https://a.co/c895JFp
+2026-10-26T08:23:25.4140440Z (Use `node --trace-warnings ...` to show where the warning was created)
+2026-10-26T08:23:26.6814174Z [32m# This file was autogenerated by uv via the following command:[39m
+2026-10-26T08:23:26.6815090Z [32m#    uv export --frozen --no-dev --no-emit-project --no-hashes -o /tmp/rss-email-layer-KqixcC/requirements.txt[39m
+2026-10-26T08:23:26.6815874Z annotated-types==0.7.0
+2026-10-26T08:23:26.6816183Z [32m    # via pydantic[39m
+2026-10-26T08:23:26.6816429Z anthropic==1.0.0
+2026-10-26T08:23:26.6816628Z [32m    # via rss-email[39m
+2026-10-26T08:23:26.6816787Z anyio==4.14.2
+2026-10-26T08:23:26.6816943Z [32m    # via[39m
+2026-10-26T08:23:26.6817111Z [32m    #   anthropic[39m
+2026-10-26T08:23:26.6817284Z [32m    #   httpx[39m
+2026-10-26T08:23:26.6817451Z [32m    #   httpx2[39m
+2026-10-26T08:23:26.6817606Z beautifulsoup4==4.14.3
+2026-10-26T08:23:26.6817790Z [32m    # via rss-email[39m
+2026-10-26T08:23:26.6817937Z boto3==1.42.85
+2026-10-26T08:23:26.6818325Z [32m    # via rss-email[39m
+2026-10-26T08:23:26.6818555Z botocore==1.42.85
+2026-10-26T08:23:26.6818775Z [32m    # via[39m
+2026-10-26T08:23:26.6819006Z [32m    #   boto3[39m
+2026-10-26T08:23:26.6819255Z [32m    #   s3transfer[39m
+2026-10-26T08:23:26.6819522Z brotli==1.2.1
+2026-10-26T08:23:26.6819768Z [32m    # via rss-email[39m
+2026-10-26T08:23:26.6820011Z certifi==2026.10.19
+2026-10-26T08:23:26.6820239Z [32m    # via[39m
+2026-10-26T08:23:26.6820489Z [32m    #   httpcore[39m
+2026-10-26T08:23:26.6820750Z [32m    #   httpx[39m
+2026-10-26T08:23:26.6820987Z docstring-parser==0.17.0
+2026-10-26T08:23:26.6821278Z [32m    # via anthropic[39m
+2026-10-26T08:23:26.6821530Z feedparser==6.0.12
+2026-10-26T08:23:26.6821787Z [32m    # via rss-email[39m
+2026-10-26T08:23:26.6822065Z h11==0.16.0
+2026-10-26T08:23:26.6822271Z [32m    # via[39m
+2026-10-26T08:23:26.6822872Z [32m    #   httpcore[39m
+2026-10-26T08:23:26.6823180Z [32m    #   httpcore2[39m
+2026-10-26T08:23:26.6823454Z httpcore==1.0.9
+2026-10-26T08:23:26.6823714Z [32m    # via httpx[39m
+2026-10-26T08:23:26.6824053Z httpcore2==2.12.0 ; sys_platform != 'emscripten'
+2026-10-26T08:23:26.6824387Z [32m    # via httpx2[39m
+2026-10-26T08:23:26.6824606Z httpx==0.28.1
+2026-10-26T08:23:26.6824842Z [32m    # via rss-email[39m
+2026-10-26T08:23:26.6825062Z httpx2==2.12.0
+2026-10-26T08:23:26.6825299Z [32m    # via anthropic[39m
+2026-10-26T08:23:26.6825769Z httpx2-jsfetch==1.0 ; sys_platform == 'emscripten'
+2026-10-26T08:23:26.6826103Z [32m    # via httpx2[39m
+2026-10-26T08:23:26.6826326Z idna==3.19
+2026-10-26T08:23:26.6826548Z [32m    # via[39m
+2026-10-26T08:23:26.6826790Z [32m    #   anyio[39m
+2026-10-26T08:23:26.6827044Z [32m    #   httpx[39m
+2026-10-26T08:23:26.6827306Z [32m    #   httpx2[39m
+2026-10-26T08:23:26.6827534Z jiter==0.13.0
+2026-10-26T08:23:26.6827800Z [32m    # via anthropic[39m
+2026-10-26T08:23:26.6828048Z jmespath==1.1.0
+2026-10-26T08:23:26.6828285Z [32m    # via[39m
+2026-10-26T08:23:26.6828557Z [32m    #   boto3[39m
+2026-10-26T08:23:26.6828818Z [32m    #   botocore[39m
+2026-10-26T08:23:26.6829046Z pydantic==2.12.5
+2026-10-26T08:23:26.6829295Z [32m    # via[39m
+2026-10-26T08:23:26.6829559Z [32m    #   anthropic[39m
+2026-10-26T08:23:26.6829846Z [32m    #   rss-email[39m
+2026-10-26T08:23:26.6830103Z pydantic-core==2.41.5
+2026-10-26T08:23:26.6830384Z [32m    # via pydantic[39m
+2026-10-26T08:23:26.6830874Z python-dateutil==2.9.0.post0
+2026-10-26T08:23:26.6831174Z [32m    # via botocore[39m
+2026-10-26T08:23:26.6831435Z python-dotenv==1.2.2
+2026-10-26T08:23:26.6831718Z [32m    # via rss-email[39m
+2026-10-26T08:23:26.6831970Z regex==2026.4.4
+2026-10-26T08:23:26.6832348Z [32m    # via rss-email[39m
+2026-10-26T08:23:26.6832636Z s3transfer==0.16.0
+2026-10-26T08:23:26.6832899Z [32m    # via boto3[39m
+2026-10-26T08:23:26.6833144Z sgmllib3k==1.0.0
+2026-10-26T08:23:26.6833435Z [32m    # via feedparser[39m
+2026-10-26T08:23:26.6833677Z six==1.17.0
+2026-10-26T08:23:26.6833964Z [32m    # via python-dateutil[39m
+2026-10-26T08:23:26.6834224Z sniffio==1.3.1
+2026-10-26T08:23:26.6834488Z [32m    # via anthropic[39m
+2026-10-26T08:23:26.6834730Z soupsieve==2.9
+2026-10-26T08:23:26.6835016Z [32m    # via beautifulsoup4[39m
+2026-10-26T08:23:26.6835355Z truststore==0.10.4 ; sys_platform != 'emscripten'
+2026-10-26T08:23:26.6836090Z [32m    # via[39m
+2026-10-26T08:23:26.6836347Z [32m    #   httpcore2[39m
+2026-10-26T08:23:26.6836627Z [32m    #   httpx2[39m
+2026-10-26T08:23:26.6836884Z typing-extensions==4.15.0
+2026-10-26T08:23:26.6837148Z [32m    # via[39m
+2026-10-26T08:23:26.6837411Z [32m    #   anthropic[39m
+2026-10-26T08:23:26.6837718Z [32m    #   beautifulsoup4[39m
+2026-10-26T08:23:26.6838019Z [32m    #   pydantic[39m
+2026-10-26T08:23:26.6838323Z [32m    #   pydantic-core[39m
+2026-10-26T08:23:26.6838647Z [32m    #   typing-inspection[39m
+2026-10-26T08:23:26.6838928Z typing-inspection==0.4.2
+2026-10-26T08:23:26.6839224Z [32m    # via pydantic[39m
+2026-10-26T08:23:26.6839473Z urllib3==2.8.0
+2026-10-26T08:23:26.6839743Z [32m    # via botocore[39m
+2026-10-26T08:23:26.6839976Z w3lib==2.4.1
+2026-10-26T08:23:26.6840231Z [32m    # via rss-email[39m
+2026-10-26T08:23:27.3249000Z Bundling asset RSSEmailStack/RSSLibsLayer/Code/Stage...
+2026-10-26T08:23:27.4143345Z Unable to find image 'public.ecr.aws/sam/build-python3.13:latest' locally
+2026-10-26T08:23:28.1125349Z latest: Pulling from sam/build-python3.13
+2026-10-26T08:23:28.3517730Z 8708c3946ac5: Pulling fs layer
+2026-10-26T08:23:28.3518089Z 1d29b796d543: Pulling fs layer
+2026-10-26T08:23:28.3518399Z 22dbaddd335b: Pulling fs layer
+2026-10-26T08:23:28.3518703Z faf3716b65cd: Pulling fs layer
+2026-10-26T08:23:28.3518984Z 9e6da502cc6d: Pulling fs layer
+2026-10-26T08:23:28.3519278Z 3a6c58be4efe: Pulling fs layer
+2026-10-26T08:23:28.3519557Z 416d51e9cbf9: Pulling fs layer
+2026-10-26T08:23:28.3519840Z 3bf19b1203b2: Pulling fs layer
+2026-10-26T08:23:28.3520293Z 3780cb9494d0: Pulling fs layer
+2026-10-26T08:23:28.3520467Z aaac8b8b6889: Pulling fs layer
+2026-10-26T08:23:28.3520639Z a414124ee2dc: Pulling fs layer
+2026-10-26T08:23:28.3520808Z 4e1d06d5193e: Pulling fs layer
+2026-10-26T08:23:28.3520972Z c042d7dd1261: Pulling fs layer
+2026-10-26T08:23:28.3521232Z 11cb0254c041: Pulling fs layer
+2026-10-26T08:23:28.3521503Z 79efe972c5d6: Pulling fs layer
+2026-10-26T08:23:28.3521775Z eee4429f6a20: Pulling fs layer
+2026-10-26T08:23:28.3522042Z 91111a564ab2: Pulling fs layer
+2026-10-26T08:23:28.5403248Z 9e6da502cc6d: Download complete
+2026-10-26T08:23:28.5403658Z 91111a564ab2: Download complete
+2026-10-26T08:23:28.5407953Z 8708c3946ac5: Download complete
+2026-10-26T08:23:28.6414484Z eee4429f6a20: Download complete
+2026-10-26T08:23:28.6462389Z 3bf19b1203b2: Download complete
+2026-10-26T08:23:28.6463347Z 416d51e9cbf9: Download complete
+2026-10-26T08:23:28.6483214Z 11cb0254c041: Download complete
+2026-10-26T08:23:28.9394558Z 79efe972c5d6: Download complete
+2026-10-26T08:23:29.7923414Z 22dbaddd335b: Download complete
+2026-10-26T08:23:30.1408131Z aaac8b8b6889: Download complete
+2026-10-26T08:23:30.3407484Z 3a6c58be4efe: Download complete
+2026-10-26T08:23:30.3408244Z faf3716b65cd: Download complete
+2026-10-26T08:23:30.3424312Z a414124ee2dc: Download complete
+2026-10-26T08:23:32.8429773Z aaac8b8b6889: Pull complete
+2026-10-26T08:23:33.6383475Z 4e1d06d5193e: Download complete
+2026-10-26T08:23:34.5385213Z 1d29b796d543: Download complete
+2026-10-26T08:23:34.6386933Z 3780cb9494d0: Download complete
+2026-10-26T08:23:34.6387794Z c042d7dd1261: Download complete
+2026-10-26T08:23:34.7397627Z 9e6da502cc6d: Pull complete
+2026-10-26T08:23:34.7446059Z 11cb0254c041: Pull complete
+2026-10-26T08:23:34.8403477Z 3bf19b1203b2: Pull complete
+2026-10-26T08:23:36.8399142Z 8708c3946ac5: Pull complete
+2026-10-26T08:23:36.8438817Z 4e1d06d5193e: Pull complete
+2026-10-26T08:23:38.2455789Z 1d29b796d543: Pull complete
+2026-10-26T08:23:41.4456659Z c042d7dd1261: Pull complete
+2026-10-26T08:23:43.2430097Z 3780cb9494d0: Pull complete
+2026-10-26T08:23:44.8411091Z 3a6c58be4efe: Pull complete
+2026-10-26T08:23:46.4420215Z a414124ee2dc: Pull complete
+2026-10-26T08:23:46.8410632Z 79efe972c5d6: Pull complete
+2026-10-26T08:23:48.0428536Z 22dbaddd335b: Pull complete
+2026-10-26T08:23:48.2396662Z eee4429f6a20: Pull complete
+2026-10-26T08:23:48.3391868Z 91111a564ab2: Pull complete
+2026-10-26T08:23:48.7138948Z 416d51e9cbf9: Pull complete
+2026-10-26T08:23:48.7144287Z faf3716b65cd: Pull complete
+2026-10-26T08:23:48.7144832Z Digest: sha256:6d1a9d0df5f2e1dd0e8fec080f94db186b8a7086fe4a1b6e560223c4bce3e9be
+2026-10-26T08:23:48.7145486Z Status: Downloaded newer image for public.ecr.aws/sam/build-python3.13:latest
+2026-10-26T08:23:55.8723520Z WARNING: The directory '/.cache/pip' or its parent directory is not owned or is not writable by the current user. The cache has been disabled. Check the permissions and owner of that directory. If executing pip with sudo, you should use sudo's -H flag.
+2026-10-26T08:23:55.9737840Z Ignoring httpx2-jsfetch: markers 'sys_platform == "emscripten"' don't match your environment
+2026-10-26T08:23:56.0471158Z Collecting annotated-types==0.7.0 (from -r /layer-requirements/requirements.txt (line 3))
+2026-10-26T08:23:56.1017981Z   Downloading annotated_types-0.7.0-py3-none-any.whl.metadata (15 kB)
+2026-10-26T08:23:56.1399296Z Collecting anthropic==1.0.0 (from -r /layer-requirements/requirements.txt (line 5))
+2026-10-26T08:23:56.1519494Z   Downloading anthropic-1.0.0-py3-none-any.whl.metadata (3.3 kB)
+2026-10-26T08:23:56.1698592Z Collecting anyio==4.14.2 (from -r /layer-requirements/requirements.txt (line 7))
+2026-10-26T08:23:56.1808139Z   Downloading anyio-4.14.2-py3-none-any.whl.metadata (4.6 kB)
+2026-10-26T08:23:56.1976236Z Collecting beautifulsoup4==4.14.3 (from -r /layer-requirements/requirements.txt (line 12))
+2026-10-26T08:23:56.2085044Z   Downloading beautifulsoup4-4.14.3-py3-none-any.whl.metadata (3.8 kB)
+2026-10-26T08:23:56.3189387Z Collecting boto3==1.42.85 (from -r /layer-requirements/requirements.txt (line 14))
+2026-10-26T08:23:56.3327311Z   Downloading boto3-1.42.85-py3-none-any.whl.metadata (6.7 kB)
+2026-10-26T08:23:56.4308172Z Collecting botocore==1.42.85 (from -r /layer-requirements/requirements.txt (line 16))
+2026-10-26T08:23:56.4430390Z   Downloading botocore-1.42.85-py3-none-any.whl.metadata (5.9 kB)
+2026-10-26T08:23:56.4687606Z Collecting brotli==1.2.1 (from -r /layer-requirements/requirements.txt (line 20))
+2026-10-26T08:23:56.4800702Z   Downloading brotli-1.2.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (6.1 kB)
+2026-10-26T08:23:56.4973818Z Collecting certifi==2026.10.19 (from -r /layer-requirements/requirements.txt (line 22))
+2026-10-26T08:23:56.5084385Z   Downloading certifi-2026.10.19-py3-none-any.whl.metadata (2.5 kB)
+2026-10-26T08:23:56.5235491Z Collecting docstring-parser==0.17.0 (from -r /layer-requirements/requirements.txt (line 26))
+2026-10-26T08:23:56.5345674Z   Downloading docstring_parser-0.17.0-py3-none-any.whl.metadata (3.5 kB)
+2026-10-26T08:23:56.5504158Z Collecting feedparser==6.0.12 (from -r /layer-requirements/requirements.txt (line 28))
+2026-10-26T08:23:56.5621043Z   Downloading feedparser-6.0.12-py3-none-any.whl.metadata (2.7 kB)
+2026-10-26T08:23:56.5772598Z Collecting h11==0.16.0 (from -r /layer-requirements/requirements.txt (line 30))
+2026-10-26T08:23:56.5881179Z   Downloading h11-0.16.0-py3-none-any.whl.metadata (8.3 kB)
+2026-10-26T08:23:56.6054777Z Collecting httpcore==1.0.9 (from -r /layer-requirements/requirements.txt (line 34))
+2026-10-26T08:23:56.6164362Z   Downloading httpcore-1.0.9-py3-none-any.whl.metadata (21 kB)
+2026-10-26T08:23:56.6356172Z Collecting httpcore2==2.12.0 (from -r /layer-requirements/requirements.txt (line 36))
+2026-10-26T08:23:56.6465047Z   Downloading httpcore2-2.12.0-py3-none-any.whl.metadata (25 kB)
+2026-10-26T08:23:56.6661428Z Collecting httpx==0.28.1 (from -r /layer-requirements/requirements.txt (line 38))
+2026-10-26T08:23:56.6771170Z   Downloading httpx-0.28.1-py3-none-any.whl.metadata (7.1 kB)
+2026-10-26T08:23:56.6929027Z Collecting httpx2==2.12.0 (from -r /layer-requirements/requirements.txt (line 40))
+2026-10-26T08:23:56.7042282Z   Downloading httpx2-2.12.0-py3-none-any.whl.metadata (9.5 kB)
+2026-10-26T08:23:56.7214167Z Collecting idna==3.19 (from -r /layer-requirements/requirements.txt (line 44))
+2026-10-26T08:23:56.7323730Z   Downloading idna-3.19-py3-none-any.whl.metadata (9.2 kB)
+2026-10-26T08:23:56.7832278Z Collecting jiter==0.13.0 (from -r /layer-requirements/requirements.txt (line 49))
+2026-10-26T08:23:56.7950276Z   Downloading jiter-0.13.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (5.2 kB)
+2026-10-26T08:23:56.8102364Z Collecting jmespath==1.1.0 (from -r /layer-requirements/requirements.txt (line 51))
+2026-10-26T08:23:56.8211560Z   Downloading jmespath-1.1.0-py3-none-any.whl.metadata (7.6 kB)
+2026-10-26T08:23:56.8746255Z Collecting pydantic==2.12.5 (from -r /layer-requirements/requirements.txt (line 55))
+2026-10-26T08:23:56.8904660Z   Downloading pydantic-2.12.5-py3-none-any.whl.metadata (90 kB)
+2026-10-26T08:23:57.2476194Z Collecting pydantic-core==2.41.5 (from -r /layer-requirements/requirements.txt (line 59))
+2026-10-26T08:23:57.2597195Z   Downloading pydantic_core-2.41.5-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (7.3 kB)
+2026-10-26T08:23:57.2765849Z Collecting python-dateutil==2.9.0.post0 (from -r /layer-requirements/requirements.txt (line 61))
+2026-10-26T08:23:57.2875956Z   Downloading python_dateutil-2.9.0.post0-py2.py3-none-any.whl.metadata (8.4 kB)
+2026-10-26T08:23:57.3045933Z Collecting python-dotenv==1.2.2 (from -r /layer-requirements/requirements.txt (line 63))
+2026-10-26T08:23:57.3155201Z   Downloading python_dotenv-1.2.2-py3-none-any.whl.metadata (27 kB)
+2026-10-26T08:23:57.4910842Z Collecting regex==2026.4.4 (from -r /layer-requirements/requirements.txt (line 65))
+2026-10-26T08:23:57.5034992Z   Downloading regex-2026.4.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (40 kB)
+2026-10-26T08:23:57.5216569Z Collecting s3transfer==0.16.0 (from -r /layer-requirements/requirements.txt (line 67))
+2026-10-26T08:23:57.5326046Z   Downloading s3transfer-0.16.0-py3-none-any.whl.metadata (1.7 kB)
+2026-10-26T08:23:57.5482292Z Collecting sgmllib3k==1.0.0 (from -r /layer-requirements/requirements.txt (line 69))
+2026-10-26T08:23:57.5591628Z   Downloading sgmllib3k-1.0.0.tar.gz (5.8 kB)
+2026-10-26T08:23:57.5624121Z   Installing build dependencies: started
+2026-10-26T08:23:58.0341460Z   Installing build dependencies: finished with status 'done'
+2026-10-26T08:23:58.0345467Z   Getting requirements to build wheel: started
+2026-10-26T08:23:58.2327829Z   Getting requirements to build wheel: finished with status 'done'
+2026-10-26T08:23:58.2333998Z   Preparing metadata (pyproject.toml): started
+2026-10-26T08:23:58.3419339Z   Preparing metadata (pyproject.toml): finished with status 'done'
+2026-10-26T08:23:58.3587190Z Collecting six==1.17.0 (from -r /layer-requirements/requirements.txt (line 71))
+2026-10-26T08:23:58.3703126Z   Downloading six-1.17.0-py2.py3-none-any.whl.metadata (1.7 kB)
+2026-10-26T08:23:58.3849247Z Collecting sniffio==1.3.1 (from -r /layer-requirements/requirements.txt (line 73))
+2026-10-26T08:23:58.3959204Z   Downloading sniffio-1.3.1-py3-none-any.whl.metadata (3.9 kB)
+2026-10-26T08:23:58.4143339Z Collecting soupsieve==2.9 (from -r /layer-requirements/requirements.txt (line 75))
+2026-10-26T08:23:58.4254022Z   Downloading soupsieve-2.9-py3-none-any.whl.metadata (4.6 kB)
+2026-10-26T08:23:58.4405844Z Collecting truststore==0.10.4 (from -r /layer-requirements/requirements.txt (line 77))
+2026-10-26T08:23:58.4519619Z   Downloading truststore-0.10.4-py3-none-any.whl.metadata (4.4 kB)
+2026-10-26T08:23:58.4689289Z Collecting typing-extensions==4.15.0 (from -r /layer-requirements/requirements.txt (line 81))
+2026-10-26T08:23:58.4802351Z   Downloading typing_extensions-4.15.0-py3-none-any.whl.metadata (3.3 kB)
+2026-10-26T08:23:58.4949570Z Collecting typing-inspection==0.4.2 (from -r /layer-requirements/requirements.txt (line 88))
+2026-10-26T08:23:58.5061672Z   Downloading typing_inspection-0.4.2-py3-none-any.whl.metadata (2.6 kB)
+2026-10-26T08:23:58.5243435Z Collecting urllib3==2.8.0 (from -r /layer-requirements/requirements.txt (line 90))
+2026-10-26T08:23:58.5352429Z   Downloading urllib3-2.8.0-py3-none-any.whl.metadata (7.4 kB)
+2026-10-26T08:23:58.5512720Z Collecting w3lib==2.4.1 (from -r /layer-requirements/requirements.txt (line 92))
+2026-10-26T08:23:58.5627913Z   Downloading w3lib-2.4.1-py3-none-any.whl.metadata (2.3 kB)
+2026-10-26T08:23:58.5958286Z Downloading annotated_types-0.7.0-py3-none-any.whl (13 kB)
+2026-10-26T08:23:58.6079328Z Downloading anthropic-1.0.0-py3-none-any.whl (1.2 MB)
+2026-10-26T08:23:58.6395244Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.2/1.2 MB 50.2 MB/s  0:00:00
+2026-10-26T08:23:58.6511443Z Downloading anyio-4.14.2-py3-none-any.whl (125 kB)
+2026-10-26T08:23:58.6622189Z Downloading docstring_parser-0.17.0-py3-none-any.whl (36 kB)
+2026-10-26T08:23:58.6731696Z Downloading httpx2-2.12.0-py3-none-any.whl (95 kB)
+2026-10-26T08:23:58.6845313Z Downloading jiter-0.13.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (359 kB)
+2026-10-26T08:23:58.6976623Z Downloading pydantic-2.12.5-py3-none-any.whl (463 kB)
+2026-10-26T08:23:58.7098014Z Downloading sniffio-1.3.1-py3-none-any.whl (10 kB)
+2026-10-26T08:23:58.7207488Z Downloading typing_extensions-4.15.0-py3-none-any.whl (44 kB)
+2026-10-26T08:23:58.7319947Z Downloading beautifulsoup4-4.14.3-py3-none-any.whl (107 kB)
+2026-10-26T08:23:58.7432329Z Downloading boto3-1.42.85-py3-none-any.whl (140 kB)
+2026-10-26T08:23:58.7559862Z Downloading botocore-1.42.85-py3-none-any.whl (14.8 MB)
+2026-10-26T08:23:58.8095412Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 14.8/14.8 MB 282.2 MB/s  0:00:00
+2026-10-26T08:23:58.8200054Z Downloading jmespath-1.1.0-py3-none-any.whl (20 kB)
+2026-10-26T08:23:58.8321125Z Downloading python_dateutil-2.9.0.post0-py2.py3-none-any.whl (229 kB)
+2026-10-26T08:23:58.8432392Z Downloading s3transfer-0.16.0-py3-none-any.whl (86 kB)
+2026-10-26T08:23:58.8544161Z Downloading urllib3-2.8.0-py3-none-any.whl (135 kB)
+2026-10-26T08:23:58.8659105Z Downloading brotli-1.2.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (1.4 MB)
+2026-10-26T08:23:58.8734917Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.4/1.4 MB 205.2 MB/s  0:00:00
+2026-10-26T08:23:58.8847449Z Downloading certifi-2026.10.19-py3-none-any.whl (136 kB)
+2026-10-26T08:23:58.8958929Z Downloading feedparser-6.0.12-py3-none-any.whl (81 kB)
+2026-10-26T08:23:58.9069112Z Downloading h11-0.16.0-py3-none-any.whl (37 kB)
+2026-10-26T08:23:58.9179363Z Downloading httpcore-1.0.9-py3-none-any.whl (78 kB)
+2026-10-26T08:23:58.9290074Z Downloading httpcore2-2.12.0-py3-none-any.whl (83 kB)
+2026-10-26T08:23:58.9400006Z Downloading httpx-0.28.1-py3-none-any.whl (73 kB)
+2026-10-26T08:23:58.9511216Z Downloading idna-3.19-py3-none-any.whl (68 kB)
+2026-10-26T08:23:58.9630641Z Downloading pydantic_core-2.41.5-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.1 MB)
+2026-10-26T08:23:58.9671849Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.1/2.1 MB 747.9 MB/s  0:00:00
+2026-10-26T08:23:58.9784512Z Downloading python_dotenv-1.2.2-py3-none-any.whl (22 kB)
+2026-10-26T08:23:58.9896561Z Downloading regex-2026.4.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (801 kB)
+2026-10-26T08:23:58.9932352Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 801.1/801.1 kB 384.5 MB/s  0:00:00
+2026-10-26T08:23:59.0041509Z Downloading six-1.17.0-py2.py3-none-any.whl (11 kB)
+2026-10-26T08:23:59.0152697Z Downloading soupsieve-2.9-py3-none-any.whl (37 kB)
+2026-10-26T08:23:59.0263761Z Downloading truststore-0.10.4-py3-none-any.whl (18 kB)
+2026-10-26T08:23:59.0372289Z Downloading typing_inspection-0.4.2-py3-none-any.whl (14 kB)
+2026-10-26T08:23:59.0481909Z Downloading w3lib-2.4.1-py3-none-any.whl (21 kB)
+2026-10-26T08:23:59.1016001Z Building wheels for collected packages: sgmllib3k
+2026-10-26T08:23:59.1023219Z   Building wheel for sgmllib3k (pyproject.toml): started
+2026-10-26T08:23:59.2285923Z   Building wheel for sgmllib3k (pyproject.toml): finished with status 'done'
+2026-10-26T08:23:59.2288898Z   Created wheel for sgmllib3k: filename=sgmllib3k-1.0.0-py3-none-any.whl size=6090 sha256=e25048dcda341fad9a19c4d25aeaa1a60590ce04400b475326ba611ace43a168
+2026-10-26T08:23:59.2297139Z   Stored in directory: /tmp/pip-ephem-wheel-cache-7oh0ug6b/wheels/3d/4d/ef/37cdccc18d6fd7e0dd7817dcdf9146d4d6789c32a227a28134
+2026-10-26T08:23:59.2300580Z Successfully built sgmllib3k
+2026-10-26T08:23:59.2688332Z Installing collected packages: sgmllib3k, brotli, w3lib, urllib3, typing-extensions, truststore, soupsieve, sniffio, six, regex, python-dotenv, jmespath, jiter, idna, h11, feedparser, docstring-parser, certifi, annotated-types, typing-inspection, python-dateutil, pydantic-core, httpcore2, httpcore, beautifulsoup4, anyio, pydantic, httpx2, httpx, botocore, s3transfer, anthropic, boto3
+2026-10-26T08:24:00.8370412Z 
+2026-10-26T08:24:00.8390782Z Successfully installed annotated-types-0.7.0 anthropic-1.0.0 anyio-4.14.2 beautifulsoup4-4.14.3 boto3-1.42.85 botocore-1.42.85 brotli-1.2.1 certifi-2026.10.19 docstring-parser-0.17.0 feedparser-6.0.12 h11-0.16.0 httpcore-1.0.9 httpcore2-2.12.0 httpx-0.28.1 httpx2-2.12.0 idna-3.19 jiter-0.13.0 jmespath-1.1.0 pydantic-2.12.5 pydantic-core-2.41.5 python-dateutil-2.9.0.post0 python-dotenv-1.2.2 regex-2026.4.4 s3transfer-0.16.0 sgmllib3k-1.0.0 six-1.17.0 sniffio-1.3.1 soupsieve-2.9 truststore-0.10.4 typing-extensions-4.15.0 typing-inspection-0.4.2 urllib3-2.8.0 w3lib-2.4.1
+2026-10-26T08:24:01.4618355Z 
+2026-10-26T08:24:01.4619105Z [notice] A new release of pip is available: 26.2.1 -> 26.2.2
+2026-10-26T08:24:01.4619658Z [notice] To update, run: pip install --upgrade pip
+2026-10-26T08:24:02.2300052Z [WARNING] aws-cdk-lib.aws_cloudfront_origins.S3Origin is deprecated, and will be removed in the next major release.
+2026-10-26T08:24:02.2300483Z   Use `S3BucketOrigin` or `S3StaticWebsiteOrigin` instead.
+2026-10-26T08:24:02.2315126Z [WARNING] aws-cdk-lib.aws_cloudfront_origins.S3Origin#bind is deprecated, and will be removed in the next major release.
+2026-10-26T08:24:02.2315498Z   Use `S3BucketOrigin` or `S3StaticWebsiteOrigin` instead.
+2026-10-26T08:24:02.2349049Z [WARNING] aws-cdk-lib.aws_lambda.FunctionOptions#logRetention is deprecated, and will be removed in the next major release.
+2026-10-26T08:24:02.2349407Z   use `logGroup` instead
+2026-10-26T08:24:03.5800705Z 
+2026-10-26T08:24:03.5801735Z ✨  Synthesis time: 38.17s
+2026-10-26T08:24:03.5801972Z 
+2026-10-26T08:24:05.6156338Z cd-RSSEmailStack: start: Building RSSLibsLayer/Code
+2026-10-26T08:24:05.6156706Z cd-RSSEmailStack: success: Built RSSLibsLayer/Code
+2026-10-26T08:24:05.6164866Z cd-RSSEmailStack: start: Building RetrieveRSSArticlesFunction/Code
+2026-10-26T08:24:05.6165354Z cd-RSSEmailStack: success: Built RetrieveRSSArticlesFunction/Code
+2026-10-26T08:24:05.6199463Z cd-RSSEmailStack: start: Building cd-RSSEmailStack Template
+2026-10-26T08:24:05.6199926Z cd-RSSEmailStack: success: Built cd-RSSEmailStack Template
+2026-10-26T08:24:05.6224317Z cd-RSSEmailStack: start: Building GeneratePodcastFunction/AssetImage
+2026-10-26T08:24:06.0963921Z cd-RSSEmailStack: start: Publishing RetrieveRSSArticlesFunction/Code (002681522526-eu-west-1-a3e6ae7d)
+2026-10-26T08:24:06.1024709Z cd-RSSEmailStack: start: Publishing cd-RSSEmailStack Template (002681522526-eu-west-1-15c985a7)
+2026-10-26T08:24:06.1035334Z cd-RSSEmailStack: start: Publishing RSSLibsLayer/Code (002681522526-eu-west-1-0d552bd4)
+2026-10-26T08:24:06.1554783Z cd-RSSEmailStack: fail: No ECR repository named 'cdk-hnb659fds-container-assets-002681522526-eu-west-1' in account 002681522526. Is this account bootstrapped?
+2026-10-26T08:24:07.7485795Z cd-RSSEmailStack: success: Published RetrieveRSSArticlesFunction/Code (002681522526-eu-west-1-a3e6ae7d)
+2026-10-26T08:24:07.7629694Z cd-RSSEmailStack: success: Published cd-RSSEmailStack Template (002681522526-eu-west-1-15c985a7)
+2026-10-26T08:24:12.2568848Z cd-RSSEmailStack: success: Published RSSLibsLayer/Code (002681522526-eu-west-1-0d552bd4)
+2026-10-26T08:24:12.2681247Z Failed to publish asset RSSLibsLayer/Code (002681522526-eu-west-1-0d552bd4)
+2026-10-26T08:24:12.2681971Z ‣ AggregateError: 
+2026-10-26T08:24:12.3151784Z ##[error]Process completed with exit code 1.
+2026-10-26T08:24:12.3283679Z Post job cleanup.
+2026-10-26T08:24:12.3857529Z Post job cleanup.
+2026-10-26T08:24:12.4428284Z [command]/usr/bin/git version
+2026-10-26T08:24:12.4469086Z git version 2.55.0
+2026-10-26T08:24:12.4491181Z Temporarily overriding HOME='/home/runner/work/_temp/6a6588b0-1b1f-49a2-bd0c-b639342881f8' before making global git config changes
+2026-10-26T08:24:12.4492152Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-26T08:24:12.4494508Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/rss-email/rss-email
+2026-10-26T08:24:12.4529562Z Removing SSH command configuration
+2026-10-26T08:24:12.4534425Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-26T08:24:12.4567092Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-26T08:24:12.4841380Z Removing HTTP extra header
+2026-10-26T08:24:12.4847116Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-26T08:24:12.4881259Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-26T08:24:12.5121864Z Removing includeIf entries pointing to credentials config files
+2026-10-26T08:24:12.5127585Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-26T08:24:12.5151317Z includeif.gitdir:/home/runner/work/rss-email/rss-email/.git.path
+2026-10-26T08:24:12.5151946Z includeif.gitdir:/home/runner/work/rss-email/rss-email/.git/worktrees/*.path
+2026-10-26T08:24:12.5152537Z includeif.gitdir:/github/workspace/.git.path
+2026-10-26T08:24:12.5153020Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-10-26T08:24:12.5159072Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/rss-email/rss-email/.git.path
+2026-10-26T08:24:12.5180422Z /home/runner/work/_temp/git-credentials-eb0780da-5a15-43c5-b8f4-bee0a92020fb.config
+2026-10-26T08:24:12.5190004Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/rss-email/rss-email/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-eb0780da\-5a15\-43c5\-b8f4\-bee0a92020fb\.config
+2026-10-26T08:24:12.5223625Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/rss-email/rss-email/.git/worktrees/*.path
+2026-10-26T08:24:12.5244838Z /home/runner/work/_temp/git-credentials-eb0780da-5a15-43c5-b8f4-bee0a92020fb.config
+2026-10-26T08:24:12.5253398Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/rss-email/rss-email/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-eb0780da\-5a15\-43c5\-b8f4\-bee0a92020fb\.config
+2026-10-26T08:24:12.5283867Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-10-26T08:24:12.5305025Z /github/runner_temp/git-credentials-eb0780da-5a15-43c5-b8f4-bee0a92020fb.config
+2026-10-26T08:24:12.5311407Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-eb0780da\-5a15\-43c5\-b8f4\-bee0a92020fb\.config
+2026-10-26T08:24:12.5341275Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-10-26T08:24:12.5361847Z /github/runner_temp/git-credentials-eb0780da-5a15-43c5-b8f4-bee0a92020fb.config
+2026-10-26T08:24:12.5367453Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-eb0780da\-5a15\-43c5\-b8f4\-bee0a92020fb\.config
+2026-10-26T08:24:12.5395959Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-26T08:24:12.5622982Z Removing credentials config '/home/runner/work/_temp/git-credentials-eb0780da-5a15-43c5-b8f4-bee0a92020fb.config'
+2026-10-26T08:24:12.5738845Z Cleaning up orphan processes
+</pasted_content id="9410">
+
+---
+
+<pasted_content id="9410">
+2026-10-26T09:20:49.6936297Z Current runner version: '2.338.0'
+2026-10-26T09:20:49.6956139Z ##[group]Runner Image Provisioner
+2026-10-26T09:20:49.6956832Z Hosted Compute Agent
+2026-10-26T09:20:49.6957285Z Version: 20261021.618
+2026-10-26T09:20:49.6957758Z Commit: 21505ad2541d5be6135ed84fc33697146cf75b8e
+2026-10-26T09:20:49.6958244Z Build Date: 2026-10-21T00:45:21Z
+2026-10-26T09:20:49.6959074Z Worker ID: {f233b6be-9bb6-4519-945a-06a449bdbb6a}
+2026-10-26T09:20:49.6959618Z Region: centralus
+2026-10-26T09:20:49.6959988Z Cloud: Azure
+2026-10-26T09:20:49.6960371Z ##[endgroup]
+2026-10-26T09:20:49.6961593Z ##[group]Operating System
+2026-10-26T09:20:49.6962005Z Ubuntu
+2026-10-26T09:20:49.6962379Z 26.04.1
+2026-10-26T09:20:49.6962726Z LTS
+2026-10-26T09:20:49.6963305Z ##[endgroup]
+2026-10-26T09:20:49.6963835Z ##[group]Runner Image
+2026-10-26T09:20:49.6964280Z Image: ubuntu-26.04
+2026-10-26T09:20:49.6964686Z Version: 20261012.163.1
+2026-10-26T09:20:49.6965602Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261012.163/images/ubuntu/Ubuntu2604-Readme.md
+2026-10-26T09:20:49.6966864Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261012.163
+2026-10-26T09:20:49.6967544Z ##[endgroup]
+2026-10-26T09:20:49.6968355Z ##[group]GITHUB_TOKEN Permissions
+2026-10-26T09:20:49.6970478Z Contents: read
+2026-10-26T09:20:49.6971030Z Metadata: read
+2026-10-26T09:20:49.6971496Z ##[endgroup]
+2026-10-26T09:20:49.6972990Z Secret source: Actions
+2026-10-26T09:20:49.6973661Z Cache mode: write
+2026-10-26T09:20:49.6974139Z Prepare workflow directory
+2026-10-26T09:20:49.7223144Z Prepare all required actions
+2026-10-26T09:20:49.7258011Z Getting action download info
+2026-10-26T09:20:49.9564958Z Download action repository 'actions/checkout@v7' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-10-26T09:20:50.0447640Z Download action repository 'actions/setup-python@v7' (SHA:6d4fd22b20465ccc0f7354476588e8df7c9ca0e0)
+2026-10-26T09:20:50.4943052Z Download action repository 'astral-sh/setup-uv@v7' (SHA:37802adc94f370d6bfd71619e3f0bf239e1f3b78)
+2026-10-26T09:20:50.9753226Z Download action repository 'actions/setup-node@v7' (SHA:949feb2413d6458794dcd2491c4babbbce0c15c1)
+2026-10-26T09:20:51.4737859Z Download action repository 'aws-actions/configure-aws-credentials@v6' (SHA:e1253824e5c10ff9df46874f81ed3ec929e19cfd)
+2026-10-26T09:20:51.8983032Z Complete job name: deploy
+2026-10-26T09:20:51.9487326Z ##[group]Run actions/checkout@v7
+2026-10-26T09:20:51.9487889Z with:
+2026-10-26T09:20:51.9488268Z   repository: eamonmason/rss-email
+2026-10-26T09:20:51.9490602Z   token: ***
+2026-10-26T09:20:51.9490985Z   ssh-strict: true
+2026-10-26T09:20:51.9491376Z   ssh-user: git
+2026-10-26T09:20:51.9491742Z   persist-credentials: true
+2026-10-26T09:20:51.9492112Z   clean: true
+2026-10-26T09:20:51.9492483Z   sparse-checkout-cone-mode: true
+2026-10-26T09:20:51.9492882Z   fetch-depth: 1
+2026-10-26T09:20:51.9493215Z   fetch-tags: false
+2026-10-26T09:20:51.9493590Z   show-progress: true
+2026-10-26T09:20:51.9493949Z   lfs: false
+2026-10-26T09:20:51.9494286Z   submodules: false
+2026-10-26T09:20:51.9494729Z   set-safe-directory: true
+2026-10-26T09:20:51.9495097Z   allow-unsafe-pr-checkout: false
+2026-10-26T09:20:51.9496059Z ##[endgroup]
+2026-10-26T09:20:52.0219782Z Syncing repository: eamonmason/rss-email
+2026-10-26T09:20:52.0221738Z ##[group]Getting Git version info
+2026-10-26T09:20:52.0222608Z Working directory is '/home/runner/work/rss-email/rss-email'
+2026-10-26T09:20:52.0223647Z [command]/usr/bin/git version
+2026-10-26T09:20:52.0224227Z git version 2.55.0
+2026-10-26T09:20:52.0227840Z ##[endgroup]
+2026-10-26T09:20:52.0233451Z Temporarily overriding HOME='/home/runner/work/_temp/7ad9c6ee-7541-445f-b6af-e09a34feae5f' before making global git config changes
+2026-10-26T09:20:52.0235172Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-26T09:20:52.0236734Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/rss-email/rss-email
+2026-10-26T09:20:52.0275089Z Deleting the contents of '/home/runner/work/rss-email/rss-email'
+2026-10-26T09:20:52.0276881Z ##[group]Determining repository object format
+2026-10-26T09:20:52.0277948Z ##[endgroup]
+2026-10-26T09:20:52.0279125Z ##[group]Initializing the repository
+2026-10-26T09:20:52.0280486Z [command]/usr/bin/git init /home/runner/work/rss-email/rss-email
+2026-10-26T09:20:52.0372684Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-10-26T09:20:52.0384271Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-10-26T09:20:52.0390003Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-10-26T09:20:52.0390943Z hint: call:
+2026-10-26T09:20:52.0391703Z hint:
+2026-10-26T09:20:52.0392575Z hint: 	git config --global init.defaultBranch <name>
+2026-10-26T09:20:52.0393282Z hint:
+2026-10-26T09:20:52.0394027Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-10-26T09:20:52.0394948Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-10-26T09:20:52.0395775Z hint:
+2026-10-26T09:20:52.0396399Z hint: 	git branch -m <name>
+2026-10-26T09:20:52.0396989Z hint:
+2026-10-26T09:20:52.0397694Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-10-26T09:20:52.0398798Z Initialized empty Git repository in /home/runner/work/rss-email/rss-email/.git/
+2026-10-26T09:20:52.0401410Z [command]/usr/bin/git remote add origin https://github.com/eamonmason/rss-email
+2026-10-26T09:20:52.0421521Z ##[endgroup]
+2026-10-26T09:20:52.0422246Z ##[group]Disabling automatic garbage collection
+2026-10-26T09:20:52.0423433Z [command]/usr/bin/git config --local gc.auto 0
+2026-10-26T09:20:52.0445997Z ##[endgroup]
+2026-10-26T09:20:52.0446773Z ##[group]Setting up auth
+2026-10-26T09:20:52.0447394Z Removing SSH command configuration
+2026-10-26T09:20:52.0449876Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-26T09:20:52.0473003Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-26T09:20:52.0782105Z Removing HTTP extra header
+2026-10-26T09:20:52.0811324Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-26T09:20:52.0832296Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-26T09:20:52.0994417Z Removing includeIf entries pointing to credentials config files
+2026-10-26T09:20:52.0997350Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-26T09:20:52.1018741Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-26T09:20:52.1179988Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-84830283-cfb9-4679-bc07-6b28d4d1177e.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-10-26T09:20:52.1204171Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/rss-email/rss-email/.git.path /home/runner/work/_temp/git-credentials-84830283-cfb9-4679-bc07-6b28d4d1177e.config
+2026-10-26T09:20:52.1228001Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/rss-email/rss-email/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-84830283-cfb9-4679-bc07-6b28d4d1177e.config
+2026-10-26T09:20:52.1252851Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-84830283-cfb9-4679-bc07-6b28d4d1177e.config
+2026-10-26T09:20:52.1274007Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-84830283-cfb9-4679-bc07-6b28d4d1177e.config
+2026-10-26T09:20:52.1294043Z ##[endgroup]
+2026-10-26T09:20:52.1294692Z ##[group]Fetching the repository
+2026-10-26T09:20:52.1297857Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +7a6cbbe88602bc0d72a6b058fb7443b6d56f7014:refs/remotes/origin/main
+2026-10-26T09:20:52.6982452Z From https://github.com/eamonmason/rss-email
+2026-10-26T09:20:52.6983195Z  * [new ref]         7a6cbbe88602bc0d72a6b058fb7443b6d56f7014 -> origin/main
+2026-10-26T09:20:52.6990457Z [command]/usr/bin/git branch --list --remote origin/main
+2026-10-26T09:20:52.7007719Z   origin/main
+2026-10-26T09:20:52.7012069Z [command]/usr/bin/git rev-parse refs/remotes/origin/main
+2026-10-26T09:20:52.7027431Z 7a6cbbe88602bc0d72a6b058fb7443b6d56f7014
+2026-10-26T09:20:52.7029409Z ##[endgroup]
+2026-10-26T09:20:52.7029853Z ##[group]Determining the checkout info
+2026-10-26T09:20:52.7030546Z ##[endgroup]
+2026-10-26T09:20:52.7034187Z [command]/usr/bin/git sparse-checkout disable
+2026-10-26T09:20:52.7081649Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-10-26T09:20:52.7105680Z ##[group]Checking out the ref
+2026-10-26T09:20:52.7108045Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2026-10-26T09:20:52.7229943Z Switched to a new branch 'main'
+2026-10-26T09:20:52.7230787Z branch 'main' set up to track 'origin/main'.
+2026-10-26T09:20:52.7234040Z ##[endgroup]
+2026-10-26T09:20:52.7267805Z [command]/usr/bin/git log -1 --format=%H
+2026-10-26T09:20:52.7284742Z 7a6cbbe88602bc0d72a6b058fb7443b6d56f7014
+2026-10-26T09:20:52.7551025Z ##[group]Run actions/setup-python@v7
+2026-10-26T09:20:52.7551365Z with:
+2026-10-26T09:20:52.7551745Z   python-version: 3.13
+2026-10-26T09:20:52.7552019Z   check-latest: false
+2026-10-26T09:20:52.7553820Z   token: ***
+2026-10-26T09:20:52.7554216Z   mirror: https://raw.githubusercontent.com/actions/python-versions/main
+2026-10-26T09:20:52.7554611Z   update-environment: true
+2026-10-26T09:20:52.7554960Z   allow-prereleases: false
+2026-10-26T09:20:52.7555256Z   freethreaded: false
+2026-10-26T09:20:52.7555558Z ##[endgroup]
+2026-10-26T09:20:52.8360140Z ##[group]Installed versions
+2026-10-26T09:20:52.8427819Z Successfully set up CPython (3.13.16)
+2026-10-26T09:20:52.8428830Z ##[endgroup]
+2026-10-26T09:20:52.8600753Z ##[group]Run astral-sh/setup-uv@v7
+2026-10-26T09:20:52.8601155Z with:
+2026-10-26T09:20:52.8601467Z   activate-environment: false
+2026-10-26T09:20:52.8601886Z   working-directory: /home/runner/work/rss-email/rss-email
+2026-10-26T09:20:52.8604823Z   github-token: ***
+2026-10-26T09:20:52.8605129Z   enable-cache: auto
+2026-10-26T09:20:52.8605841Z   cache-dependency-glob: **/*requirements*.txt
+**/*requirements*.in
+**/*constraints*.txt
+**/*constraints*.in
+**/pyproject.toml
+**/uv.lock
+**/*.py.lock
+
+2026-10-26T09:20:52.8606590Z   restore-cache: true
+2026-10-26T09:20:52.8606891Z   save-cache: true
+2026-10-26T09:20:52.8607195Z   prune-cache: true
+2026-10-26T09:20:52.8607481Z   cache-python: false
+2026-10-26T09:20:52.8607852Z   ignore-nothing-to-cache: false
+2026-10-26T09:20:52.8608223Z   ignore-empty-workdir: false
+2026-10-26T09:20:52.8608896Z   add-problem-matchers: true
+2026-10-26T09:20:52.8609356Z   resolution-strategy: highest
+2026-10-26T09:20:52.8609789Z env:
+2026-10-26T09:20:52.8610439Z   pythonLocation: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T09:20:52.8611061Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.13.16/x64/lib/pkgconfig
+2026-10-26T09:20:52.8611629Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T09:20:52.8612178Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T09:20:52.8612726Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T09:20:52.8613204Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.13.16/x64/lib
+2026-10-26T09:20:52.8613654Z ##[endgroup]
+2026-10-26T09:20:52.9832050Z Trying to find version for uv in: /home/runner/work/rss-email/rss-email/uv.toml
+2026-10-26T09:20:52.9832915Z Could not find file: /home/runner/work/rss-email/rss-email/uv.toml
+2026-10-26T09:20:52.9833928Z Trying to find version for uv in: /home/runner/work/rss-email/rss-email/pyproject.toml
+2026-10-26T09:20:52.9837774Z Could not determine uv version from uv.toml or pyproject.toml. Falling back to latest.
+2026-10-26T09:20:52.9839788Z Fetching version data from https://raw.githubusercontent.com/astral-sh/versions/main/v1/uv.ndjson ...
+2026-10-26T09:20:53.0957441Z Downloading uv from "https://releases.astral.sh/github/uv/releases/download/0.13.5/uv-x86_64-unknown-linux-gnu.tar.gz" ...
+2026-10-26T09:20:53.2326069Z [command]/usr/bin/tar xz --warning=no-unknown-keyword --overwrite -C /home/runner/work/_temp/9a650350-c637-4df9-9e6d-f28d666a660d -f /home/runner/work/_temp/eb44ac11-3bfd-4738-a15d-8f5f3bfc1b33
+2026-10-26T09:20:53.5296534Z Added /home/runner/.local/bin to the path
+2026-10-26T09:20:53.5297734Z Added /opt/hostedtoolcache/uv/0.13.5/x86_64 to the path
+2026-10-26T09:20:53.5298540Z Set UV_PYTHON_INSTALL_DIR to /home/runner/work/_temp/uv-python-dir
+2026-10-26T09:20:53.5299308Z Added /home/runner/work/_temp/uv-python-dir to the path
+2026-10-26T09:20:53.5305573Z Set UV_CACHE_DIR to /home/runner/work/_temp/setup-uv-cache
+2026-10-26T09:20:53.5306184Z Successfully installed uv version 0.13.5
+2026-10-26T09:20:54.0979128Z Searching files using cache dependency glob: /home/runner/work/rss-email/rss-email/**/*requirements*.txt,/home/runner/work/rss-email/rss-email/**/*requirements*.in,/home/runner/work/rss-email/rss-email/**/*constraints*.txt,/home/runner/work/rss-email/rss-email/**/*constraints*.in,/home/runner/work/rss-email/rss-email/**/pyproject.toml,/home/runner/work/rss-email/rss-email/**/uv.lock,/home/runner/work/rss-email/rss-email/**/*.py.lock
+2026-10-26T09:20:54.1122430Z /home/runner/work/rss-email/rss-email/pyproject.toml
+2026-10-26T09:20:54.1190511Z /home/runner/work/rss-email/rss-email/uv.lock
+2026-10-26T09:20:54.1200818Z Found 2 files to hash.
+2026-10-26T09:20:54.1245885Z Trying to restore cache from GitHub Actions cache with key: setup-uv-2-x86_64-unknown-linux-gnu-ubuntu-26.04-3.13.16-pruned-934b2e8287e07377aea38baa6cf3620fc02e5187fb3363fae9f8b4a8d3777940
+2026-10-26T09:20:54.2589711Z Cache hit for: setup-uv-2-x86_64-unknown-linux-gnu-ubuntu-26.04-3.13.16-pruned-934b2e8287e07377aea38baa6cf3620fc02e5187fb3363fae9f8b4a8d3777940
+2026-10-26T09:20:54.5031884Z Received 1090 of 1090 (100.0%), 0.0 MBs/sec
+2026-10-26T09:20:54.5032468Z Cache Size: ~0 MB (1090 B)
+2026-10-26T09:20:54.5049737Z [command]/usr/bin/tar -xf /home/runner/work/_temp/5e12ee73-a649-4b56-9c87-1387d949e3f2/cache.tzst -P -C /home/runner/work/rss-email/rss-email --use-compress-program unzstd
+2026-10-26T09:20:54.5100451Z Cache restored successfully
+2026-10-26T09:20:54.5103894Z cache restored from GitHub Actions cache with key: setup-uv-2-x86_64-unknown-linux-gnu-ubuntu-26.04-3.13.16-pruned-934b2e8287e07377aea38baa6cf3620fc02e5187fb3363fae9f8b4a8d3777940
+2026-10-26T09:20:54.5749781Z ##[group]Run actions/setup-node@v7
+2026-10-26T09:20:54.5750067Z with:
+2026-10-26T09:20:54.5750316Z   node-version: 20
+2026-10-26T09:20:54.5750573Z   check-latest: false
+2026-10-26T09:20:54.5752246Z   token: ***
+2026-10-26T09:20:54.5752490Z   package-manager-cache: true
+2026-10-26T09:20:54.5752772Z env:
+2026-10-26T09:20:54.5753024Z   pythonLocation: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T09:20:54.5753432Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.13.16/x64/lib/pkgconfig
+2026-10-26T09:20:54.5753832Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T09:20:54.5754193Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T09:20:54.5754539Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T09:20:54.5754888Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.13.16/x64/lib
+2026-10-26T09:20:54.5755304Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-10-26T09:20:54.5755714Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-10-26T09:20:54.5755988Z ##[endgroup]
+2026-10-26T09:20:54.6665725Z Attempting to download 20...
+2026-10-26T09:20:55.4615496Z Acquiring 20.20.2 - x64 from https://github.com/actions/node-versions/releases/download/20.20.2-23521894959/node-20.20.2-linux-x64.tar.gz
+2026-10-26T09:20:55.9661570Z Extracting ...
+2026-10-26T09:20:55.9750902Z [command]/usr/bin/tar xz --strip 1 --warning=no-unknown-keyword --overwrite -C /home/runner/work/_temp/14e965f4-9254-467b-9dbd-6ad3210de07c -f /home/runner/work/_temp/4ac24097-0111-4e99-b43e-31a63576a670
+2026-10-26T09:20:56.4570130Z Adding to the cache ...
+2026-10-26T09:20:59.3931108Z ##[group]Environment details
+2026-10-26T09:20:59.5581162Z node: v20.20.2
+2026-10-26T09:20:59.5581620Z npm: 10.8.2
+2026-10-26T09:20:59.5582422Z yarn: 1.22.22
+2026-10-26T09:20:59.5583054Z ##[endgroup]
+2026-10-26T09:20:59.5709362Z ##[group]Run npm ci
+2026-10-26T09:20:59.5709686Z [36;1mnpm ci[0m
+2026-10-26T09:20:59.5819885Z shell: /usr/bin/bash -e {0}
+2026-10-26T09:20:59.5820160Z env:
+2026-10-26T09:20:59.5820566Z   pythonLocation: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T09:20:59.5820973Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.13.16/x64/lib/pkgconfig
+2026-10-26T09:20:59.5821363Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T09:20:59.5821724Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T09:20:59.5822080Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T09:20:59.5822445Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.13.16/x64/lib
+2026-10-26T09:20:59.5822794Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-10-26T09:20:59.5823141Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-10-26T09:20:59.5823441Z ##[endgroup]
+2026-10-26T09:21:03.7435046Z 
+2026-10-26T09:21:03.7442267Z added 67 packages, and audited 89 packages in 4s
+2026-10-26T09:21:03.7442645Z 
+2026-10-26T09:21:03.7443033Z 11 packages are looking for funding
+2026-10-26T09:21:03.7443461Z   run `npm fund` for details
+2026-10-26T09:21:03.7443686Z 
+2026-10-26T09:21:03.7443815Z found 0 vulnerabilities
+2026-10-26T09:21:03.7681365Z ##[group]Run aws-actions/configure-aws-credentials@v6
+2026-10-26T09:21:03.7681655Z with:
+2026-10-26T09:21:03.7682011Z   role-to-assume: arn:aws:iam::002681522526:role/rss-email-github-actions-deploy
+2026-10-26T09:21:03.7682372Z   aws-region: eu-west-1
+2026-10-26T09:21:03.7682703Z   role-session-name: rss-email-deploy-40291733888
+2026-10-26T09:21:03.7682992Z   audience: sts.amazonaws.com
+2026-10-26T09:21:03.7683259Z env:
+2026-10-26T09:21:03.7683513Z   pythonLocation: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T09:21:03.7683868Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.13.16/x64/lib/pkgconfig
+2026-10-26T09:21:03.7684254Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T09:21:03.7684618Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T09:21:03.7684945Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T09:21:03.7685289Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.13.16/x64/lib
+2026-10-26T09:21:03.7685734Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-10-26T09:21:03.7686057Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-10-26T09:21:03.7686340Z ##[endgroup]
+2026-10-26T09:21:04.0262198Z Assuming role with OIDC
+2026-10-26T09:21:04.3825142Z Authenticated as assumedRoleId AROAQBH6UZFPDNUESFOI7:rss-email-deploy-40291733888
+2026-10-26T09:21:04.7704083Z ##[group]Run set -euo pipefail
+2026-10-26T09:21:04.7704481Z [36;1mset -euo pipefail[0m
+2026-10-26T09:21:04.7704863Z [36;1mresponse=$(aws ssm get-parameters --names $PARAMETERS --output json)[0m
+2026-10-26T09:21:04.7705234Z [36;1m[0m
+2026-10-26T09:21:04.7705540Z [36;1m# Fail loudly rather than deploying with blanks - an empty[0m
+2026-10-26T09:21:04.7705965Z [36;1m# EMAIL_RECIPIENTS would wipe the SES receipt rule's recipient list.[0m
+2026-10-26T09:21:04.7706401Z [36;1minvalid=$(jq -r '.InvalidParameters | join(", ")' <<< "$response")[0m
+2026-10-26T09:21:04.7706725Z [36;1mif [ -n "$invalid" ]; then[0m
+2026-10-26T09:21:04.7707072Z [36;1m  echo "::error::Missing Parameter Store parameters: $invalid"[0m
+2026-10-26T09:21:04.7707403Z [36;1m  exit 1[0m
+2026-10-26T09:21:04.7707750Z [36;1mfi[0m
+2026-10-26T09:21:04.7707967Z [36;1m[0m
+2026-10-26T09:21:04.7708219Z [36;1mwhile IFS=$'\t' read -r name value; do[0m
+2026-10-26T09:21:04.7708700Z [36;1m  key=${name#rss-email-}[0m
+2026-10-26T09:21:04.7709105Z [36;1m  # Account id and region are not sensitive, and masking the region[0m
+2026-10-26T09:21:04.7709477Z [36;1m  # would garble every ARN in the deploy log.[0m
+2026-10-26T09:21:04.7709781Z [36;1m  case "$key" in[0m
+2026-10-26T09:21:04.7710062Z [36;1m    AWS_ACCOUNT_ID|AWS_REGION) ;;[0m
+2026-10-26T09:21:04.7710374Z [36;1m    *) echo "::add-mask::$value" ;;[0m
+2026-10-26T09:21:04.7710657Z [36;1m  esac[0m
+2026-10-26T09:21:04.7710902Z [36;1m  echo "$key=$value" >> "$GITHUB_ENV"[0m
+2026-10-26T09:21:04.7711211Z [36;1m  echo "Loaded $key"[0m
+2026-10-26T09:21:04.7711541Z [36;1mdone < <(jq -r '.Parameters[] | [.Name, .Value] | @tsv' <<< "$response")[0m
+2026-10-26T09:21:04.7747285Z shell: /usr/bin/bash -e {0}
+2026-10-26T09:21:04.7747562Z env:
+2026-10-26T09:21:04.7747902Z   pythonLocation: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T09:21:04.7748304Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.13.16/x64/lib/pkgconfig
+2026-10-26T09:21:04.7748803Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T09:21:04.7749167Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T09:21:04.7749556Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T09:21:04.7749959Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.13.16/x64/lib
+2026-10-26T09:21:04.7750318Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-10-26T09:21:04.7750686Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-10-26T09:21:04.7751010Z   AWS_DEFAULT_REGION: eu-west-1
+2026-10-26T09:21:04.7751284Z   AWS_REGION: eu-west-1
+2026-10-26T09:21:04.7751869Z   AWS_ACCESS_KEY_ID: ***
+2026-10-26T09:21:04.7752211Z   AWS_SECRET_ACCESS_KEY: ***
+2026-10-26T09:21:04.7755280Z   AWS_SESSION_TOKEN: ***
+2026-10-26T09:21:04.7755858Z   PARAMETERS: rss-email-AWS_ACCOUNT_ID rss-email-AWS_REGION rss-email-EMAIL_RECIPIENTS rss-email-SOURCE_DOMAIN rss-email-SOURCE_EMAIL_ADDRESS rss-email-TO_EMAIL_ADDRESS
+2026-10-26T09:21:04.7756490Z ##[endgroup]
+2026-10-26T09:21:09.1039697Z Loaded AWS_ACCOUNT_ID
+2026-10-26T09:21:09.1040277Z Loaded AWS_REGION
+2026-10-26T09:21:09.1042426Z Loaded EMAIL_RECIPIENTS
+2026-10-26T09:21:09.1044164Z Loaded SOURCE_DOMAIN
+2026-10-26T09:21:09.1045095Z Loaded SOURCE_EMAIL_ADDRESS
+2026-10-26T09:21:09.1045805Z Loaded TO_EMAIL_ADDRESS
+2026-10-26T09:21:09.1078787Z ##[group]Run npx cdk deploy RSSEmailStack --require-approval never
+2026-10-26T09:21:09.1079359Z [36;1mnpx cdk deploy RSSEmailStack --require-approval never[0m
+2026-10-26T09:21:09.1115766Z shell: /usr/bin/bash -e {0}
+2026-10-26T09:21:09.1116154Z env:
+2026-10-26T09:21:09.1116484Z   pythonLocation: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T09:21:09.1116954Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.13.16/x64/lib/pkgconfig
+2026-10-26T09:21:09.1117436Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T09:21:09.1117892Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T09:21:09.1118329Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.13.16/x64
+2026-10-26T09:21:09.1118936Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.13.16/x64/lib
+2026-10-26T09:21:09.1119424Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+2026-10-26T09:21:09.1119792Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+2026-10-26T09:21:09.1120246Z   AWS_DEFAULT_REGION: eu-west-1
+2026-10-26T09:21:09.1120563Z   AWS_REGION: eu-west-1
+2026-10-26T09:21:09.1121057Z   AWS_ACCESS_KEY_ID: ***
+2026-10-26T09:21:09.1121490Z   AWS_SECRET_ACCESS_KEY: ***
+2026-10-26T09:21:09.1124998Z   AWS_SESSION_TOKEN: ***
+2026-10-26T09:21:09.1125348Z   AWS_ACCOUNT_ID: 002681522526
+2026-10-26T09:21:09.1126205Z   EMAIL_RECIPIENTS: ***
+2026-10-26T09:21:09.1126700Z   SOURCE_DOMAIN: ***
+2026-10-26T09:21:09.1127140Z   SOURCE_EMAIL_ADDRESS: ***
+2026-10-26T09:21:09.1127573Z   TO_EMAIL_ADDRESS: ***
+2026-10-26T09:21:09.1128097Z ##[endgroup]
+2026-10-26T09:21:09.9525041Z (node:2291) Warning: NodeVersionSupportWarning: The AWS SDK for JavaScript (v3)
+2026-10-26T09:21:09.9526550Z versions published after the first week of January 2027
+2026-10-26T09:21:09.9527575Z will require node >=22. You are running node v20.20.2.
+2026-10-26T09:21:09.9528288Z 
+2026-10-26T09:21:09.9529330Z To continue receiving updates to AWS services, bug fixes,
+2026-10-26T09:21:09.9530186Z and security updates please upgrade to node >=22.
+2026-10-26T09:21:09.9530484Z 
+2026-10-26T09:21:09.9530849Z More information can be found at: https://a.co/c895JFp
+2026-10-26T09:21:09.9531525Z (Use `node --trace-warnings ...` to show where the warning was created)
+2026-10-26T09:21:11.3086809Z [32m# This file was autogenerated by uv via the following command:[39m
+2026-10-26T09:21:11.3088121Z [32m#    uv export --frozen --no-dev --no-emit-project --no-hashes -o /tmp/rss-email-layer-jjpTV3/requirements.txt[39m
+2026-10-26T09:21:11.3089111Z annotated-types==0.7.0
+2026-10-26T09:21:11.3089503Z [32m    # via pydantic[39m
+2026-10-26T09:21:11.3089891Z anthropic==1.0.0
+2026-10-26T09:21:11.3090227Z [32m    # via rss-email[39m
+2026-10-26T09:21:11.3090585Z anyio==4.14.2
+2026-10-26T09:21:11.3090932Z [32m    # via[39m
+2026-10-26T09:21:11.3091297Z [32m    #   anthropic[39m
+2026-10-26T09:21:11.3091670Z [32m    #   httpx[39m
+2026-10-26T09:21:11.3092037Z [32m    #   httpx2[39m
+2026-10-26T09:21:11.3092366Z beautifulsoup4==4.14.3
+2026-10-26T09:21:11.3092775Z [32m    # via rss-email[39m
+2026-10-26T09:21:11.3093202Z boto3==1.42.85
+2026-10-26T09:21:11.3093723Z [32m    # via rss-email[39m
+2026-10-26T09:21:11.3094137Z botocore==1.42.85
+2026-10-26T09:21:11.3094616Z [32m    # via[39m
+2026-10-26T09:21:11.3094991Z [32m    #   boto3[39m
+2026-10-26T09:21:11.3095469Z [32m    #   s3transfer[39m
+2026-10-26T09:21:11.3095880Z brotli==1.2.1
+2026-10-26T09:21:11.3096392Z [32m    # via rss-email[39m
+2026-10-26T09:21:11.3096809Z certifi==2026.10.19
+2026-10-26T09:21:11.3097282Z [32m    # via[39m
+2026-10-26T09:21:11.3097731Z [32m    #   httpcore[39m
+2026-10-26T09:21:11.3098253Z [32m    #   httpx[39m
+2026-10-26T09:21:11.3099009Z docstring-parser==0.17.0
+2026-10-26T09:21:11.3099501Z [32m    # via anthropic[39m
+2026-10-26T09:21:11.3099967Z feedparser==6.0.12
+2026-10-26T09:21:11.3100474Z [32m    # via rss-email[39m
+2026-10-26T09:21:11.3101022Z h11==0.16.0
+2026-10-26T09:21:11.3101495Z [32m    # via[39m
+2026-10-26T09:21:11.3102334Z [32m    #   httpcore[39m
+2026-10-26T09:21:11.3102896Z [32m    #   httpcore2[39m
+2026-10-26T09:21:11.3103346Z httpcore==1.0.9
+2026-10-26T09:21:11.3104431Z [32m    # via httpx[39m
+2026-10-26T09:21:11.3105023Z httpcore2==2.12.0 ; sys_platform != 'emscripten'
+2026-10-26T09:21:11.3105599Z [32m    # via httpx2[39m
+2026-10-26T09:21:11.3106050Z httpx==0.28.1
+2026-10-26T09:21:11.3106485Z [32m    # via rss-email[39m
+2026-10-26T09:21:11.3106938Z httpx2==2.12.0
+2026-10-26T09:21:11.3107393Z [32m    # via anthropic[39m
+2026-10-26T09:21:11.3108017Z httpx2-jsfetch==1.0 ; sys_platform == 'emscripten'
+2026-10-26T09:21:11.3119678Z [32m    # via httpx2[39m
+2026-10-26T09:21:11.3120374Z idna==3.19
+2026-10-26T09:21:11.3121038Z [32m    # via[39m
+2026-10-26T09:21:11.3121533Z [32m    #   anyio[39m
+2026-10-26T09:21:11.3121995Z [32m    #   httpx[39m
+2026-10-26T09:21:11.3122489Z [32m    #   httpx2[39m
+2026-10-26T09:21:11.3122952Z jiter==0.13.0
+2026-10-26T09:21:11.3123447Z [32m    # via anthropic[39m
+2026-10-26T09:21:11.3123910Z jmespath==1.1.0
+2026-10-26T09:21:11.3124436Z [32m    # via[39m
+2026-10-26T09:21:11.3124954Z [32m    #   boto3[39m
+2026-10-26T09:21:11.3125477Z [32m    #   botocore[39m
+2026-10-26T09:21:11.3125879Z pydantic==2.12.5
+2026-10-26T09:21:11.3126347Z [32m    # via[39m
+2026-10-26T09:21:11.3126815Z [32m    #   anthropic[39m
+2026-10-26T09:21:11.3127336Z [32m    #   rss-email[39m
+2026-10-26T09:21:11.3127772Z pydantic-core==2.41.5
+2026-10-26T09:21:11.3128297Z [32m    # via pydantic[39m
+2026-10-26T09:21:11.3129047Z python-dateutil==2.9.0.post0
+2026-10-26T09:21:11.3129842Z [32m    # via botocore[39m
+2026-10-26T09:21:11.3130297Z python-dotenv==1.2.2
+2026-10-26T09:21:11.3130750Z [32m    # via rss-email[39m
+2026-10-26T09:21:11.3131233Z regex==2026.4.4
+2026-10-26T09:21:11.3131904Z [32m    # via rss-email[39m
+2026-10-26T09:21:11.3132367Z s3transfer==0.16.0
+2026-10-26T09:21:11.3132881Z [32m    # via boto3[39m
+2026-10-26T09:21:11.3133318Z sgmllib3k==1.0.0
+2026-10-26T09:21:11.3133844Z [32m    # via feedparser[39m
+2026-10-26T09:21:11.3134302Z six==1.17.0
+2026-10-26T09:21:11.3135023Z [32m    # via python-dateutil[39m
+2026-10-26T09:21:11.3135613Z sniffio==1.3.1
+2026-10-26T09:21:11.3136111Z [32m    # via anthropic[39m
+2026-10-26T09:21:11.3136560Z soupsieve==2.9
+2026-10-26T09:21:11.3137034Z [32m    # via beautifulsoup4[39m
+2026-10-26T09:21:11.3137869Z truststore==0.10.4 ; sys_platform != 'emscripten'
+2026-10-26T09:21:11.3138630Z [32m    # via[39m
+2026-10-26T09:21:11.3139161Z [32m    #   httpcore2[39m
+2026-10-26T09:21:11.3139672Z [32m    #   httpx2[39m
+2026-10-26T09:21:11.3140213Z typing-extensions==4.15.0
+2026-10-26T09:21:11.3140694Z [32m    # via[39m
+2026-10-26T09:21:11.3141188Z [32m    #   anthropic[39m
+2026-10-26T09:21:11.3141713Z [32m    #   beautifulsoup4[39m
+2026-10-26T09:21:11.3142231Z [32m    #   pydantic[39m
+2026-10-26T09:21:11.3142762Z [32m    #   pydantic-core[39m
+2026-10-26T09:21:11.3143324Z [32m    #   typing-inspection[39m
+2026-10-26T09:21:11.3143860Z typing-inspection==0.4.2
+2026-10-26T09:21:11.3144405Z [32m    # via pydantic[39m
+2026-10-26T09:21:11.3144849Z urllib3==2.8.0
+2026-10-26T09:21:11.3145327Z [32m    # via botocore[39m
+2026-10-26T09:21:11.3145761Z w3lib==2.4.1
+2026-10-26T09:21:11.3146228Z [32m    # via rss-email[39m
+2026-10-26T09:21:12.0788911Z Bundling asset RSSEmailStack/RSSLibsLayer/Code/Stage...
+2026-10-26T09:21:12.1755812Z Unable to find image 'public.ecr.aws/sam/build-python3.13:latest' locally
+2026-10-26T09:21:12.6530178Z latest: Pulling from sam/build-python3.13
+2026-10-26T09:21:12.8834046Z 11cb0254c041: Pulling fs layer
+2026-10-26T09:21:12.8834693Z 8708c3946ac5: Pulling fs layer
+2026-10-26T09:21:12.8835189Z 1d29b796d543: Pulling fs layer
+2026-10-26T09:21:12.8835652Z c042d7dd1261: Pulling fs layer
+2026-10-26T09:21:12.8836091Z aaac8b8b6889: Pulling fs layer
+2026-10-26T09:21:12.8836521Z 3780cb9494d0: Pulling fs layer
+2026-10-26T09:21:12.8836976Z 9e6da502cc6d: Pulling fs layer
+2026-10-26T09:21:12.8837414Z 416d51e9cbf9: Pulling fs layer
+2026-10-26T09:21:12.8838241Z 3a6c58be4efe: Pulling fs layer
+2026-10-26T09:21:12.8839688Z a414124ee2dc: Pulling fs layer
+2026-10-26T09:21:12.8840069Z 79efe972c5d6: Pulling fs layer
+2026-10-26T09:21:12.8840347Z 3bf19b1203b2: Pulling fs layer
+2026-10-26T09:21:12.8840694Z 22dbaddd335b: Pulling fs layer
+2026-10-26T09:21:12.8840990Z 4e1d06d5193e: Pulling fs layer
+2026-10-26T09:21:12.8841339Z eee4429f6a20: Pulling fs layer
+2026-10-26T09:21:12.8841635Z 91111a564ab2: Pulling fs layer
+2026-10-26T09:21:12.8841964Z faf3716b65cd: Pulling fs layer
+2026-10-26T09:21:12.9789084Z 11cb0254c041: Download complete
+2026-10-26T09:21:13.0802938Z 91111a564ab2: Download complete
+2026-10-26T09:21:13.0805799Z 8708c3946ac5: Download complete
+2026-10-26T09:21:13.1834369Z 416d51e9cbf9: Download complete
+2026-10-26T09:21:13.1861222Z 9e6da502cc6d: Download complete
+2026-10-26T09:21:13.1864729Z eee4429f6a20: Download complete
+2026-10-26T09:21:13.4808282Z 3bf19b1203b2: Download complete
+2026-10-26T09:21:13.5851302Z 79efe972c5d6: Download complete
+2026-10-26T09:21:14.2794690Z 22dbaddd335b: Download complete
+2026-10-26T09:21:14.7791773Z aaac8b8b6889: Download complete
+2026-10-26T09:21:16.0785922Z faf3716b65cd: Download complete
+2026-10-26T09:21:17.3785372Z 3a6c58be4efe: Download complete
+2026-10-26T09:21:18.3790158Z a414124ee2dc: Download complete
+2026-10-26T09:21:19.0852165Z aaac8b8b6889: Pull complete
+2026-10-26T09:21:19.4787607Z 4e1d06d5193e: Download complete
+2026-10-26T09:21:19.5787786Z c042d7dd1261: Download complete
+2026-10-26T09:21:19.5792259Z 3780cb9494d0: Download complete
+2026-10-26T09:21:19.5793498Z 1d29b796d543: Download complete
+2026-10-26T09:21:19.6800864Z 11cb0254c041: Pull complete
+2026-10-26T09:21:19.6836319Z 9e6da502cc6d: Pull complete
+2026-10-26T09:21:19.7823645Z 3bf19b1203b2: Pull complete
+2026-10-26T09:21:21.5801388Z 8708c3946ac5: Pull complete
+2026-10-26T09:21:21.5870427Z 4e1d06d5193e: Pull complete
+2026-10-26T09:21:22.9935580Z 1d29b796d543: Pull complete
+2026-10-26T09:21:26.3854456Z c042d7dd1261: Pull complete
+2026-10-26T09:21:28.0852208Z 3780cb9494d0: Pull complete
+2026-10-26T09:21:29.2845938Z 3a6c58be4efe: Pull complete
+2026-10-26T09:21:30.6826156Z a414124ee2dc: Pull complete
+2026-10-26T09:21:31.2810376Z 79efe972c5d6: Pull complete
+2026-10-26T09:21:31.8823296Z 22dbaddd335b: Pull complete
+2026-10-26T09:21:32.5800819Z eee4429f6a20: Pull complete
+2026-10-26T09:21:32.7783950Z 91111a564ab2: Pull complete
+2026-10-26T09:21:33.9789668Z 416d51e9cbf9: Pull complete
+2026-10-26T09:21:33.9796196Z faf3716b65cd: Pull complete
+2026-10-26T09:21:34.0123440Z Digest: sha256:6d1a9d0df5f2e1dd0e8fec080f94db186b8a7086fe4a1b6e560223c4bce3e9be
+2026-10-26T09:21:41.6715654Z Status: Downloaded newer image for public.ecr.aws/sam/build-python3.13:latest
+2026-10-26T09:21:41.6717422Z WARNING: The directory '/.cache/pip' or its parent directory is not owned or is not writable by the current user. The cache has been disabled. Check the permissions and owner of that directory. If executing pip with sudo, you should use sudo's -H flag.
+2026-10-26T09:21:41.7738225Z Ignoring httpx2-jsfetch: markers 'sys_platform == "emscripten"' don't match your environment
+2026-10-26T09:21:41.8419777Z Collecting annotated-types==0.7.0 (from -r /layer-requirements/requirements.txt (line 3))
+2026-10-26T09:21:41.9097355Z   Downloading annotated_types-0.7.0-py3-none-any.whl.metadata (15 kB)
+2026-10-26T09:21:41.9534686Z Collecting anthropic==1.0.0 (from -r /layer-requirements/requirements.txt (line 5))
+2026-10-26T09:21:41.9670261Z   Downloading anthropic-1.0.0-py3-none-any.whl.metadata (3.3 kB)
+2026-10-26T09:21:41.9868163Z Collecting anyio==4.14.2 (from -r /layer-requirements/requirements.txt (line 7))
+2026-10-26T09:21:41.9994090Z   Downloading anyio-4.14.2-py3-none-any.whl.metadata (4.6 kB)
+2026-10-26T09:21:42.0184195Z Collecting beautifulsoup4==4.14.3 (from -r /layer-requirements/requirements.txt (line 12))
+2026-10-26T09:21:42.0310689Z   Downloading beautifulsoup4-4.14.3-py3-none-any.whl.metadata (3.8 kB)
+2026-10-26T09:21:42.1605171Z Collecting boto3==1.42.85 (from -r /layer-requirements/requirements.txt (line 14))
+2026-10-26T09:21:42.1733682Z   Downloading boto3-1.42.85-py3-none-any.whl.metadata (6.7 kB)
+2026-10-26T09:21:42.2918362Z Collecting botocore==1.42.85 (from -r /layer-requirements/requirements.txt (line 16))
+2026-10-26T09:21:42.3048502Z   Downloading botocore-1.42.85-py3-none-any.whl.metadata (5.9 kB)
+2026-10-26T09:21:42.3341170Z Collecting brotli==1.2.1 (from -r /layer-requirements/requirements.txt (line 20))
+2026-10-26T09:21:42.3467148Z   Downloading brotli-1.2.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (6.1 kB)
+2026-10-26T09:21:42.3667071Z Collecting certifi==2026.10.19 (from -r /layer-requirements/requirements.txt (line 22))
+2026-10-26T09:21:42.3787125Z   Downloading certifi-2026.10.19-py3-none-any.whl.metadata (2.5 kB)
+2026-10-26T09:21:42.3954982Z Collecting docstring-parser==0.17.0 (from -r /layer-requirements/requirements.txt (line 26))
+2026-10-26T09:21:42.4081059Z   Downloading docstring_parser-0.17.0-py3-none-any.whl.metadata (3.5 kB)
+2026-10-26T09:21:42.4266677Z Collecting feedparser==6.0.12 (from -r /layer-requirements/requirements.txt (line 28))
+2026-10-26T09:21:42.4390608Z   Downloading feedparser-6.0.12-py3-none-any.whl.metadata (2.7 kB)
+2026-10-26T09:21:42.4554946Z Collecting h11==0.16.0 (from -r /layer-requirements/requirements.txt (line 30))
+2026-10-26T09:21:42.4681689Z   Downloading h11-0.16.0-py3-none-any.whl.metadata (8.3 kB)
+2026-10-26T09:21:42.4868506Z Collecting httpcore==1.0.9 (from -r /layer-requirements/requirements.txt (line 34))
+2026-10-26T09:21:42.4993762Z   Downloading httpcore-1.0.9-py3-none-any.whl.metadata (21 kB)
+2026-10-26T09:21:42.5209367Z Collecting httpcore2==2.12.0 (from -r /layer-requirements/requirements.txt (line 36))
+2026-10-26T09:21:42.5335175Z   Downloading httpcore2-2.12.0-py3-none-any.whl.metadata (25 kB)
+2026-10-26T09:21:42.5561447Z Collecting httpx==0.28.1 (from -r /layer-requirements/requirements.txt (line 38))
+2026-10-26T09:21:42.5685933Z   Downloading httpx-0.28.1-py3-none-any.whl.metadata (7.1 kB)
+2026-10-26T09:21:42.5864494Z Collecting httpx2==2.12.0 (from -r /layer-requirements/requirements.txt (line 40))
+2026-10-26T09:21:42.5990555Z   Downloading httpx2-2.12.0-py3-none-any.whl.metadata (9.5 kB)
+2026-10-26T09:21:42.6175311Z Collecting idna==3.19 (from -r /layer-requirements/requirements.txt (line 44))
+2026-10-26T09:21:42.6300989Z   Downloading idna-3.19-py3-none-any.whl.metadata (9.2 kB)
+2026-10-26T09:21:42.6898196Z Collecting jiter==0.13.0 (from -r /layer-requirements/requirements.txt (line 49))
+2026-10-26T09:21:42.7033157Z   Downloading jiter-0.13.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (5.2 kB)
+2026-10-26T09:21:42.7200345Z Collecting jmespath==1.1.0 (from -r /layer-requirements/requirements.txt (line 51))
+2026-10-26T09:21:42.7325165Z   Downloading jmespath-1.1.0-py3-none-any.whl.metadata (7.6 kB)
+2026-10-26T09:21:42.7903564Z Collecting pydantic==2.12.5 (from -r /layer-requirements/requirements.txt (line 55))
+2026-10-26T09:21:42.8029030Z   Downloading pydantic-2.12.5-py3-none-any.whl.metadata (90 kB)
+2026-10-26T09:21:43.1851776Z Collecting pydantic-core==2.41.5 (from -r /layer-requirements/requirements.txt (line 59))
+2026-10-26T09:21:43.1977534Z   Downloading pydantic_core-2.41.5-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (7.3 kB)
+2026-10-26T09:21:43.2151342Z Collecting python-dateutil==2.9.0.post0 (from -r /layer-requirements/requirements.txt (line 61))
+2026-10-26T09:21:43.2276929Z   Downloading python_dateutil-2.9.0.post0-py2.py3-none-any.whl.metadata (8.4 kB)
+2026-10-26T09:21:43.2462075Z Collecting python-dotenv==1.2.2 (from -r /layer-requirements/requirements.txt (line 63))
+2026-10-26T09:21:43.2587318Z   Downloading python_dotenv-1.2.2-py3-none-any.whl.metadata (27 kB)
+2026-10-26T09:21:43.4518939Z Collecting regex==2026.4.4 (from -r /layer-requirements/requirements.txt (line 65))
+2026-10-26T09:21:43.4647641Z   Downloading regex-2026.4.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (40 kB)
+2026-10-26T09:21:43.4856198Z Collecting s3transfer==0.16.0 (from -r /layer-requirements/requirements.txt (line 67))
+2026-10-26T09:21:43.4982578Z   Downloading s3transfer-0.16.0-py3-none-any.whl.metadata (1.7 kB)
+2026-10-26T09:21:43.5157040Z Collecting sgmllib3k==1.0.0 (from -r /layer-requirements/requirements.txt (line 69))
+2026-10-26T09:21:43.5282845Z   Downloading sgmllib3k-1.0.0.tar.gz (5.8 kB)
+2026-10-26T09:21:43.5312280Z   Installing build dependencies: started
+2026-10-26T09:21:44.0415472Z   Installing build dependencies: finished with status 'done'
+2026-10-26T09:21:44.0417931Z   Getting requirements to build wheel: started
+2026-10-26T09:21:44.2570892Z   Getting requirements to build wheel: finished with status 'done'
+2026-10-26T09:21:44.2577743Z   Preparing metadata (pyproject.toml): started
+2026-10-26T09:21:44.3756127Z   Preparing metadata (pyproject.toml): finished with status 'done'
+2026-10-26T09:21:44.3935509Z Collecting six==1.17.0 (from -r /layer-requirements/requirements.txt (line 71))
+2026-10-26T09:21:44.4062351Z   Downloading six-1.17.0-py2.py3-none-any.whl.metadata (1.7 kB)
+2026-10-26T09:21:44.4226786Z Collecting sniffio==1.3.1 (from -r /layer-requirements/requirements.txt (line 73))
+2026-10-26T09:21:44.4354537Z   Downloading sniffio-1.3.1-py3-none-any.whl.metadata (3.9 kB)
+2026-10-26T09:21:44.4541420Z Collecting soupsieve==2.9 (from -r /layer-requirements/requirements.txt (line 75))
+2026-10-26T09:21:44.4667000Z   Downloading soupsieve-2.9-py3-none-any.whl.metadata (4.6 kB)
+2026-10-26T09:21:44.4834464Z Collecting truststore==0.10.4 (from -r /layer-requirements/requirements.txt (line 77))
+2026-10-26T09:21:44.4963496Z   Downloading truststore-0.10.4-py3-none-any.whl.metadata (4.4 kB)
+2026-10-26T09:21:44.5152390Z Collecting typing-extensions==4.15.0 (from -r /layer-requirements/requirements.txt (line 81))
+2026-10-26T09:21:44.5278365Z   Downloading typing_extensions-4.15.0-py3-none-any.whl.metadata (3.3 kB)
+2026-10-26T09:21:44.5443736Z Collecting typing-inspection==0.4.2 (from -r /layer-requirements/requirements.txt (line 88))
+2026-10-26T09:21:44.5570403Z   Downloading typing_inspection-0.4.2-py3-none-any.whl.metadata (2.6 kB)
+2026-10-26T09:21:44.5774841Z Collecting urllib3==2.8.0 (from -r /layer-requirements/requirements.txt (line 90))
+2026-10-26T09:21:44.5899855Z   Downloading urllib3-2.8.0-py3-none-any.whl.metadata (7.4 kB)
+2026-10-26T09:21:44.6091909Z Collecting w3lib==2.4.1 (from -r /layer-requirements/requirements.txt (line 92))
+2026-10-26T09:21:44.6217725Z   Downloading w3lib-2.4.1-py3-none-any.whl.metadata (2.3 kB)
+2026-10-26T09:21:44.6604639Z Downloading annotated_types-0.7.0-py3-none-any.whl (13 kB)
+2026-10-26T09:21:44.6751681Z Downloading anthropic-1.0.0-py3-none-any.whl (1.2 MB)
+2026-10-26T09:21:44.7114442Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.2/1.2 MB 42.4 MB/s  0:00:00
+2026-10-26T09:21:44.7241842Z Downloading anyio-4.14.2-py3-none-any.whl (125 kB)
+2026-10-26T09:21:44.7371743Z Downloading docstring_parser-0.17.0-py3-none-any.whl (36 kB)
+2026-10-26T09:21:44.7499542Z Downloading httpx2-2.12.0-py3-none-any.whl (95 kB)
+2026-10-26T09:21:44.7629588Z Downloading jiter-0.13.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (359 kB)
+2026-10-26T09:21:44.7765330Z Downloading pydantic-2.12.5-py3-none-any.whl (463 kB)
+2026-10-26T09:21:44.7906480Z Downloading sniffio-1.3.1-py3-none-any.whl (10 kB)
+2026-10-26T09:21:44.8033752Z Downloading typing_extensions-4.15.0-py3-none-any.whl (44 kB)
+2026-10-26T09:21:44.8159953Z Downloading beautifulsoup4-4.14.3-py3-none-any.whl (107 kB)
+2026-10-26T09:21:44.8285722Z Downloading boto3-1.42.85-py3-none-any.whl (140 kB)
+2026-10-26T09:21:44.8435971Z Downloading botocore-1.42.85-py3-none-any.whl (14.8 MB)
+2026-10-26T09:21:44.8906928Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 14.8/14.8 MB 321.5 MB/s  0:00:00
+2026-10-26T09:21:44.9032786Z Downloading jmespath-1.1.0-py3-none-any.whl (20 kB)
+2026-10-26T09:21:44.9160470Z Downloading python_dateutil-2.9.0.post0-py2.py3-none-any.whl (229 kB)
+2026-10-26T09:21:44.9289511Z Downloading s3transfer-0.16.0-py3-none-any.whl (86 kB)
+2026-10-26T09:21:44.9415993Z Downloading urllib3-2.8.0-py3-none-any.whl (135 kB)
+2026-10-26T09:21:44.9543207Z Downloading brotli-1.2.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (1.4 MB)
+2026-10-26T09:21:44.9578973Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.4/1.4 MB 522.7 MB/s  0:00:00
+2026-10-26T09:21:44.9705024Z Downloading certifi-2026.10.19-py3-none-any.whl (136 kB)
+2026-10-26T09:21:44.9832074Z Downloading feedparser-6.0.12-py3-none-any.whl (81 kB)
+2026-10-26T09:21:44.9958140Z Downloading h11-0.16.0-py3-none-any.whl (37 kB)
+2026-10-26T09:21:45.0084721Z Downloading httpcore-1.0.9-py3-none-any.whl (78 kB)
+2026-10-26T09:21:45.0210986Z Downloading httpcore2-2.12.0-py3-none-any.whl (83 kB)
+2026-10-26T09:21:45.0337863Z Downloading httpx-0.28.1-py3-none-any.whl (73 kB)
+2026-10-26T09:21:45.0465517Z Downloading idna-3.19-py3-none-any.whl (68 kB)
+2026-10-26T09:21:45.0593135Z Downloading pydantic_core-2.41.5-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.1 MB)
+2026-10-26T09:21:45.0641717Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.1/2.1 MB 516.2 MB/s  0:00:00
+2026-10-26T09:21:45.0766981Z Downloading python_dotenv-1.2.2-py3-none-any.whl (22 kB)
+2026-10-26T09:21:45.0898934Z Downloading regex-2026.4.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (801 kB)
+2026-10-26T09:21:45.0919095Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 801.1/801.1 kB 807.9 MB/s  0:00:00
+2026-10-26T09:21:45.1044686Z Downloading six-1.17.0-py2.py3-none-any.whl (11 kB)
+2026-10-26T09:21:45.1170061Z Downloading soupsieve-2.9-py3-none-any.whl (37 kB)
+2026-10-26T09:21:45.1295675Z Downloading truststore-0.10.4-py3-none-any.whl (18 kB)
+2026-10-26T09:21:45.1420829Z Downloading typing_inspection-0.4.2-py3-none-any.whl (14 kB)
+2026-10-26T09:21:45.1546573Z Downloading w3lib-2.4.1-py3-none-any.whl (21 kB)
+2026-10-26T09:21:45.2191482Z Building wheels for collected packages: sgmllib3k
+2026-10-26T09:21:45.2197637Z   Building wheel for sgmllib3k (pyproject.toml): started
+2026-10-26T09:21:45.3639224Z   Building wheel for sgmllib3k (pyproject.toml): finished with status 'done'
+2026-10-26T09:21:45.3642754Z   Created wheel for sgmllib3k: filename=sgmllib3k-1.0.0-py3-none-any.whl size=6090 sha256=72aaf9326186723cc8506245b99bee41f3a53b73cf4e9af1eb0bd4fbaba50ab6
+2026-10-26T09:21:45.3644121Z   Stored in directory: /tmp/pip-ephem-wheel-cache-fagsgt0j/wheels/3d/4d/ef/37cdccc18d6fd7e0dd7817dcdf9146d4d6789c32a227a28134
+2026-10-26T09:21:45.3654689Z Successfully built sgmllib3k
+2026-10-26T09:21:45.4093690Z Installing collected packages: sgmllib3k, brotli, w3lib, urllib3, typing-extensions, truststore, soupsieve, sniffio, six, regex, python-dotenv, jmespath, jiter, idna, h11, feedparser, docstring-parser, certifi, annotated-types, typing-inspection, python-dateutil, pydantic-core, httpcore2, httpcore, beautifulsoup4, anyio, pydantic, httpx2, httpx, botocore, s3transfer, anthropic, boto3
+2026-10-26T09:21:47.0474212Z 
+2026-10-26T09:21:47.0499064Z Successfully installed annotated-types-0.7.0 anthropic-1.0.0 anyio-4.14.2 beautifulsoup4-4.14.3 boto3-1.42.85 botocore-1.42.85 brotli-1.2.1 certifi-2026.10.19 docstring-parser-0.17.0 feedparser-6.0.12 h11-0.16.0 httpcore-1.0.9 httpcore2-2.12.0 httpx-0.28.1 httpx2-2.12.0 idna-3.19 jiter-0.13.0 jmespath-1.1.0 pydantic-2.12.5 pydantic-core-2.41.5 python-dateutil-2.9.0.post0 python-dotenv-1.2.2 regex-2026.4.4 s3transfer-0.16.0 sgmllib3k-1.0.0 six-1.17.0 sniffio-1.3.1 soupsieve-2.9 truststore-0.10.4 typing-extensions-4.15.0 typing-inspection-0.4.2 urllib3-2.8.0 w3lib-2.4.1
+2026-10-26T09:21:47.4589634Z 
+2026-10-26T09:21:47.4591624Z [notice] A new release of pip is available: 26.2.1 -> 26.2.2
+2026-10-26T09:21:47.4592735Z [notice] To update, run: pip install --upgrade pip
+2026-10-26T09:21:48.3180083Z [WARNING] aws-cdk-lib.aws_cloudfront_origins.S3Origin is deprecated, and will be removed in the next major release.
+2026-10-26T09:21:48.3181399Z   Use `S3BucketOrigin` or `S3StaticWebsiteOrigin` instead.
+2026-10-26T09:21:48.3200253Z [WARNING] aws-cdk-lib.aws_cloudfront_origins.S3Origin#bind is deprecated, and will be removed in the next major release.
+2026-10-26T09:21:48.3201403Z   Use `S3BucketOrigin` or `S3StaticWebsiteOrigin` instead.
+2026-10-26T09:21:48.3273312Z [WARNING] aws-cdk-lib.aws_lambda.FunctionOptions#logRetention is deprecated, and will be removed in the next major release.
+2026-10-26T09:21:48.3274444Z   use `logGroup` instead
+2026-10-26T09:21:50.0679951Z 
+2026-10-26T09:21:50.0680962Z ✨  Synthesis time: 40.12s
+2026-10-26T09:21:50.0681242Z 
+2026-10-26T09:21:51.9010760Z cd-RSSEmailStack: start: Building RSSLibsLayer/Code
+2026-10-26T09:21:51.9011497Z cd-RSSEmailStack: success: Built RSSLibsLayer/Code
+2026-10-26T09:21:51.9020379Z cd-RSSEmailStack: start: Building cd-RSSEmailStack Template
+2026-10-26T09:21:51.9020851Z cd-RSSEmailStack: success: Built cd-RSSEmailStack Template
+2026-10-26T09:21:51.9061115Z cd-RSSEmailStack: start: Building GeneratePodcastFunction/AssetImage
+2026-10-26T09:21:52.3665151Z cd-RSSEmailStack: start: Publishing cd-RSSEmailStack Template (002681522526-eu-west-1-d8d32712)
+2026-10-26T09:21:52.3806460Z cd-RSSEmailStack: start: Publishing RSSLibsLayer/Code (002681522526-eu-west-1-22e68438)
+2026-10-26T09:21:52.3843282Z cd-RSSEmailStack: fail: No ECR repository named 'cdk-hnb659fds-container-assets-002681522526-eu-west-1' in account 002681522526. Is this account bootstrapped?
+2026-10-26T09:21:54.0604309Z cd-RSSEmailStack: success: Published cd-RSSEmailStack Template (002681522526-eu-west-1-d8d32712)
+2026-10-26T09:21:58.9007713Z cd-RSSEmailStack: success: Published RSSLibsLayer/Code (002681522526-eu-west-1-22e68438)
+2026-10-26T09:21:58.9138135Z Failed to publish asset RSSLibsLayer/Code (002681522526-eu-west-1-22e68438)
+2026-10-26T09:21:58.9139271Z ‣ AggregateError: 
+2026-10-26T09:21:58.9504785Z ##[error]Process completed with exit code 1.
+2026-10-26T09:21:58.9779416Z Post job cleanup.
+2026-10-26T09:21:59.0386583Z Post job cleanup.
+2026-10-26T09:21:59.1031279Z [command]/usr/bin/git version
+2026-10-26T09:21:59.1070486Z git version 2.55.0
+2026-10-26T09:21:59.1093852Z Temporarily overriding HOME='/home/runner/work/_temp/8ca05389-6fd7-4b3d-9465-f260bbb7ee0a' before making global git config changes
+2026-10-26T09:21:59.1094819Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-26T09:21:59.1097732Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/rss-email/rss-email
+2026-10-26T09:21:59.1120805Z Removing SSH command configuration
+2026-10-26T09:21:59.1125735Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-26T09:21:59.1153063Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-26T09:21:59.1338891Z Removing HTTP extra header
+2026-10-26T09:21:59.1343317Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-26T09:21:59.1365848Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-26T09:21:59.1541229Z Removing includeIf entries pointing to credentials config files
+2026-10-26T09:21:59.1546288Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-26T09:21:59.1568212Z includeif.gitdir:/home/runner/work/rss-email/rss-email/.git.path
+2026-10-26T09:21:59.1569045Z includeif.gitdir:/home/runner/work/rss-email/rss-email/.git/worktrees/*.path
+2026-10-26T09:21:59.1569656Z includeif.gitdir:/github/workspace/.git.path
+2026-10-26T09:21:59.1570158Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-10-26T09:21:59.1573750Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/rss-email/rss-email/.git.path
+2026-10-26T09:21:59.1593663Z /home/runner/work/_temp/git-credentials-84830283-cfb9-4679-bc07-6b28d4d1177e.config
+2026-10-26T09:21:59.1603041Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/rss-email/rss-email/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-84830283\-cfb9\-4679\-bc07\-6b28d4d1177e\.config
+2026-10-26T09:21:59.1653182Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/rss-email/rss-email/.git/worktrees/*.path
+2026-10-26T09:21:59.1680038Z /home/runner/work/_temp/git-credentials-84830283-cfb9-4679-bc07-6b28d4d1177e.config
+2026-10-26T09:21:59.1682191Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/rss-email/rss-email/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-84830283\-cfb9\-4679\-bc07\-6b28d4d1177e\.config
+2026-10-26T09:21:59.1713972Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-10-26T09:21:59.1728108Z /github/runner_temp/git-credentials-84830283-cfb9-4679-bc07-6b28d4d1177e.config
+2026-10-26T09:21:59.1732733Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-84830283\-cfb9\-4679\-bc07\-6b28d4d1177e\.config
+2026-10-26T09:21:59.1810212Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-10-26T09:21:59.1810969Z /github/runner_temp/git-credentials-84830283-cfb9-4679-bc07-6b28d4d1177e.config
+2026-10-26T09:21:59.1812392Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-84830283\-cfb9\-4679\-bc07\-6b28d4d1177e\.config
+2026-10-26T09:21:59.1839507Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-26T09:21:59.2006054Z Removing credentials config '/home/runner/work/_temp/git-credentials-84830283-cfb9-4679-bc07-6b28d4d1177e.config'
+2026-10-26T09:21:59.2113807Z Cleaning up orphan processes
+</pasted_content id="9410">
+
+---
+
+<pasted_content id="9410">
+npx cdk bootstrap aws://002681522526/eu-west-1
+npm warn Unknown project config "node-option". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "node-option". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown project config "node-option". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+◇ injected env (0) from .env
+warning: The `UV_NATIVE_TLS` environment variable is deprecated and will be removed in a future release. Use `UV_SYSTEM_CERTS` instead.
+# This file was autogenerated by uv via the following command:
+#    uv export --frozen --no-dev --no-emit-project --no-hashes -o /var/folders/jw/l5dp_d_s6dnbj5qtksb8rs5h0000gn/T/rss-email-layer-HyvuCE/requirements.txt
+annotated-types==0.7.0
+    # via pydantic
+anthropic==1.0.0
+    # via rss-email
+anyio==4.14.2
+    # via
+    #   anthropic
+    #   httpx
+    #   httpx2
+beautifulsoup4==4.14.3
+    # via rss-email
+boto3==1.42.85
+    # via rss-email
+botocore==1.42.85
+    # via
+    #   boto3
+    #   s3transfer
+brotli==1.2.1
+    # via rss-email
+certifi==2026.10.19
+    # via
+    #   httpcore
+    #   httpx
+docstring-parser==0.17.0
+    # via anthropic
+feedparser==6.0.12
+    # via rss-email
+h11==0.16.0
+    # via
+    #   httpcore
+    #   httpcore2
+httpcore==1.0.9
+    # via httpx
+httpcore2==2.12.0 ; sys_platform != 'emscripten'
+    # via httpx2
+httpx==0.28.1
+    # via rss-email
+httpx2==2.12.0
+    # via anthropic
+httpx2-jsfetch==1.0 ; sys_platform == 'emscripten'
+    # via httpx2
+idna==3.19
+    # via
+    #   anyio
+    #   httpx
+    #   httpx2
+jiter==0.13.0
+    # via anthropic
+jmespath==1.1.0
+    # via
+    #   boto3
+    #   botocore
+pydantic==2.12.5
+    # via
+    #   anthropic
+    #   rss-email
+pydantic-core==2.41.5
+    # via pydantic
+python-dateutil==2.9.0.post0
+    # via botocore
+python-dotenv==1.2.2
+    # via rss-email
+regex==2026.4.4
+    # via rss-email
+s3transfer==0.16.0
+    # via boto3
+sgmllib3k==1.0.0
+    # via feedparser
+six==1.17.0
+    # via python-dateutil
+sniffio==1.3.1
+    # via anthropic
+soupsieve==2.9
+    # via beautifulsoup4
+truststore==0.10.4 ; sys_platform != 'emscripten'
+    # via
+    #   httpcore2
+    #   httpx2
+typing-extensions==4.15.0
+    # via
+    #   anthropic
+    #   beautifulsoup4
+    #   pydantic
+    #   pydantic-core
+    #   typing-inspection
+typing-inspection==0.4.2
+    # via pydantic
+urllib3==2.8.0
+    # via botocore
+w3lib==2.4.1
+    # via rss-email
+[WARNING] aws-cdk-lib.aws_cloudfront_origins.S3Origin is deprecated.
+  Use `S3BucketOrigin` or `S3StaticWebsiteOrigin` instead.
+  This API will be removed in the next major release.
+[WARNING] aws-cdk-lib.aws_cloudfront_origins.S3Origin#bind is deprecated.
+  Use `S3BucketOrigin` or `S3StaticWebsiteOrigin` instead.
+  This API will be removed in the next major release.
+[WARNING] aws-cdk-lib.aws_lambda.FunctionOptions#logRetention is deprecated.
+  use `logGroup` instead
+  This API will be removed in the next major release.
+ ⏳  Bootstrapping environment aws://002681522526/eu-west-1...
+Trusted accounts for deployment: 002681522526
+Trusted accounts for lookup: (none)
+Execution policies: arn:aws:iam::aws:policy/AdministratorAccess
+CDKToolkit: creating CloudFormation changeset...
+✅  Environment aws://002681522526/eu-west-1 bootstrapped.
+ AWS: default  ~/code/rss-email   feat/podcast-from-brief  aws ecr describe-repositories --region eu-west-1 --repository-names cdk-hnb659fds-container-assets-002681522526-eu-west-1
+
+aws: [ERROR]: An error occurred (RepositoryNotFoundException) when calling the DescribeRepositories operation: The repository with name 'cdk-hnb659fds-container-assets-002681522526-eu-west-1' does not exist in the registry with id '002681522526'
+ ✘  AWS: default  ~/code/rss-email   feat/podcast-from-brief  npx cdk bootstrap aws://002681522526/eu-west-1
+npm warn Unknown project config "node-option". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "node-option". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown project config "node-option". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+◇ injected env (0) from .env
+warning: The `UV_NATIVE_TLS` environment variable is deprecated and will be removed in a future release. Use `UV_SYSTEM_CERTS` instead.
+# This file was autogenerated by uv via the following command:
+#    uv export --frozen --no-dev --no-emit-project --no-hashes -o /var/folders/jw/l5dp_d_s6dnbj5qtksb8rs5h0000gn/T/rss-email-layer-87jMWN/requirements.txt
+annotated-types==0.7.0
+    # via pydantic
+anthropic==1.0.0
+    # via rss-email
+anyio==4.14.2
+    # via
+    #   anthropic
+    #   httpx
+    #   httpx2
+beautifulsoup4==4.14.3
+    # via rss-email
+boto3==1.42.85
+    # via rss-email
+botocore==1.42.85
+    # via
+    #   boto3
+    #   s3transfer
+brotli==1.2.1
+    # via rss-email
+certifi==2026.10.19
+    # via
+    #   httpcore
+    #   httpx
+docstring-parser==0.17.0
+    # via anthropic
+feedparser==6.0.12
+    # via rss-email
+h11==0.16.0
+    # via
+    #   httpcore
+    #   httpcore2
+httpcore==1.0.9
+    # via httpx
+httpcore2==2.12.0 ; sys_platform != 'emscripten'
+    # via httpx2
+httpx==0.28.1
+    # via rss-email
+httpx2==2.12.0
+    # via anthropic
+httpx2-jsfetch==1.0 ; sys_platform == 'emscripten'
+    # via httpx2
+idna==3.19
+    # via
+    #   anyio
+    #   httpx
+    #   httpx2
+jiter==0.13.0
+    # via anthropic
+jmespath==1.1.0
+    # via
+    #   boto3
+    #   botocore
+pydantic==2.12.5
+    # via
+    #   anthropic
+    #   rss-email
+pydantic-core==2.41.5
+    # via pydantic
+python-dateutil==2.9.0.post0
+    # via botocore
+python-dotenv==1.2.2
+    # via rss-email
+regex==2026.4.4
+    # via rss-email
+s3transfer==0.16.0
+    # via boto3
+sgmllib3k==1.0.0
+    # via feedparser
+six==1.17.0
+    # via python-dateutil
+sniffio==1.3.1
+    # via anthropic
+soupsieve==2.9
+    # via beautifulsoup4
+truststore==0.10.4 ; sys_platform != 'emscripten'
+    # via
+    #   httpcore2
+    #   httpx2
+typing-extensions==4.15.0
+    # via
+    #   anthropic
+    #   beautifulsoup4
+    #   pydantic
+    #   pydantic-core
+    #   typing-inspection
+typing-inspection==0.4.2
+    # via pydantic
+urllib3==2.8.0
+    # via botocore
+w3lib==2.4.1
+    # via rss-email
+[WARNING] aws-cdk-lib.aws_cloudfront_origins.S3Origin is deprecated.
+  Use `S3BucketOrigin` or `S3StaticWebsiteOrigin` instead.
+  This API will be removed in the next major release.
+[WARNING] aws-cdk-lib.aws_cloudfront_origins.S3Origin#bind is deprecated.
+  Use `S3BucketOrigin` or `S3StaticWebsiteOrigin` instead.
+  This API will be removed in the next major release.
+[WARNING] aws-cdk-lib.aws_lambda.FunctionOptions#logRetention is deprecated.
+  use `logGroup` instead
+  This API will be removed in the next major release.
+ ⏳  Bootstrapping environment aws://002681522526/eu-west-1...
+Trusted accounts for deployment: 002681522526
+Trusted accounts for lookup: (none)
+Execution policies: arn:aws:iam::aws:policy/AdministratorAccess
+✅  Environment aws://002681522526/eu-west-1 bootstrapped (no changes).
+ AWS: default  ~/code/rss-email   feat/podcast-from-brief  aws ecr describe-repositories --region eu-west-1 --repository-names cdk-hnb659fds-container-assets-002681522526-eu-west-1
+
+aws: [ERROR]: An error occurred (RepositoryNotFoundException) when calling the DescribeRepositories operation: The repository with name 'cdk-hnb659fds-container-assets-002681522526-eu-west-1' does not exist in the registry with id '002681522526'
+</pasted_content id="9410">
+
+---
+
+aws ecr describe-repositories --region eu-west-1 --query 'repositories[].repositoryName'
+
+---
+
+<pasted_content id="9410">
+{
+    "Status": "UPDATE_COMPLETE",
+    "Outputs": [
+        {
+            "OutputKey": "ImageRepositoryName",
+            "OutputValue": "cdk-hnb659fds-container-assets-002681522526-eu-west-1",
+            "Description": "The name of the ECR repository which hosts docker image assets"
+        },
+        {
+            "OutputKey": "BucketName",
+            "OutputValue": "cdk-hnb659fds-assets-002681522526-eu-west-1",
+            "Description": "The name of the S3 bucket owned by the CDK toolkit stack"
+        },
+        {
+            "OutputKey": "BootstrapVersion",
+            "OutputValue": "32",
+            "Description": "The version of the bootstrap resources that are currently mastered in this stack"
+        },
+        {
+            "OutputKey": "BucketDomainName",
+            "OutputValue": "cdk-hnb659fds-assets-002681522526-eu-west-1.s3.eu-west-1.amazonaws.com",
+            "Description": "The domain name of the S3 bucket owned by the CDK toolkit stack"
+        },
+        {
+            "OutputKey": "FileAssetKeyArn",
+            "OutputValue": "AWS_MANAGED_KEY",
+            "Description": "The ARN of the KMS key used to encrypt the asset bucket (deprecated)",
+            "ExportName": "CdkBootstrap-hnb659fds-FileAssetKeyArn"
+        }
+    ],
+    "Params": [
+        {
+            "ParameterKey": "FileAssetsBucketKmsKeyId",
+            "ParameterValue": "AWS_MANAGED_KEY"
+        },
+        {
+            "ParameterKey": "PublicAccessBlockConfiguration",
+            "ParameterValue": "true"
+        },
+        {
+            "ParameterKey": "UseExamplePermissionsBoundary",
+            "ParameterValue": "false"
+        },
+        {
+            "ParameterKey": "FileAssetsBucketName",
+            "ParameterValue": ""
+        },
+        {
+            "ParameterKey": "InputPermissionsBoundary",
+            "ParameterValue": ""
+        },
+        {
+            "ParameterKey": "BootstrapVariant",
+            "ParameterValue": "AWS CDK: Default Resources"
+        },
+        {
+            "ParameterKey": "DenyExternalId",
+            "ParameterValue": "true"
+        },
+        {
+            "ParameterKey": "CloudFormationExecutionPolicies",
+            "ParameterValue": "arn:aws:iam::aws:policy/AdministratorAccess"
+        },
+        {
+            "ParameterKey": "TrustedAccountsForLookup",
+            "ParameterValue": ""
+        },
+        {
+            "ParameterKey": "Qualifier",
+            "ParameterValue": "hnb659fds"
+        },
+        {
+            "ParameterKey": "ContainerAssetsRepositoryName",
+            "ParameterValue": ""
+        },
+        {
+            "ParameterKey": "TrustedAccounts",
+            "ParameterValue": "002681522526"
+        }
+    ]
+}
+</pasted_content id="9410">
+
+---
+
+deploy succeeded
+
+---
+
+Given only a couple of hours have passed since the last run, i would like to regenerate the one from today rather than from scratch
+
+---
+
+Two things:
+
+1. When saying "AI", it sounds like "A. I." With long pause between A and I words.
+2. There seem to be AI tropes. Look at my memory/instructions here on avoiding those.

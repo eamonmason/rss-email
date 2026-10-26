@@ -1,0 +1,51 @@
+{
+  "cli_version": "0.10.5",
+  "checkpoint_id": "22e089600e27",
+  "session_id": "bc883dcf-e955-4365-9cd3-4cebcd5b94e1",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-26T10:26:06.578063Z",
+  "branch": "fix/podcast-ai-pronunciation",
+  "checkpoints_count": 8,
+  "files_touched": [
+    "src/rss_email/podcast_script.py",
+    "src/rss_email/podcast_tts.py",
+    "tests/test_podcast_tts.py"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-5-5",
+  "turn_id": "6c839e8b0f0e",
+  "checkpoint_transcript_start": 734,
+  "transcript_lines_at_start": 734,
+  "compact_transcript_start": 77,
+  "token_usage": {
+    "input_tokens": 70,
+    "cache_creation_tokens": 100115,
+    "cache_read_tokens": 10199434,
+    "output_tokens": 20441,
+    "api_call_count": 35
+  },
+  "session_metrics": {
+    "turn_count": 15
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-26T10:26:06.423684Z",
+    "agent_lines": 33,
+    "agent_removed": 3,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 33,
+    "total_lines_changed": 36,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
