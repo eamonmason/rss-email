@@ -554,6 +554,14 @@ with `url`, `length` (bytes, required by podcast apps) and `type`. It invalidate
 `/podcasts/feed.xml` when a distribution id is supplied, so apps see new episodes immediately.
 The Lambda role needs `cloudfront:CreateInvalidation` and S3 write access to `podcasts/*`.
 
+The distribution reads the bucket through Origin Access Control, using
+`origins.S3BucketOrigin.withOriginAccessControl` on an *imported* bucket reference. Do not go back to
+`origins.S3Origin`: it ignores `originAccessControl`, falls back to a legacy Origin Access Identity and
+adds a bucket-wide read statement that would expose `brief-memory/` and the feed data. The imported
+reference stops CDK adding that statement, so the explicit `podcasts/*` bucket-policy statement is the
+only grant. After changing this, check that `/podcasts/feed.xml` returns 200 and
+`/brief-memory/memory.json` returns 403 on the CloudFront domain.
+
 ### Testing
 
 Tests mock `ptts` (fake module in `sys.modules`), Anthropic and boto3. See

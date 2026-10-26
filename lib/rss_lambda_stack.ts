@@ -236,9 +236,14 @@ export class RSSEmailStack extends cdk.Stack {
     // Create CloudFront distribution for public podcast access
     const podcastDistribution = new cloudfront.Distribution(this, 'PodcastDistribution', {
       defaultBehavior: {
-        origin: new origins.S3Origin(bucket, {
-          originAccessControl: podcastOAC,
-        }),
+        // The deprecated origins.S3Origin ignored originAccessControl and fell back to a legacy
+        // Origin Access Identity whose policy statement granted read on the WHOLE bucket. Use an
+        // imported bucket reference so CDK adds no bucket-wide statement: the only grant is the
+        // explicit podcasts/* statement further down.
+        origin: origins.S3BucketOrigin.withOriginAccessControl(
+          s3.Bucket.fromBucketName(this, 'PodcastOriginBucket', bucket.bucketName),
+          { originAccessControl: podcastOAC },
+        ),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
