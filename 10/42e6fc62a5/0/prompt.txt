@@ -1,0 +1,28 @@
+look at dependabot risk and the MSAL Node authorization code flow may disclose parameters to an attacker-controlled endpoint #201. 
+
+<pasted_content id="6076">
+Dependabot cannot update to the required version
+
+One or more other dependencies require a version that is incompatible with this update.
+Vulnerability found in your code
+Package    
+@azure/msal-node (npm)
+Affected versions    
+>= 5.0.0-beta.0, < 7.1.0
+Patched version    
+7.1.0
+Impact
+
+Origin validation error in Microsoft Authentication Library (MSAL) for Node.js allows an unauthorized attacker to disclose information over a network. This affects the auth_code flow.
+
+Patches
+
+Version 7.1.0 and higher are patched.
+
+Workarounds
+
+Ensure you pass in only the auth_code to to acquireTokenByCode
+</pasted_content id="6076">
+
+
+look at dpeendencies and what can be updated to mitigate
