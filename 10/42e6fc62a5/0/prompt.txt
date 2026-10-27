@@ -26,3 +26,56 @@ Ensure you pass in only the auth_code to to acquireTokenByCode
 
 
 look at dpeendencies and what can be updated to mitigate
+
+---
+
+<task-notification>
+<task-id>a53e56fe25cbfbbe3</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-eamon-code-rss-email/55ff8eeb-9310-4825-a7df-1221c21053a8/tasks/a53e56fe25cbfbbe3.output</output-file>
+<status>completed</status>
+<summary>Agent "Trace msal-node dependency chain" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>`@azure/msal-node` is only in the `eval/` npm tree, as an optional dev dependency of promptfoo. It does not ship in the Lambda or runtime.
+
+**Where it appears**
+- Root `package.json` and `package-lock.json` have no `msal-node` (grep count is 0). Root `overrides` only pin `fast-uri` and `fast-xml-builder`.
+- `src/rss_email/package.json` doesn't reference it. The other `package.json` files are stale copies under `.claude/worktrees/*`.
+- `eval/package.json` has one devDependency, `promptfoo ^0.125.0`. Its `overrides` (sharp, adm-zip, brace-expansion, smol-toml, fast-uri) don't touch `@azure/*`.
+
+**Versions**
+- The lockfile has two copies, both flagged `dev` and `optional`:
+  - `node_modules/@azure/msal-node` is 7.0.1.
+  - `node_modules/@azure/identity/node_modules/@azure/msal-node` (nested) is 6.0.1.
+- The local `eval/node_modules` is stale. `npm ls` shows `promptfoo@0.121.19` and `msal-node@5.4.2`, and `npm explain` reports the installed promptfoo as invalid against `^0.125.0`. The lockfile is the source of truth, not that install.
+
+**Dependency chains (from the lockfile)**
+1. `promptfoo@0.125.0` optionally depends on `@azure/msal-node ^7.0.0`, which resolves to **7.0.1**. This is the top-level copy.
+2. `promptfoo@0.125.0` optionally depends on `@azure/identity ^4.13.3`, which resolves to 4.13.3. That depends on `@azure/msal-node ^6.0.0`, which resolves to the nested **6.0.1**.
+3. `promptfoo` also pulls in `@azure/ai-projects ^2.1.1` (optional), which depends on `@azure/identity ^4.13.0`. This is the same identity copy as chain 2.
+
+**What blocks 7.1.0**
+- The npm registry has msal-node 7.0.2, 7.1.0 and 7.1.1, with `latest` at 7.1.1.
+- The top-level copy (chain 1) is not blocked. `^7.0.0` already allows 7.1.x, so it can move up with a lockfile-only update.
+- The nested 6.0.1 copy is blocked by `@azure/identity`'s range `^6.0.0`, which excludes 7.x. If the alert is on the 6.0.1 copy, that range is the blocker.
+
+**Newer parent versions**
+- `@azure/identity@latest` is 4.14.0, and it still declares `@azure/msal-node ^6.0.0` and `@azure/msal-browser ^5.5.0`. No stable identity release allows msal-node 7. The only newer version is the prerelease `4.15.0-beta.1`, and I didn't check what it declares.
+- `promptfoo@latest` is 0.125.1. It declares `@azure/msal-node ^7.0.0` and `@azure/identity ^4.13.3`, so it improves nothing for the nested copy.
+- `@azure/ai-projects@latest` is 2.9.0, still on `@azure/identity ^4.13.0`.
+
+**Dev or prod, and Lambda exposure**
+- The package is dev and optional only. `lib/rss_lambda_stack.ts` line 343 excludes `eval` (and `node_modules`) from the Lambda asset, and the root tree never includes it.
+- The tree is only installed by `.github/workflows/eval.yml`, via `npm --prefix eval ci`, for the manual promptfoo run. Exposure is limited to CI and dev machines.
+
+**Dependabot**
+- `.github/dependabot.yml` has a separate npm entry for `/eval`. It runs weekly on Mondays, groups everything into `eval-dependencies`, and has no ignore rules.
+- Because the group bumps everything together, a refresh that can't move the 6.0.1 copy may not open a PR for it.
+- The most recent lockfile commit is `e2bd6ec` (promptfoo bump, #107).
+
+**Options if you want 7.1.x everywhere** (I changed nothing)
+- Refresh the top-level copy to 7.1.1 with `npm update @azure/msal-node` in `eval/`.
+- Add `"@azure/msal-node": "^7.1.0"` to `eval/package.json` `overrides`. That would force identity's nested copy up to 7.x, but identity declares `^6.0.0`, so it's an unsupported combination. The eval would need to be run to confirm it works.
+- Wait for an `@azure/identity` release that allows msal-node 7.</result>
+<usage><subagent_tokens>32526</subagent_tokens><tool_uses>4</tool_uses><duration_ms>64105</duration_ms></usage>
+</task-notification>
