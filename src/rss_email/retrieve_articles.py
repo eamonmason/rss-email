@@ -72,6 +72,10 @@ _throttle_registry_lock = threading.Lock()
 _host_locks: Dict[str, threading.Lock] = {}
 _host_last_start: Dict[str, float] = {}
 
+# Statuses meaning "this site refuses automated clients": 403, plus the
+# non-standard 454 returned by zwifthacks.com.
+SCRAPER_BLOCK_STATUSES = frozenset({403, 454})
+
 
 def _rate_limited_host_key(url: str) -> Optional[str]:
     """Return the ``RATE_LIMITED_HOSTS`` key matching ``url``'s host, else None."""
@@ -148,12 +152,14 @@ def get_feed_items(url: str, timestamp: datetime) -> bytes:
             if response.status_code == 304:
                 logger.debug("URL: %s not modified in 3 days", url)
                 return b""
-            if response.status_code == 403:
-                # Some sites routinely block scrapers; a single 403 is expected
-                # and shouldn't page on-call, so log at INFO like 429 below.
+            if response.status_code in SCRAPER_BLOCK_STATUSES:
+                # Some sites routinely block scrapers (403, or the non-standard
+                # 454 used by zwifthacks.com); retrying never helps and it
+                # shouldn't page on-call, so log at INFO like 429 below.
                 logger.info(
-                    "URL: %s returned 403 Forbidden. This might be a site that aggressively blocks scrapers.",
+                    "URL: %s returned %d. This might be a site that aggressively blocks scrapers.",
                     url,
+                    response.status_code,
                 )
                 return b""
             if response.status_code == 410:

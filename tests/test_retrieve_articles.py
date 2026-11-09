@@ -7,6 +7,7 @@ Some code duplication with test_article_data.py is intentional for test isolatio
 # pylint: disable=duplicate-code,R0801
 """
 
+import logging
 import json
 import subprocess
 import sys
@@ -124,6 +125,29 @@ class TestRetrieveArticles(unittest.TestCase):
 
         self.assertTrue(any("403" in message for message in captured.output))
         self.assertFalse(any(record.levelname == "WARNING" for record in captured.records))
+
+    @patch("rss_email.retrieve_articles.time.sleep")
+    @patch("rss_email.retrieve_articles.httpx.get")
+    def test_get_feed_items_454_skips_without_retry_or_error(self, mock_get, mock_sleep):
+        """zwifthacks.com answers bots with a non-standard 454.
+
+        It must be treated like 403: one request, no backoff, no ERROR log
+        (ERROR logs trigger the SNS alert).
+        """
+        mock_response = MagicMock()
+        mock_response.status_code = 454
+        mock_get.return_value = mock_response
+
+        timestamp = datetime.now() - timedelta(days=3)
+
+        with self.assertLogs("rss_email.retrieve_articles", level="INFO") as captured:
+            result = get_feed_items("https://zwifthacks.com/feed/", timestamp)
+
+        self.assertEqual(result, b"")
+        self.assertEqual(mock_get.call_count, 1)
+        mock_sleep.assert_not_called()
+        self.assertTrue(any("454" in message for message in captured.output))
+        self.assertFalse(any(record.levelno >= logging.WARNING for record in captured.records))
 
     @patch("rss_email.retrieve_articles.time.sleep")
     @patch("rss_email.retrieve_articles.httpx.get")
