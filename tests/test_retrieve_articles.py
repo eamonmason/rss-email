@@ -128,12 +128,8 @@ class TestRetrieveArticles(unittest.TestCase):
 
     @patch("rss_email.retrieve_articles.time.sleep")
     @patch("rss_email.retrieve_articles.httpx.get")
-    def test_get_feed_items_454_skips_without_retry_or_error(self, mock_get, mock_sleep):
-        """zwifthacks.com answers bots with a non-standard 454.
-
-        It must be treated like 403: one request, no backoff, no ERROR log
-        (ERROR logs trigger the SNS alert).
-        """
+    def test_get_feed_items_454_logs_error_once_without_retry(self, mock_get, mock_sleep):
+        """A 454 block must still alert (ERROR) but only once, with no retries."""
         mock_response = MagicMock()
         mock_response.status_code = 454
         mock_get.return_value = mock_response
@@ -146,8 +142,9 @@ class TestRetrieveArticles(unittest.TestCase):
         self.assertEqual(result, b"")
         self.assertEqual(mock_get.call_count, 1)
         mock_sleep.assert_not_called()
-        self.assertTrue(any("454" in message for message in captured.output))
-        self.assertFalse(any(record.levelno >= logging.WARNING for record in captured.records))
+        errors = [r for r in captured.records if r.levelno == logging.ERROR]
+        self.assertEqual(len(errors), 1)
+        self.assertIn("454", errors[0].getMessage())
 
     @patch("rss_email.retrieve_articles.time.sleep")
     @patch("rss_email.retrieve_articles.httpx.get")
