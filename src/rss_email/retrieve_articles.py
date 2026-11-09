@@ -148,12 +148,15 @@ def get_feed_items(url: str, timestamp: datetime) -> bytes:
             if response.status_code == 304:
                 logger.debug("URL: %s not modified in 3 days", url)
                 return b""
-            if response.status_code == 403:
-                # Some sites routinely block scrapers; a single 403 is expected
-                # and shouldn't page on-call, so log at INFO like 429 below.
-                logger.info(
-                    "URL: %s returned 403 Forbidden. This might be a site that aggressively blocks scrapers.",
+            if response.status_code in (403, 454):
+                # The site is blocking us (403, or the non-standard 454 used by
+                # zwifthacks.com). Retrying cannot help, but the block should
+                # still alert, so log once per URL at ERROR rather than once
+                # per retry attempt.
+                logger.error(
+                    "URL: %s returned %d; the site is blocking us",
                     url,
+                    response.status_code,
                 )
                 return b""
             if response.status_code == 410:
