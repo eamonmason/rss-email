@@ -105,46 +105,33 @@ class TestRetrieveArticles(unittest.TestCase):
         self.assertEqual(mock_get.call_count, 1)
         mock_sleep.assert_not_called()
 
-    @patch("rss_email.retrieve_articles.httpx.get")
-    def test_get_feed_items_403_logged_at_info_not_warning(self, mock_get):
-        """A 403 is expected/routine for scraper-blocking sites.
-
-        It must not log at WARNING (which feeds the ErrorWarningCount metric
-        filter and pages on-call for a single blocked feed), matching the
-        429 treatment which was already downgraded for the same reason.
-        """
-        mock_response = MagicMock()
-        mock_response.status_code = 403
-        mock_get.return_value = mock_response
-
-        url = "https://example.com/rss"
-        timestamp = datetime.now() - timedelta(days=3)
-
-        with self.assertLogs("rss_email.retrieve_articles", level="INFO") as captured:
-            get_feed_items(url, timestamp)
-
-        self.assertTrue(any("403" in message for message in captured.output))
-        self.assertFalse(any(record.levelname == "WARNING" for record in captured.records))
-
     @patch("rss_email.retrieve_articles.time.sleep")
     @patch("rss_email.retrieve_articles.httpx.get")
-    def test_get_feed_items_454_logs_error_once_without_retry(self, mock_get, mock_sleep):
-        """A 454 block must still alert (ERROR) but only once, with no retries."""
-        mock_response = MagicMock()
-        mock_response.status_code = 454
-        mock_get.return_value = mock_response
+    def test_get_feed_items_block_statuses_alert_once_without_retry(self, mock_get, mock_sleep):
+        """A site blocking us (403, or the non-standard 454) must alert.
 
-        timestamp = datetime.now() - timedelta(days=3)
+        It logs at ERROR (which triggers the SNS alert) exactly once per URL:
+        retrying a block cannot help, so there is one request and no backoff.
+        """
+        for status in (403, 454):
+            with self.subTest(status=status):
+                mock_get.reset_mock()
+                mock_sleep.reset_mock()
+                mock_response = MagicMock()
+                mock_response.status_code = status
+                mock_get.return_value = mock_response
 
-        with self.assertLogs("rss_email.retrieve_articles", level="INFO") as captured:
-            result = get_feed_items("https://zwifthacks.com/feed/", timestamp)
+                timestamp = datetime.now() - timedelta(days=3)
 
-        self.assertEqual(result, b"")
-        self.assertEqual(mock_get.call_count, 1)
-        mock_sleep.assert_not_called()
-        errors = [r for r in captured.records if r.levelno == logging.ERROR]
-        self.assertEqual(len(errors), 1)
-        self.assertIn("454", errors[0].getMessage())
+                with self.assertLogs("rss_email.retrieve_articles", level="INFO") as captured:
+                    result = get_feed_items("https://example.com/feed/", timestamp)
+
+                self.assertEqual(result, b"")
+                self.assertEqual(mock_get.call_count, 1)
+                mock_sleep.assert_not_called()
+                errors = [r for r in captured.records if r.levelno == logging.ERROR]
+                self.assertEqual(len(errors), 1)
+                self.assertIn(str(status), errors[0].getMessage())
 
     @patch("rss_email.retrieve_articles.time.sleep")
     @patch("rss_email.retrieve_articles.httpx.get")
