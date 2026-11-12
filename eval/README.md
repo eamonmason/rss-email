@@ -42,6 +42,28 @@ about half that, and each grader call a few cents. The full matrix (4 variants x
 `CLAUDE_USAGE` log or a first run gives real figures. Narrow a run with
 `--filter-providers '^sonnet-5-5/high$' --repeat 1`.
 
+### Haiku 4.5 -> 5.5 assessment (grouping and categorising)
+
+`compare_haiku.py` decides whether the production Haiku stages can move to `claude-haiku-5-5`.
+It needs a real day's `batch-metadata` file (articles plus the groups production used):
+
+```bash
+aws s3 cp s3://<bucket>/batch-metadata/batch-<timestamp>.json /tmp/batch.json
+export ANTHROPIC_API_KEY=sk-...
+uv run python eval/compare_haiku.py /tmp/batch.json --out /tmp/haiku-report.json \
+    --write-fixtures eval/fixtures        # optional: digests for the brief eval
+```
+
+It runs the shipping prompts for the Haiku 4.5 baseline and Haiku 5.5 at effort `low` and
+`medium`, then prints parse failures, refusals, `max_tokens` stops, tokens and cost, grouping
+precision/recall against the stored groups, category agreement against the baseline, and the
+disagreements to read by hand. Pass bar: no failures of any kind, category agreement >= 90%,
+grouping recall >= 85%, disagreements judged acceptable. The cost shown is the synchronous
+price; the Batch API halves the categorising part. Run it on several days before deciding.
+
+To check the downstream effect, add an `expected_major.json` (curate from the baseline fixture)
+to a written fixture directory, add a `tests:` entry for it, and run the brief eval.
+
 ### Models
 
 The promptfoo eval runs on the **5.5 family only** (`claude-opus-5-5`, `claude-sonnet-5-5`,
