@@ -123,6 +123,11 @@ the memory as `previous_context`. `memory_days` in a provider's `config` (defaul
 it to the most recent days, so a trimmed-memory variant is one more provider entry. Not reproduced:
 the repeat-article filter (`seen_links`), because it would shift article ids relative to the assertions.
 
+`memory` also writes `memory.txt` (the same text, rendered the way the provider renders it), which the
+faithfulness grader gets as "previously covered": the brief is meant to frame a story as a development
+of an earlier day, so facts and dates from that block are allowed, while a claim in neither the digest
+nor the memory still fails. Use `uv run python` for this step so `memory.txt` is written.
+
 ### Comparing Opus and Sonnet for the brief
 
 ```bash

@@ -90,6 +90,8 @@ def _row(label, success, cost, completion, assertion_passes):
     return {
         "provider": {"label": label},
         "success": success,
+        "failureReason": 0 if success else 1,
+        "error": None if success else "Expected output to pass the assertions",
         "cost": cost,
         "response": {"tokenUsage": {"completion": completion}},
         "gradingResult": {"componentResults": [
@@ -145,10 +147,18 @@ def test_tolerance_is_in_baseline_runs():
     assert not strict["v"]["no_worse"]
 
 
+def test_failed_assertions_are_not_provider_errors():
+    rows = summarise.summarise(_runs("base", [{"c": True}, {"c": False}]), baseline="base")
+    assert rows[0]["errors"] == 0 and rows[0]["passed"] == 1
+    assert summarise.is_provider_error({"failureReason": 2, "error": "x"})
+    assert not summarise.is_provider_error({"failureReason": 1, "error": "assertion failed"})
+    assert summarise.is_provider_error({"error": "timeout"})  # no failureReason, nothing graded
+
+
 def test_provider_errors_count_against_a_variant():
     base = _runs("base", [{"c": True}] * 3)
     errored = _runs("v", [{"c": True}] * 3)
-    errored[0]["error"] = "timeout"
+    errored[0].update(error="Python worker timed out", failureReason=2, gradingResult=None)
     rows = summarise.summarise(base + errored, baseline="base")
     assert not rows[1]["no_worse"] and "provider error" in " ".join(rows[1]["worse_checks"])
 
@@ -381,6 +391,11 @@ def test_memory_command_writes_memory_json_and_sync_tests_points_at_it(tmp_path)
     written = json.loads((fixtures / "2026-11-12-haiku-4-5" / "memory.json").read_text())
     assert [d["date"] for d in written["days"]] == ["2026-11-10", "2026-11-11"]
     assert not (fixtures / "2026-06-15" / "memory.json").exists()  # nothing earlier than June 15
+    # memory.txt is what the grader reads: it must equal what the provider shows the brief
+    shown = provider.load_previous_context(
+        str(fixtures / "2026-11-12-haiku-4-5" / "memory.json"), "2026-11-12", 14)
+    assert (fixtures / "2026-11-12-haiku-4-5" / "memory.txt").read_text().strip() == shown.strip()
+    assert "A summary." in shown
 
     config = tmp_path / "config.yaml"
     _config(config)
@@ -388,6 +403,8 @@ def test_memory_command_writes_memory_json_and_sync_tests_points_at_it(tmp_path)
     text = config.read_text()
     assert "memory_path: fixtures/2026-11-12-haiku-4-5/memory.json" in text
     assert text.count("memory_path") == 1
+    assert "memory_text: file://fixtures/2026-11-12-haiku-4-5/memory.txt" in text
+    assert text.count("memory_text") == 1
 
 
 def _memory_file(tmp_path, dates):
@@ -432,3 +449,10 @@ def test_call_api_passes_memory_to_synthesis(tmp_path):
     with patch.object(provider, "synthesize", fake_synthesize):
         provider.call_api("", {}, {"vars": {"fixture": str(fixture)}})
     assert seen["previous_context"] == ""  # no memory_path: the fixture runs without memory
+
+
+def test_faithfulness_rubric_is_shown_the_memory():
+    with open(os.path.join(EVAL_DIR, "promptfooconfig.yaml"), encoding="utf-8") as handle:
+        text = handle.read()
+    assert 'memory_text: ""' in text and "{{ memory_text }}" in text
+    assert "found in neither the digest nor that text fails" in text

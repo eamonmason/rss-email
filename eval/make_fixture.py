@@ -147,6 +147,8 @@ def render_tests(fixtures_dir: str) -> str:
             lines.append(f"      expected_major: fixtures/{name}/expected_major.json")
         if os.path.exists(os.path.join(folder, "memory.json")):
             lines.append(f"      memory_path: fixtures/{name}/memory.json")
+        if os.path.exists(os.path.join(folder, "memory.txt")):
+            lines.append(f"      memory_text: file://fixtures/{name}/memory.txt")
         lines.append(f"      digest_text: file://fixtures/{name}/digest_text.txt")
     return "\n".join(lines)
 
@@ -226,15 +228,17 @@ def main(argv: List[str]) -> int:
                 continue
             _write(os.path.join(folder, "memory.json"), json.dumps(subset, indent=2) + "\n")
             size = ""
-            try:  # needs the project environment; the size note is skipped under a plain python
+            try:  # rendering needs the project environment (`uv run python`)
                 if _SRC not in sys.path:
                     sys.path.insert(0, _SRC)
                 from rss_email.brief_memory import render_previous_context  # pylint: disable=import-outside-toplevel
                 from rss_email.models import BriefMemory  # pylint: disable=import-outside-toplevel
-                chars = len(render_previous_context(BriefMemory.model_validate(subset)))
-                size = f", rendered {chars:,} characters (about {chars // 4:,} tokens)"
+                rendered = render_previous_context(BriefMemory.model_validate(subset))
+                # The faithfulness grader reads this: it is exactly what the brief was shown.
+                _write(os.path.join(folder, "memory.txt"), rendered + "\n")
+                size = f", rendered {len(rendered):,} characters (about {len(rendered) // 4:,} tokens)"
             except ImportError:
-                pass
+                size = " (memory.txt NOT written: run with `uv run python` so the grader can see it)"
             print(f"{folder}: {len(subset['days'])} days ({subset['days'][0]['date']} to "
                   f"{subset['days'][-1]['date']}){size}")
         return 0

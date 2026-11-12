@@ -44,6 +44,10 @@ defaultTest:
     # rubric must allow references to it; otherwise every "relevance_to_reader" that names
     # the reader's company is wrongly failed as invented.
     brief_config: file://../src/rss_email/brief_config.json
+    # The earlier days' themes the brief was shown (a fixture's memory.txt, if it has one). The
+    # faithfulness rubric must allow references to them: the brief is meant to frame a story as
+    # a development of an earlier day, and those facts are not in today's digest.
+    memory_text: ""
   options:
     provider:
       id: anthropic:messages:claude-sonnet-5-5
@@ -69,9 +73,16 @@ defaultTest:
         brief is for; it is NOT a source of news):
         {{ brief_config | dump }}
 
+        PREVIOUSLY COVERED (earlier days' briefs, which the writer was also given so it can
+        frame a story as a development of one of them; this is background, NOT a source
+        for today's news; it may be empty):
+        {{ memory_text }}
+
         Grade the brief OUTPUT (JSON). PASS only if every news claim, number, company,
         product, and named entity in the brief is supported by the digest above, with no
-        invented or extrapolated news. References to the reader's own role, employer,
+        invented or extrapolated news. Pointers back to earlier coverage (for example
+        "since 10 November's report that...") may rely on the previously-covered text,
+        including its dates; a claim found in neither the digest nor that text fails. References to the reader's own role, employer,
         interests or responsibilities may rely on the reader context and are allowed (for
         example naming the reader's employer or their metrics in relevance_to_reader).
         Claims about any other company or person (for example calling a company the

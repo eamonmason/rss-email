@@ -35,6 +35,18 @@ def _assertion_name(component: Dict[str, Any]) -> str:
     return f"{assertion.get('type', '?')}: {first_line[:40]}".strip()
 
 
+def is_provider_error(run: Dict[str, Any]) -> bool:
+    """True for a provider failure (timeout, API error), not for a failed assertion.
+
+    promptfoo sets ``failureReason`` to 0 (passed), 1 (assertion failed) or 2 (error), and also
+    puts the assertion-failure message in ``error``, so a truthy ``error`` alone proves nothing.
+    """
+    reason = run.get("failureReason")
+    if reason is not None:
+        return reason == 2
+    return bool(run.get("error")) and not run.get("gradingResult")
+
+
 def worse_checks(
     row: Dict[str, Any], base: Dict[str, Any], tolerance: float
 ) -> List[str]:
@@ -82,7 +94,7 @@ def summarise(
             "label": label,
             "runs": len(runs),
             "passed": sum(1 for run in runs if run.get("success")),
-            "errors": sum(1 for run in runs if run.get("error")),
+            "errors": sum(1 for run in runs if is_provider_error(run)),
             "counts": {k: (v[0], v[1]) for k, v in counts.items()},
             "assertions": {k: v[0] / v[1] for k, v in counts.items()},
             "mean_cost": sum(costs) / len(costs) if costs else None,
