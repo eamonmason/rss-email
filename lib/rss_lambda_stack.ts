@@ -41,7 +41,11 @@ const ANTHROPIC_API_KEY_PARAMETER = 'rss-email-anthropic-api-key';
 const MASTODON_TOKEN_PARAMETER = 'rss-email-mastodon-token';
 
 // Keep in sync with DEFAULT_CLAUDE_MODEL in src/rss_email/models.py
-const DEFAULT_CLAUDE_MODEL = 'claude-haiku-4-5';
+const DEFAULT_CLAUDE_MODEL = 'claude-haiku-5-5';
+// Grouping has its own model so it can move separately from categorising. It stays on Haiku 4.5
+// until `uv run python eval/compare_haiku.py <batch-metadata.json> --grouping-only` passes on
+// real days (see eval/README.md); then set this to 'claude-haiku-5-5'.
+const GROUPING_CLAUDE_MODEL = 'claude-haiku-4-5';
 // Narration quality matters more than cost for one call a day.
 const PODCAST_CLAUDE_MODEL = 'claude-sonnet-5-5';
 // Must be one of the voices baked into docker/podcast/Dockerfile (PODCAST_VOICES).
@@ -290,6 +294,7 @@ export class RSSEmailStack extends cdk.Stack {
         RSS_KEY: KEY,
         ANTHROPIC_API_KEY_PARAMETER: ANTHROPIC_API_KEY_PARAMETER,
         CLAUDE_MODEL: DEFAULT_CLAUDE_MODEL,
+        CLAUDE_GROUPING_MODEL: GROUPING_CLAUDE_MODEL,
         LAST_RUN_PARAMETER: LAST_RUN_PARAMETER,
         CLAUDE_BATCH_SIZE: '25',
       },

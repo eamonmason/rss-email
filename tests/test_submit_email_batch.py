@@ -292,7 +292,7 @@ def test_batch_rejecting_effort_is_retried_without_it(
 
     assert result["batch_id"] == "batch-ok" and create.call_count == 2
     first, second = (call.kwargs["requests"][0]["params"] for call in create.call_args_list)
-    assert first["output_config"] == {"effort": "low"}
+    assert first["output_config"] == {"effort": "medium"}
     assert "output_config" not in second
 
 
@@ -328,15 +328,15 @@ def test_unrelated_bad_request_is_not_retried(
     assert create.call_count == 1
 
 
-def test_batch_prompt_version_defaults_to_v1_and_can_be_switched(monkeypatch):
-    """Production keeps the original prompt until v2 passes its gates; an env var switches it."""
+def test_batch_prompt_version_defaults_to_v2_and_can_roll_back_to_v1(monkeypatch):
+    """Production sends the v2 categorisation prompt; CATEGORY_PROMPT_VERSION=v1 rolls it back."""
     from rss_email.submit_email_batch import create_batch_requests  # pylint: disable=import-outside-toplevel
 
     articles = [{"title": "T", "description": "d", "link": "https://x/1", "pubDate": "now"}]
     batches = [[("group_0", [0])]]
     monkeypatch.delenv("CATEGORY_PROMPT_VERSION", raising=False)
-    old = create_batch_requests(batches, articles, "claude-haiku-4-5")[0]["params"]["messages"][0]["content"]
-    assert "in priority order" in old and "HOW TO CHOOSE" not in old
-    monkeypatch.setenv("CATEGORY_PROMPT_VERSION", "v2")
-    new = create_batch_requests(batches, articles, "claude-haiku-4-5")[0]["params"]["messages"][0]["content"]
+    new = create_batch_requests(batches, articles, "claude-haiku-5-5")[0]["params"]["messages"][0]["content"]
     assert "HOW TO CHOOSE A CATEGORY" in new
+    monkeypatch.setenv("CATEGORY_PROMPT_VERSION", "v1")
+    old = create_batch_requests(batches, articles, "claude-haiku-5-5")[0]["params"]["messages"][0]["content"]
+    assert "in priority order" in old and "HOW TO CHOOSE" not in old

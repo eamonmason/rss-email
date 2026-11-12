@@ -85,7 +85,7 @@ def test_recovery_never_raises():
 
 
 def test_recovery_sends_effort_for_haiku_5_only():
-    for model, expected in (("claude-haiku-5-5", {"effort": "low"}), ("claude-haiku-4-5", None)):
+    for model, expected in (("claude-haiku-5-5", {"effort": "medium"}), ("claude-haiku-4-5", None)):
         client = _client(_reply(["group_0"]))
         _recover_missing_groups(client, model, _articles(1), [[0]], set(), {})
         assert client.messages.create.call_args.kwargs.get("output_config") == expected

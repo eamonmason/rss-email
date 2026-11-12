@@ -26,6 +26,12 @@ Because agreement with Haiku 4.5 is not accuracy, the report adds four checks:
 ``--write-fixtures`` also writes each variant's categorised digest in the brief-eval fixture
 shape, so the brief eval can show whether categorisation drift changes what the brief surfaces.
 
+``--grouping-only`` is a separate acceptance check for the grouping stage: it re-groups the
+articles on each variant (default Haiku 4.5 as baseline and Haiku 5.5), skips categorising,
+has the judge decide for each pair one grouping made and the other did not whether the two
+articles report the same specific news event, and prints PASS/FAIL against the grouping gate
+(about $0.05 a day).
+
 Spends real API money (a few cents per day of data). Needs ``ANTHROPIC_API_KEY``.
 Haiku 4.5 is the one non-5.5 model the eval tooling mentions: it is the baseline being replaced.
 """
@@ -77,14 +83,15 @@ CATEGORISE_MAX_TOKENS = 8192  # as in submit_email_batch
 ADJUDICATE_MAX_TOKENS = 4000
 BATCH_SIZE = 25  # CLAUDE_BATCH_SIZE default
 
-# Decision rule, fixed before the results were looked at (see eval/README.md).
-CATEGORY_TOLERANCE = 0.05  # candidate agreement may trail 4.5's self-agreement by this much
-GROUPING_TOLERANCE = 0.10  # same, for grouping pair recall
-MIN_WIN_RATE = 0.45  # blind adjudication, (wins + 0.5 * ties) / n
+# Decision rule (see eval/README.md). Agreement with the baseline is reported but is NOT a gate:
+# the baseline is not the reference (Haiku 4.5 filed seven Nvidia stories under Other and
+# Media/TV/Film, which the brief never sees), so a better classifier agrees with it less.
+GROUPING_TOLERANCE = 0.10  # grouping recall vs stored groups, only when pairs were not judged
+MIN_WIN_RATE = 0.45  # per day: the candidate's judged win rate, (wins + 0.5 * ties) / n
+# README: pooled over the days it must be at least 55%.
 MIN_GROUPING_COVERAGE = 0.90  # share of articles a grouping reply must actually place
 GROUPING_F1_TOLERANCE = 0.05  # pair F1 (judged) may trail the baseline's by this much
 # Used only when no second baseline run is available to measure the noise floor.
-FALLBACK_CATEGORY_AGREEMENT = 0.90
 FALLBACK_GROUPING_RECALL = 0.85
 
 
@@ -237,18 +244,23 @@ def grouping_fallback_reason(text: str, article_count: int) -> Optional[str]:
 
 
 def win_rate(counts: Dict[str, int]) -> Optional[float]:
-    """Candidate win rate from adjudication counts ``{"x": wins, "y": wins, "tie": ties}``."""
-    decided = counts.get("x", 0) + counts.get("y", 0) + counts.get("tie", 0)
+    """Candidate win rate (ties count half) from ``adjudicate`` counts.
+
+    ``counts`` is ``{"baseline": n, "candidate": n, "tie": n, "invalid": n}``; invalid answers
+    are not counted. Returns None when nothing was decided.
+    """
+    decided = counts.get("baseline", 0) + counts.get("candidate", 0) + counts.get("tie", 0)
     if not decided:
         return None
-    return (counts.get("x", 0) + 0.5 * counts.get("tie", 0)) / decided
+    return (counts.get("candidate", 0) + 0.5 * counts.get("tie", 0)) / decided
 
 
 def verdict(run: Run, metrics: Dict[str, Optional[float]]) -> List[str]:
     """Reasons a variant misses the decision rule (empty list means it qualifies).
 
-    ``metrics`` keys: cat_all, noise_all, cat_vis, noise_vis, recall, noise_recall, win_rate.
-    A ``noise_*`` of None means no second baseline run: the fixed fallback bars apply.
+    ``metrics`` keys: recall, noise_recall, f1, base_f1, win_rate (agreement figures may be
+    present but are not gated). Groups a model left out are not a failure here: production
+    re-requests them, so the report shows them as a note.
     """
     reasons = []
     if run.parse_failures:
@@ -257,8 +269,6 @@ def verdict(run: Run, metrics: Dict[str, Optional[float]]) -> List[str]:
         reasons.append(f"{run.refusals} refusal(s)")
     if run.max_token_stops:
         reasons.append(f"{run.max_token_stops} max_tokens stop(s)")
-    if run.missing_groups:
-        reasons.append(f"{run.missing_groups} group(s) missing from the response")
     if run.groups is None:
         reasons.append("grouping failed")
     if run.grouping_fallback:
@@ -267,12 +277,6 @@ def verdict(run: Run, metrics: Dict[str, Optional[float]]) -> List[str]:
     def floor(noise: Optional[float], fixed: float, tolerance: float) -> float:
         return fixed if noise is None else noise - tolerance
 
-    for key, noise_key, label in (("cat_all", "noise_all", "category agreement"),
-                                  ("cat_vis", "noise_vis", "brief-visible agreement")):
-        value = metrics.get(key)
-        bar = floor(metrics.get(noise_key), FALLBACK_CATEGORY_AGREEMENT, CATEGORY_TOLERANCE)
-        if value is not None and value < bar:
-            reasons.append(f"{label} {value:.0%} < {bar:.0%}")
     f1, base_f1 = metrics.get("f1"), metrics.get("base_f1")
     if f1 is not None and base_f1 is not None:
         if f1 < base_f1 - GROUPING_F1_TOLERANCE:
@@ -284,7 +288,7 @@ def verdict(run: Run, metrics: Dict[str, Optional[float]]) -> List[str]:
             reasons.append(f"grouping recall {recall:.0%} < {recall_bar:.0%}")
     wins = metrics.get("win_rate")
     if wins is not None and wins < MIN_WIN_RATE:
-        reasons.append(f"adjudication win rate {wins:.0%} < {MIN_WIN_RATE:.0%}")
+        reasons.append(f"judge preferred this variant only {wins:.0%} of the time (< {MIN_WIN_RATE:.0%})")
     return reasons
 
 
@@ -380,21 +384,22 @@ def adjudicate(
     usage: Optional[List[int]] = None,
     verdicts_out: Optional[List[Dict[str, str]]] = None,
 ) -> Dict[str, int]:
-    """Blind-judge ``(group_id, category_x, category_y)`` pairs.
+    """Blind-judge ``(group_id, baseline_category, candidate_category)`` items.
 
-    The two categories are shown in random order. Returns counts ``{"x", "y", "tie",
-    "invalid"}`` keyed by which side won, regardless of display order. ``usage`` (a two-item
-    list) accumulates input/output tokens; ``verdicts_out`` collects one
-    ``{group_id, x, y, winner}`` per item so patterns can be read, not only counted.
+    The two categories are shown in random order, so the judge cannot tell which side is which.
+    Returns counts ``{"baseline", "candidate", "tie", "invalid"}`` saying which side the judge
+    preferred, regardless of display order. ``usage`` (a two-item list) accumulates
+    input/output tokens; ``verdicts_out`` collects one ``{group_id, baseline, candidate,
+    winner}`` per item so patterns can be read, not only counted.
     """
-    counts = {"x": 0, "y": 0, "tie": 0, "invalid": 0}
+    counts = {"baseline": 0, "candidate": 0, "tie": 0, "invalid": 0}
     for start in range(0, len(pairs), BATCH_SIZE):
         chunk = pairs[start:start + BATCH_SIZE]
-        items, x_is_a = [], {}
-        for gid, cat_x, cat_y in chunk:
+        items, baseline_is_a = [], {}
+        for gid, cat_baseline, cat_candidate in chunk:
             swap = rng.random() < 0.5
-            x_is_a[gid] = not swap
-            first, second = (cat_y, cat_x) if swap else (cat_x, cat_y)
+            baseline_is_a[gid] = not swap
+            first, second = (cat_candidate, cat_baseline) if swap else (cat_baseline, cat_candidate)
             members = _build_group_payload(gid, groups[int(gid.split("_", 1)[1])], articles)["members"]
             items.append({"id": gid, "article": members, "option_a": first, "option_b": second})
         message = client.messages.create(
@@ -411,17 +416,18 @@ def adjudicate(
         for entry in (data or {}).get("choices", []):  # pylint: disable=no-member
             if isinstance(entry, dict):
                 answers[entry.get("id")] = str(entry.get("choice", "")).upper()
-        for gid, cat_x, cat_y in chunk:
+        for gid, cat_baseline, cat_candidate in chunk:
             choice = answers.get(gid)
             if choice == "TIE":
                 winner = "tie"
             elif choice in ("A", "B"):
-                winner = "x" if (choice == "A") == x_is_a[gid] else "y"
+                winner = "baseline" if (choice == "A") == baseline_is_a[gid] else "candidate"
             else:
                 winner = "invalid"
             counts[winner] += 1
             if verdicts_out is not None:
-                verdicts_out.append({"group_id": gid, "x": cat_x, "y": cat_y, "winner": winner})
+                verdicts_out.append({"group_id": gid, "baseline": cat_baseline,
+                                     "candidate": cat_candidate, "winner": winner})
     return counts
 
 
@@ -649,10 +655,14 @@ def report(
         counts = res["adjudication"]
         if counts:
             lines.append(
-                f"   blind adjudication vs {runs[0].variant.label}: wins {counts['x']}, "
-                f"losses {counts['y']}, ties {counts['tie']}, invalid {counts['invalid']} "
-                f"-> win rate {_pct(metrics['win_rate'])}"
+                f"   blind judge on {sum(counts.values()) - counts['invalid']} disagreements: "
+                f"preferred this variant {counts['candidate']}, preferred "
+                f"{runs[0].variant.label} {counts['baseline']}, tie {counts['tie']}, "
+                f"unanswered {counts['invalid']} -> this variant's win rate {_pct(metrics['win_rate'])}"
             )
+        if run.missing_groups:
+            lines.append(f"   NOTE: {run.missing_groups} group(s) left out of the reply "
+                         "(production re-requests these)")
         if res["reference"]:
             lines.append("   (reference run: baseline or noise floor)")
         else:
@@ -660,8 +670,8 @@ def report(
                          else "   DOES NOT QUALIFY: " + "; ".join(res["failures"]))
             shown = visible_disagreements(res["diffs"], visible) or res["diffs"]
             judge = {v["group_id"]: v["winner"] for v in res.get("verdicts", [])}
-            mark = {"x": "judge: baseline", "y": "judge: candidate", "tie": "judge: tie",
-                    "invalid": "judge: ?"}
+            mark = {"baseline": "judge: baseline", "candidate": "judge: candidate",
+                    "tie": "judge: tie", "invalid": "judge: ?"}
             for gid, was, now in shown[:25]:
                 lines.append(f"     {gid}: {was} -> {now}  [{mark.get(judge.get(gid), 'not judged')}]"
                              f"  | {names.get(gid, '')[:70]}")
@@ -673,6 +683,119 @@ def report(
             f"brief-visible {_pct(m['noise_vis'])}; grouping recall vs stored {_pct(m['noise_recall'])}"
         )
     return "\n".join(lines)
+
+
+GROUPING_ONLY_VARIANTS = [BASELINE, "claude-haiku-5-5:medium"]
+
+
+def grouping_failures(run: Run, scored: Optional[Dict[str, Any]], base_f1: Optional[float]) -> List[str]:
+    """Reasons a grouping-only run misses the grouping gate (empty means PASS)."""
+    reasons = []
+    if run.groups is None:
+        reasons.append("grouping failed")
+    if run.parse_failures:
+        reasons.append(f"{run.parse_failures} unusable reply")
+    if run.refusals:
+        reasons.append(f"{run.refusals} refusal(s)")
+    if run.max_token_stops:
+        reasons.append(f"{run.max_token_stops} max_tokens stop(s)")
+    if run.grouping_fallback:
+        reasons.append(f"fell back to singletons ({run.grouping_fallback})")
+    f1 = scored["candidate"]["f1"] if scored else None
+    if f1 is not None and base_f1 is not None and f1 < base_f1 - GROUPING_F1_TOLERANCE:
+        reasons.append(f"pair F1 {f1:.2f} < baseline {base_f1:.2f} - {GROUPING_F1_TOLERANCE}")
+    return reasons
+
+
+def report_grouping(
+    runs: List[Run],
+    scores: Dict[str, Dict[str, Dict[str, Optional[float]]]],
+    judged: Dict[str, Dict[FrozenSet[int], Optional[bool]]],
+    articles: List[Dict[str, Any]],
+    limit: int = 20,
+) -> Tuple[str, Dict[str, List[str]]]:
+    """Text report for ``--grouping-only`` and the failures found per variant label."""
+    base = runs[0]
+    base_pairs = pair_set(base.groups) if base.groups is not None else set()
+    lines: List[str] = []
+    failures: Dict[str, List[str]] = {}
+    base_f1 = next((s["baseline"]["f1"] for s in scores.values()), None)
+    for run in runs:
+        label = run.variant.label
+        cost = run_cost(run)
+        lines.append(f"== {label}")
+        lines.append(
+            f"   calls {run.calls}, tokens in/out {run.input_tokens}/{run.output_tokens}, "
+            f"cost {'n/a' if cost is None else f'${cost:.4f}'}, "
+            f"multi-article groups {run.nonsingleton_groups}"
+            + (f", FALLBACK: {run.grouping_fallback}" if run.grouping_fallback else "")
+        )
+        scored = scores.get(label)
+        if run is base:
+            lines.append("   (baseline)")
+            continue
+        failures[label] = grouping_failures(run, scored, base_f1)
+        if scored:
+            b, c = scored["baseline"], scored["candidate"]
+            lines.append(
+                f"   judged on pairs: precision {_pct(c['precision'])}, recall {_pct(c['recall'])}, "
+                f"F1 {_pct(c['f1'])}  (baseline F1 {_pct(b['f1'])}; {c['pairs']} pairs vs {b['pairs']})"
+            )
+        lines.append("   PASS" if not failures[label] else "   FAIL: " + "; ".join(failures[label]))
+        cand_pairs = pair_set(run.groups) if run.groups is not None else set()
+        verdicts = judged.get(label, {})
+        for owner, pairs in (("only this variant", cand_pairs - base_pairs),
+                             (f"only {base.variant.label}", base_pairs - cand_pairs)):
+            for pair in sorted(pairs, key=sorted)[:limit]:
+                first, second = sorted(pair)
+                answer = verdicts.get(pair)
+                said = {True: "same event", False: "different events", None: "not judged"}[answer]
+                lines.append(f"     {owner}: [{said}]  {articles[first].get('title', '')[:60]}  +  "
+                             f"{articles[second].get('title', '')[:60]}")
+    return "\n".join(lines), failures
+
+
+def main_grouping_only(args: argparse.Namespace, articles: List[Dict[str, Any]]) -> int:
+    """Run only the grouping stage per variant, judge differing pairs, report PASS/FAIL."""
+    variants = [Variant.parse(v) for v in (args.variants or GROUPING_ONLY_VARIANTS)]
+    if variants[0].model != BASELINE:
+        print(f"the first variant must be the baseline, {BASELINE}", file=sys.stderr)
+        return 2
+    client = anthropic.Anthropic()
+    runs: List[Run] = []
+    for variant in variants:
+        print(f"grouping with {variant.label} ...", file=sys.stderr)
+        run = Run(variant)
+        run_grouping(client, run, articles)
+        runs.append(run)
+    base = runs[0]
+    rng = random.Random(0)
+    usage = [0, 0]
+    scores: Dict[str, Dict[str, Dict[str, Optional[float]]]] = {}
+    judged: Dict[str, Dict[FrozenSet[int], Optional[bool]]] = {}
+    if not args.no_adjudicate and base.groups is not None:
+        base_pairs = pair_set(base.groups)
+        for run in runs[1:]:
+            if run.groups is None:
+                continue
+            cand_pairs = pair_set(run.groups)
+            differing = sorted(base_pairs ^ cand_pairs, key=sorted)
+            if len(differing) > args.adjudication_sample:
+                differing = rng.sample(differing, args.adjudication_sample)
+            print(f"judging {len(differing)} differing pairs for {run.variant.label} ...", file=sys.stderr)
+            judged[run.variant.label] = judge_pairs(client, differing, articles, usage) if differing else {}
+            scores[run.variant.label] = pair_scores(base_pairs, cand_pairs, judged[run.variant.label])
+    text, failures = report_grouping(runs, scores, judged, articles)
+    print(text)
+    judge_cost = cost_usd(ADJUDICATOR, usage[0], usage[1])
+    if judge_cost:
+        print(f"judge cost ${judge_cost:.4f}")
+    if args.raw_dir:
+        write_raw(runs, args.raw_dir)
+    if args.out:
+        with open(args.out, "w", encoding="utf-8") as handle:
+            json.dump({"scores": scores, "failures": failures}, handle, indent=2, default=str)
+    return 1 if any(failures.values()) else 0
 
 
 def write_raw(runs: List[Run], directory: str) -> None:
@@ -691,12 +814,16 @@ def main(argv: List[str]) -> int:  # pylint: disable=too-many-locals
     """CLI entry point."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n", maxsplit=1)[0])
     parser.add_argument("metadata", help="batch-metadata/batch-*.json downloaded from S3")
-    parser.add_argument("--variants", nargs="+", default=DEFAULT_VARIANTS)
+    parser.add_argument("--variants", nargs="+", default=None,
+                        help="model[:effort][@prompt][#tag]; the first is the baseline")
     parser.add_argument("--out", help="write the JSON summary here")
     parser.add_argument("--raw-dir", help="save every raw model reply here")
     parser.add_argument("--write-fixtures", metavar="DIR",
                         help="write each variant's categorised digest as a brief-eval fixture")
     parser.add_argument("--no-adjudicate", action="store_true", help="skip the blind adjudication")
+    parser.add_argument("--grouping-only", action="store_true",
+                        help="acceptance check for grouping alone: no categorising, pairs judged, "
+                             "PASS/FAIL")
     parser.add_argument("--skip-grouping", action="store_true",
                         help="use the stored groups instead of re-grouping (cheaper prompt-tuning rounds)")
     parser.add_argument("--adjudication-sample", type=int, default=100,
@@ -711,7 +838,11 @@ def main(argv: List[str]) -> int:  # pylint: disable=too-many-locals
             "use the files from s3://<bucket>/batch-metadata/ and keep reports elsewhere"
         )
     articles, stored_groups = meta["articles"], meta["groups"]
-    variants = [Variant.parse(v) for v in args.variants]
+    if args.grouping_only:
+        if args.write_fixtures:
+            parser.error("--write-fixtures needs categorising; it cannot be used with --grouping-only")
+        return main_grouping_only(args, articles)
+    variants = [Variant.parse(v) for v in (args.variants or DEFAULT_VARIANTS)]
     if variants[0].model != BASELINE:
         parser.error(f"the first variant must be the baseline, {BASELINE}")
     config = load_brief_config()

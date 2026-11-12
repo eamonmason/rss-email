@@ -8,10 +8,10 @@ Haiku 4.5 rejects ``output_config.effort``. These helpers hide both differences.
 import os
 from typing import Any, Dict
 
-# Grouping and categorising are extraction work: the lowest effort is enough, and
-# every thinking token is paid for as output. Override with CLAUDE_HAIKU_EFFORT
-# (for example "medium") if the assessment in eval/compare_haiku.py shows it helps.
-DEFAULT_HAIKU_EFFORT = "low"
+# Medium, not low: in the November 2026 comparison Haiku 5.5 at low effort left groups out of
+# its categorising replies and at medium it did not, and it was judged at least as good. The cost
+# difference is under a cent a day. Override with CLAUDE_HAIKU_EFFORT (for example "low").
+DEFAULT_HAIKU_EFFORT = "medium"
 
 
 def response_text(message: Any) -> str:

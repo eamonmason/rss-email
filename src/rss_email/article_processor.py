@@ -288,10 +288,11 @@ def _build_group_payload(
     return {"group_id": group_id, "members": members}
 
 
-# Which categorisation prompt production sends. Stays "v1" (the original) until the v2 prompt
-# has passed the gates in eval/README.md on real days; the switch is then this one constant, and
-# CATEGORY_PROMPT_VERSION overrides it per deployment (e.g. to roll back without a code change).
-DEFAULT_CATEGORY_PROMPT_VERSION = "v1"
+# Which categorisation prompt production sends: v2 (definitions for every category) since the
+# move to Haiku 5.5, where it was judged better than 4.5 with the original prompt (see
+# eval/README.md). CATEGORY_PROMPT_VERSION overrides it per deployment, e.g. "v1" to roll back
+# without a code change.
+DEFAULT_CATEGORY_PROMPT_VERSION = "v2"
 
 
 def category_prompt_version() -> str:

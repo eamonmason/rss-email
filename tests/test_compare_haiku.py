@@ -65,37 +65,63 @@ def test_grouping_fallback_reason(text, expected):
 
 
 def test_win_rate():
-    assert ch.win_rate({"x": 3, "y": 1, "tie": 2}) == pytest.approx(4 / 6)
-    assert ch.win_rate({"x": 0, "y": 0, "tie": 0, "invalid": 4}) is None
+    assert ch.win_rate({"baseline": 1, "candidate": 3, "tie": 2}) == pytest.approx(4 / 6)
+    assert ch.win_rate({"baseline": 0, "candidate": 0, "tie": 0, "invalid": 4}) is None
+
+
+def test_win_rate_is_the_candidates_not_the_baselines():
+    """Regression: the judge counts were once read the wrong way round.
+
+    From a real round: the judge preferred Haiku 4.5 (the baseline) 8 times and Haiku 5.5 (the
+    candidate) 29 times, with 3 ties. The report said 24% (the baseline's rate) and read as a loss.
+    """
+    counts = {"baseline": 8, "candidate": 29, "tie": 3, "invalid": 0}
+    assert ch.win_rate(counts) == pytest.approx((29 + 1.5) / 40)  # about 76%
+    assert ch.win_rate({"baseline": 29, "candidate": 8, "tie": 3}) == pytest.approx((8 + 1.5) / 40)
+
+
+def test_report_states_which_side_the_judge_preferred():
+    base = _run("claude-haiku-4-5@v1", FakeClient())
+    cand = _run("claude-haiku-5-5:low@v2", FakeClient(flip_group_1=True))
+    counts = {"baseline": 8, "candidate": 29, "tie": 3, "invalid": 0}
+    results = ch.evaluate([base, cand], STORED_GROUPS, VISIBLE, {cand.variant.label: counts})
+    text = ch.report([base, cand], results, VISIBLE, {})
+    assert "preferred this variant 29, preferred claude-haiku-4-5@v1 8, tie 3" in text
+    assert "this variant's win rate 76.2%" in text
 
 
 def _metrics(**overrides):
-    base = {"cat_all": 0.80, "noise_all": 0.82, "cat_vis": 0.85, "noise_vis": 0.86,
-            "recall": 0.90, "noise_recall": 0.95, "win_rate": 0.55}
+    base = {"cat_all": 0.60, "noise_all": 0.82, "cat_vis": 0.60, "noise_vis": 0.86,
+            "recall": 0.90, "noise_recall": 0.95, "win_rate": 0.75}
     base.update(overrides)
     return base
 
 
-def test_verdict_is_relative_to_the_noise_floor():
+def test_low_agreement_with_the_baseline_is_not_a_failure_if_the_judge_prefers_the_candidate():
+    """A better classifier agrees with a flawed baseline less; agreement is reported, not gated."""
     run = ch.Run(ch.Variant("claude-haiku-5-5"), groups=[[0]])
-    assert not ch.verdict(run, _metrics())  # 80% is within 5 points of the 82% noise floor
-    reasons = " ".join(ch.verdict(run, _metrics(cat_all=0.70, recall=0.80, win_rate=0.30)))
-    assert "category agreement 70% < 77%" in reasons
+    assert not ch.verdict(run, _metrics())  # 60% agreement against an 82% noise floor, judge at 75%
+
+
+def test_verdict_fails_a_candidate_the_judge_does_not_prefer():
+    run = ch.Run(ch.Variant("claude-haiku-5-5"), groups=[[0]])
+    reasons = " ".join(ch.verdict(run, _metrics(recall=0.80, win_rate=0.30)))
+    assert "judge preferred this variant only 30% of the time" in reasons
     assert "grouping recall 80% < 85%" in reasons
-    assert "adjudication win rate 30% < 45%" in reasons
 
 
-def test_verdict_uses_fixed_bars_without_a_noise_run():
+def test_verdict_uses_fixed_recall_bar_without_a_noise_run():
     run = ch.Run(ch.Variant("claude-haiku-5-5"), groups=[[0]])
     none = _metrics(noise_all=None, noise_vis=None, noise_recall=None)
-    assert any("90%" in r for r in ch.verdict(run, {**none, "cat_all": 0.85}))
+    assert any("85%" in r for r in ch.verdict(run, {**none, "recall": 0.80}))
 
 
 def test_verdict_reports_run_failures_and_grouping_fallback():
     run = ch.Run(ch.Variant("claude-haiku-5-5"), groups=[[0]], refusals=1, max_token_stops=2,
                  missing_groups=3, grouping_fallback="unparseable reply")
     text = " ".join(ch.verdict(run, _metrics()))
-    assert "refusal" in text and "max_tokens" in text and "3 group(s) missing" in text
+    assert "refusal" in text and "max_tokens" in text
+    assert "missing" not in text  # omitted groups are a report note: production re-requests them
     assert "fell back to singletons (unparseable reply)" in text
 
 
@@ -184,7 +210,9 @@ def test_prompt_hides_model_names_and_adjudication_maps_sides_back():
     usage = [0, 0]
     counts = ch.adjudicate(client, pairs, ARTICLES, [[0], [1], [2]], random.Random(3), usage)
     # Truth is category_x in the first pair and category_y in the second, wherever it was shown.
-    assert counts == {"x": 1, "y": 1, "tie": 1, "invalid": 0}
+    # Truth is the baseline's category in the first pair and the candidate's in the second,
+    # wherever it was shown to the judge.
+    assert counts == {"baseline": 1, "candidate": 1, "tie": 1, "invalid": 0}
     assert usage == [1000, 500]
     prompt = client.calls[0]["messages"][0]["content"]
     assert "haiku" not in prompt.lower() and "claude" not in prompt.lower()
@@ -217,16 +245,18 @@ def test_evaluate_fails_a_candidate_that_is_worse_than_the_noise_floor():
     noise = _run("claude-haiku-4-5#2", FakeClient())  # 4.5 agrees with itself fully
     bad = _run("claude-haiku-5-5:low", FakeClient(flip_group_1=True))
     results = ch.evaluate([base, noise, bad], STORED_GROUPS, VISIBLE, {bad.variant.label: {
-        "x": 1, "y": 4, "tie": 0, "invalid": 0}})
+        "baseline": 4, "candidate": 1, "tie": 0, "invalid": 0}})
     failures = " ".join(results[bad.variant.label]["failures"])
-    assert "category agreement 50% < 95%" in failures and "win rate 20% < 45%" in failures
+    assert "judge preferred this variant only 20% of the time" in failures
+    assert "agreement" not in failures  # reported, not gated
 
 
 def test_report_lists_visible_disagreements_and_verdict():
     base = _run("claude-haiku-4-5", FakeClient())
     noise = _run("claude-haiku-4-5#2", FakeClient())
     bad = _run("claude-haiku-5-5:low", FakeClient(flip_group_1=True))
-    results = ch.evaluate([base, noise, bad], STORED_GROUPS, VISIBLE, {})
+    judged = {bad.variant.label: {"baseline": 5, "candidate": 1, "tie": 0, "invalid": 0}}
+    results = ch.evaluate([base, noise, bad], STORED_GROUPS, VISIBLE, judged)
     text = ch.report([base, noise, bad], results, VISIBLE, {"group_1": "T2"})
     assert "DOES NOT QUALIFY" in text and "group_1: AI/ML -> Business" in text
     assert "Noise floor (Haiku 4.5 vs itself)" in text
@@ -299,8 +329,8 @@ def test_adjudicate_records_per_item_verdicts():
     pairs = [("group_0", "Truth", "Wrong"), ("group_1", "Wrong", "Truth")]
     verdicts = []
     ch.adjudicate(FakeClient(), pairs, ARTICLES, STORED_GROUPS, random.Random(5), None, verdicts)
-    assert {v["group_id"]: v["winner"] for v in verdicts} == {"group_0": "x", "group_1": "y"}
-    assert verdicts[0]["x"] == "Truth" and verdicts[0]["y"] == "Wrong"
+    assert {v["group_id"]: v["winner"] for v in verdicts} == {"group_0": "baseline", "group_1": "candidate"}
+    assert verdicts[0]["baseline"] == "Truth" and verdicts[0]["candidate"] == "Wrong"
 
 
 class PairJudge(FakeClient):
@@ -364,7 +394,7 @@ def test_check_batch_reports_acceptance_and_rejection():
     assert check_batch.check(client, "claude-haiku-5-5") == "accepted"
     client.messages.batches.cancel.assert_called_once_with("batch_1")
     params = client.messages.batches.create.call_args.kwargs["requests"][0]["params"]
-    assert params["output_config"] == {"effort": "low"}
+    assert params["output_config"] == {"effort": "medium"}
 
     import anthropic  # pylint: disable=import-outside-toplevel
     import httpx2  # pylint: disable=import-outside-toplevel
@@ -373,3 +403,66 @@ def test_check_batch_reports_acceptance_and_rejection():
     client.messages.batches.create.side_effect = anthropic.BadRequestError(
         "output_config not permitted", response=response, body=None)
     assert check_batch.check(client, "claude-haiku-5-5").startswith("rejected: output_config")
+
+
+class GroupingFake(PairJudge):
+    """Groups per model: replies come from a {model: groups} map; judging as in PairJudge."""
+
+    def __init__(self, groupings):
+        super().__init__()
+        self.groupings = groupings
+
+    def create(self, **kwargs):
+        prompt = kwargs["messages"][0]["content"]
+        if "clustering" in prompt:
+            self.calls.append(kwargs)
+            reply = self.groupings[kwargs["model"]]
+            text = reply if isinstance(reply, str) else json.dumps(
+                {"groups": [[f"article_{i}" for i in g] for g in reply], "article_count": 5})
+            return SimpleNamespace(content=[SimpleNamespace(type="text", text=text)], stop_reason="end_turn",
+                                   usage=SimpleNamespace(input_tokens=1000, output_tokens=200))
+        return super().create(**kwargs)
+
+
+def _grouping_metadata(tmp_path):
+    articles = [{"title": f"Story {n}", "description": "d", "link": f"https://x/{i}", "pubDate": "now"}
+                for i, n in enumerate((1, 1, 2, 2, 3))]  # 0+1 are one event, 2+3 are one event
+    path = tmp_path / "batch-1.json"
+    path.write_text(json.dumps({"articles": articles, "groups": [[0], [1], [2], [3], [4]]}))
+    return str(path)
+
+
+def test_grouping_only_passes_a_model_that_finds_more_real_pairs(tmp_path, monkeypatch, capsys):
+    client = GroupingFake({"claude-haiku-4-5": [[0, 1], [2], [3], [4]],
+                           "claude-haiku-5-5": [[0, 1], [2, 3], [4]]})
+    monkeypatch.setattr(ch.anthropic, "Anthropic", lambda: client)
+    status = ch.main([_grouping_metadata(tmp_path), "--grouping-only"])
+    out = capsys.readouterr().out
+    assert status == 0 and "PASS" in out and "FAIL" not in out
+    assert "only this variant: [same event]  Story 2  +  Story 2" in out
+    assert all(c["model"] != ch.ADJUDICATOR or "SAME SPECIFIC NEWS EVENT" in c["messages"][0]["content"]
+               for c in client.calls)
+    assert not any("CATEGORIES" in c["messages"][0]["content"] for c in client.calls)  # no categorising
+
+
+def test_grouping_only_fails_a_model_that_merges_unrelated_articles(tmp_path, monkeypatch, capsys):
+    client = GroupingFake({"claude-haiku-4-5": [[0, 1], [2, 3], [4]],
+                           "claude-haiku-5-5": [[0, 4], [1], [2], [3]]})  # one wrong pair, two real ones missed
+    monkeypatch.setattr(ch.anthropic, "Anthropic", lambda: client)
+    status = ch.main([_grouping_metadata(tmp_path), "--grouping-only"])
+    out = capsys.readouterr().out
+    assert status == 1 and "FAIL: pair F1" in out
+    assert "[different events]" in out
+
+
+def test_grouping_only_reports_an_unusable_reply_as_a_failure(tmp_path, monkeypatch, capsys):
+    client = GroupingFake({"claude-haiku-4-5": [[0, 1], [2, 3], [4]], "claude-haiku-5-5": "no json here"})
+    monkeypatch.setattr(ch.anthropic, "Anthropic", lambda: client)
+    status = ch.main([_grouping_metadata(tmp_path), "--grouping-only", "--no-adjudicate"])
+    out = capsys.readouterr().out
+    assert status == 1 and "unparseable reply" in out
+
+
+def test_grouping_only_cannot_write_fixtures(tmp_path):
+    with pytest.raises(SystemExit):
+        ch.main([_grouping_metadata(tmp_path), "--grouping-only", "--write-fixtures", str(tmp_path)])

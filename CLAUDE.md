@@ -98,7 +98,7 @@ local `pip` bundling — acceptable for `synth`/`diff`, never for a real deploy.
 - **models.py**: Shared Pydantic models for consistent data validation across the application
 - **lib/rss_lambda_stack.ts**: Main CDK infrastructure stack defining all AWS resources
 - **cli_article_processor.py**: CLI tool for testing article processing with Claude API locally
-- **brief_generator.py**: Synthesises the companion "RSS Brief" email ("Read these" list, themes, signal strength, cross-cutting signals) from a day's categorised articles via a single streamed Claude Opus 5.5 call (`claude-opus-5-5`; `effort` set in `brief_config.json` - `high`, because at `medium` the model only sometimes counts a societal story from a low-ranked source as major and drops it under the theme caps; server-side refusal fallback enabled). Opus 5.5 always thinks, so read response content by block type and leave `max_tokens` headroom for thinking. Bulk categorisation and grouping stay on `claude-haiku-4-5`; the podcast narration uses `claude-sonnet-5-5`
+- **brief_generator.py**: Synthesises the companion "RSS Brief" email ("Read these" list, themes, signal strength, cross-cutting signals) from a day's categorised articles via a single streamed Claude Opus 5.5 call (`claude-opus-5-5`; `effort` set in `brief_config.json` - `high`, because at `medium` the model only sometimes counts a societal story from a low-ranked source as major and drops it under the theme caps; server-side refusal fallback enabled). Opus 5.5 always thinks, so read response content by block type and leave `max_tokens` headroom for thinking. Bulk categorisation runs on `claude-haiku-5-5` (medium effort, v2 prompt); grouping stays on `claude-haiku-4-5` until `eval/compare_haiku.py --grouping-only` passes; the podcast narration uses `claude-sonnet-5-5`
 - **brief_prompt.py**: Prompt text and editorial rules (selection, length caps, fidelity) for the RSS Brief synthesis call
 - **url_utils.py**: Credential-param stripping (via `w3lib`) and link normalisation shared by ingest and the brief
 - **brief_memory.py**: Persists a rolling window of recent RSS Brief days to S3 so the synthesis prompt can avoid repeating stories and frame multi-day stories as developments — see "Brief Memory" below
@@ -136,22 +136,26 @@ Every Claude call site logs one `CLAUDE_USAGE step=... model=... input=... outpu
 
 ### Haiku 4.5 / 5.5 compatibility
 
-Grouping and categorising are written to run on either `claude-haiku-4-5` (current default) or
-`claude-haiku-5-5`. `claude_compat.response_text` reads the text blocks of a response (Haiku 5.5
+Grouping and categorising are written to run on either `claude-haiku-4-5` or `claude-haiku-5-5`
+(categorising now runs on 5.5, set by `CLAUDE_MODEL`). `claude_compat.response_text` reads the text blocks of a response (Haiku 5.5
 can open with a thinking block, and a refusal has no text), and `claude_compat.effort_params`
-sends `output_config.effort` (`low`, or `CLAUDE_HAIKU_EFFORT`) for Haiku 5 models only, because
+sends `output_config.effort` (`medium`, or `CLAUDE_HAIKU_EFFORT`) for Haiku 5 models only, because
 Haiku 5.5 thinks by default and bills thinking as output while Haiku 4.5 rejects the parameter.
 An empty or refused response counts as a failed request. Do not read `content[0].text` directly.
-The decision to switch the default model is made with `eval/compare_haiku.py` (see `eval/README.md`).
+The model decisions are made with `eval/compare_haiku.py` (see `eval/README.md`): in November 2026
+the blind judge preferred Haiku 5.5 to Haiku 4.5 on 71-85% of the disagreements that matter to the
+brief (an earlier report had these figures inverted; fixed). Rollback for categorising: set
+`CLAUDE_MODEL=claude-haiku-4-5` and `CATEGORY_PROMPT_VERSION=v1` on the Lambdas (or the
+`DEFAULT_CLAUDE_MODEL` constant in `lib/rss_lambda_stack.ts` and a redeploy).
 
 ### Categorisation prompt versions and models
 
 `article_processor.create_group_summary_prompt(payloads, version)` has two versions: `v1` (the
 original bare category list, byte for byte) and `v2` (definitions for every category in
 `CATEGORY_DEFINITIONS` plus choosing rules). Production sends `DEFAULT_CATEGORY_PROMPT_VERSION`
-(currently `v1`; env `CATEGORY_PROMPT_VERSION` overrides it) until v2 passes the gates in
-`eval/README.md`. Grouping can run on a different model from the categorising batch via
-`CLAUDE_GROUPING_MODEL` (falls back to `CLAUDE_MODEL`). If the Batch API rejects the Haiku 5
+(`v2`; env `CATEGORY_PROMPT_VERSION=v1` rolls back). Grouping runs on `CLAUDE_GROUPING_MODEL` (the
+stack's `GROUPING_CLAUDE_MODEL`, currently Haiku 4.5; unset it falls back to `CLAUDE_MODEL`), so it
+moves separately: change that constant once the grouping check passes. If the Batch API rejects the Haiku 5
 `output_config.effort` setting, `submit_email_batch` retries once without it.
 
 ### Missing groups

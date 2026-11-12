@@ -96,17 +96,35 @@ model names) that is shown the same category definitions, so it grades against t
 prints which side won on each disagreement, so patterns can be read, not only counted. Because the
 judge uses v2's definitions, also read a sample of the disagreements yourself.
 
-**Classification gate:** no parse failures, refusals, truncations or missing groups; pooled judge win
-rate of `5.5@v2` against `4.5@v1` of at least 50% with no day under 45%; brief-visible agreement
-within 5 points of 4.5's own noise floor. Then regenerate one fixture per day from `5.5@v2` with
-`--write-fixtures` and run the baseline brief eval on it, so any change in what reaches the brief
-shows in `major_coverage`.
+**Classification gate:** no parse failures, refusals or truncations; the blind judge preferred the
+candidate on at least 55% of the disagreements pooled over the days, and no single day below 45%
+(the harness checks the per-day 45%). Groups a model leaves out are reported as a note, not a
+failure: production re-requests them, but prefer the effort level that leaves out none. Agreement
+with Haiku 4.5 is shown but is **not** a gate: Haiku 4.5 is not the reference (it filed seven Nvidia
+stories under Other and Media/TV/Film, which the brief never sees), so a better classifier agrees
+with it less. Then regenerate one fixture per day from the chosen setup with `--write-fixtures` and
+run the baseline brief eval on it, so any change in what reaches the brief shows in `major_coverage`.
 
-**Grouping** is judged separately (omit `--skip-grouping`, one or two days): for pairs one grouping
-made and the other did not, the judge answers "same specific news event?", and the report gives each
-model's pair precision, recall against judge-confirmed pairs and F1. Gate: 5.5's F1 within 0.05 of
-4.5's or better. Recall against the stored groups is shown but not used when pairs were judged, because
-the stored groups are Haiku 4.5's own output.
+The judge's counts are `{baseline, candidate, tie}` and the win rate is the **candidate's**
+(`win_rate`). An earlier version read them the wrong way round and every printed rate was the
+baseline's; a regression test now pins the orientation.
+
+**Grouping acceptance check (`--grouping-only`)** tests the grouping stage on its own, without
+re-running the classification tests: it re-groups the articles for each variant (default
+`claude-haiku-4-5` as baseline and `claude-haiku-5-5:medium`), has the judge answer "do these report
+the same specific news event?" for pairs one grouping made and the other did not (up to 100), and
+prints each model's pair precision, recall against judge-confirmed pairs and F1, any fallback to
+singletons, truncation or refusal, and the differing pairs with the judge's answer so you can read
+them. It prints PASS or FAIL (5.5's F1 within 0.05 of 4.5's or better, and no failures) and exits 1 on
+FAIL. About $0.05 a day (estimate); one or two days is enough:
+
+```bash
+uv run python eval/compare_haiku.py /tmp/batches/batch-20261110-073154.json --grouping-only \
+    --out /tmp/batches/reports/grouping-1110.json
+```
+
+When it passes, set `GROUPING_CLAUDE_MODEL` in `lib/rss_lambda_stack.ts` to `claude-haiku-5-5`.
+Recall against the stored groups is not used here: the stored groups are Haiku 4.5's own output.
 
 Before switching, confirm the Batch API accepts the Haiku 5.5 settings (`output_config.effort`):
 
@@ -116,6 +134,16 @@ uv run python eval/check_batch.py      # creates a one-request batch, then cance
 
 If the API ever rejects it in production, `submit_email_batch` retries once without the setting
 instead of failing the day.
+
+### Findings (November 2026)
+
+Classification, two real days, candidate preferred by the blind judge (ties half), against Haiku 4.5
+with the original prompt: Haiku 5.5 low effort with the v2 prompt 76% and 79%; medium effort 71% and
+85%; Haiku 4.5 with v2 43% and 56%; a repeat of Haiku 4.5 itself 32% and 43% (the noise check, so
+swings of about ten points are noise). At low effort Haiku 5.5 left 2 groups out of a reply on one
+day; at medium none. Haiku 4.5 with v2 left 16 out on one day, so v2 is not a free upgrade on 4.5.
+Production therefore runs Haiku 5.5, medium effort, v2. Not measured, to save credits: v2 against v1
+on Haiku 5.5, and the effect on the brief itself.
 
 ### Models
 

@@ -247,7 +247,10 @@ The enhanced email template features:
 The following environment variables are configured in the CDK stack:
 
 - `ANTHROPIC_API_KEY_PARAMETER`: Name of the AWS Parameter Store parameter containing the API key (default: `rss-email-anthropic-api-key`)
-- `CLAUDE_MODEL`: The Claude model to use (default: `claude-haiku-4-5`)
+- `CLAUDE_MODEL`: The Claude model for the categorising batch (default: `claude-haiku-5-5`)
+- `CLAUDE_GROUPING_MODEL`: The model for the grouping step (stack default: `claude-haiku-4-5` until the grouping check passes; unset falls back to `CLAUDE_MODEL`)
+- `CATEGORY_PROMPT_VERSION`: Categorisation prompt, `v2` (default) or `v1` (the original)
+- `CLAUDE_HAIKU_EFFORT`: Effort for Haiku 5 calls (default: `medium`)
 - `CLAUDE_MAX_TOKENS`: Maximum tokens per request (default: `100000`)
 - `CLAUDE_MAX_REQUESTS`: Maximum API requests per Lambda execution (default: `5`)
 - `CLAUDE_ENABLED`: Feature flag to enable/disable Claude processing (default: `true`)
@@ -281,7 +284,7 @@ The integration logs the following metrics to CloudWatch:
 
 ### Cost Considerations
 
-- The system uses Claude Haiku 4.5 for cost efficiency
+- The system uses Claude Haiku (5.5 for categorising; grouping moves once it passes its check) for cost efficiency
 - Token usage is limited per request and per Lambda execution
 - Only new articles since the last run are processed
 
@@ -496,7 +499,7 @@ To test the email generation locally:
 ```bash
 export ANTHROPIC_API_KEY_PARAMETER="rss-email-anthropic-api-key"
 export CLAUDE_ENABLED="true"
-export CLAUDE_MODEL="claude-haiku-4-5"
+export CLAUDE_MODEL="claude-haiku-5-5"
 ```
 
 2. Run the email generation:
@@ -564,7 +567,7 @@ cp .env.example .env
 ```bash
 export CLAUDE_ENABLED=true
 export ANTHROPIC_API_KEY=your-api-key-here
-export CLAUDE_MODEL=claude-haiku-4-5
+export CLAUDE_MODEL=claude-haiku-5-5
 ```
 
 **Method 3: AWS Parameter Store (Production)**

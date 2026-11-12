@@ -39,10 +39,10 @@ def test_response_text_empty_when_no_text(content):
 
 def test_effort_only_for_haiku_5(monkeypatch):
     monkeypatch.delenv("CLAUDE_HAIKU_EFFORT", raising=False)
-    assert effort_params("claude-haiku-5-5") == {"output_config": {"effort": "low"}}
-    assert not effort_params("claude-haiku-4-5")
-    monkeypatch.setenv("CLAUDE_HAIKU_EFFORT", "medium")
     assert effort_params("claude-haiku-5-5") == {"output_config": {"effort": "medium"}}
+    assert not effort_params("claude-haiku-4-5")
+    monkeypatch.setenv("CLAUDE_HAIKU_EFFORT", "low")
+    assert effort_params("claude-haiku-5-5") == {"output_config": {"effort": "low"}}
 
 
 @pytest.mark.parametrize("model, expected", [
@@ -56,7 +56,7 @@ def test_batch_requests_carry_effort_for_haiku_5_only():
     batches = [[("group_0", [0, 1])]]
     new = create_batch_requests(batches, ARTICLES, "claude-haiku-5-5")[0]["params"]
     old = create_batch_requests(batches, ARTICLES, "claude-haiku-4-5")[0]["params"]
-    assert new["output_config"] == {"effort": "low"}
+    assert new["output_config"] == {"effort": "medium"}
     assert "output_config" not in old
 
 
@@ -77,7 +77,7 @@ def test_grouping_parses_when_thinking_block_leads(_key, mock_anthropic, monkeyp
     client.messages.create.return_value = _grouping_response([thinking(), text_block(GROUPS_JSON)])
 
     assert group_articles_with_claude(ARTICLES, ClaudeRateLimiter()) == [[0, 1], [2]]
-    assert client.messages.create.call_args.kwargs["output_config"] == {"effort": "low"}
+    assert client.messages.create.call_args.kwargs["output_config"] == {"effort": "medium"}
 
 
 @patch("rss_email.article_grouper.anthropic.Anthropic")
