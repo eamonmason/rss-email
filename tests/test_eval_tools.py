@@ -244,3 +244,17 @@ def test_major_coverage_assertion_skips_uncurated_fixtures(expected_major, passe
     out = subprocess.run(["node", "-e", script], cwd=EVAL_DIR, capture_output=True, text=True,
                          check=True)
     assert json.loads(out.stdout)["pass"] is passes
+
+
+def test_weekly_ci_eval_runs_only_the_production_setting():
+    """The matrix is a manual cost comparison; the schedule must not run all of it."""
+    workflow = os.path.join(EVAL_DIR, os.pardir, ".github", "workflows", "eval.yml")
+    with open(workflow, encoding="utf-8") as handle:
+        text = handle.read()
+    assert "--filter-providers '^opus-5-5/high$' --repeat 1" in text
+    runs = [line for line in text.splitlines() if "npm run eval" in line and "echo" not in line]
+    assert len(runs) == 2 and all('"${args[@]}"' in line for line in runs)
+    yaml = pytest.importorskip("yaml")
+    parsed = yaml.safe_load(text)
+    triggers = parsed.get("on", parsed.get(True))
+    assert triggers["workflow_dispatch"]["inputs"]["matrix"]["default"] is False

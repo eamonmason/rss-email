@@ -105,6 +105,10 @@ The promptfoo eval runs on the **5.5 family only** (`claude-opus-5-5`, `claude-s
 the production Haiku 4.5 baseline (`baseline_prices` in `prices.json`) because it is the model
 being replaced.
 
+**CI runs the production setting only.** The weekly `eval.yml` job filters to `opus-5-5/high` with
+one repeat (about $0.25 per fixture: a measured ~$0.19 brief plus grading), so it stays cheap as
+fixtures are added. To run the whole matrix from CI, start the workflow manually and tick `matrix`.
+
 ### Fixtures for this comparison
 
 - `2026-06-15` - the original real day.
