@@ -103,6 +103,21 @@ def _throttle_host(url: str) -> None:
         _host_last_start[key] = time.monotonic()
 
 
+def _log_failed_attempt(attempt: int, max_retries: int, message: str, *log_args) -> None:
+    """Log a failed fetch attempt, alerting only when it was the last one.
+
+    Errors are logged at INFO while retries remain, because a transient failure
+    that a later attempt recovers from should not page on-call. WARNING is not
+    used: the ErrorWarningCount metric filter counts it as well as ERROR.
+    """
+    if attempt < max_retries - 1:
+        logger.info(
+            "Attempt %d/%d failed, retrying: " + message, attempt + 1, max_retries, *log_args
+        )
+    else:
+        logger.error(message, *log_args)
+
+
 @pydantic.validate_call(validate_return=True)
 def get_feed_items(url: str, timestamp: datetime) -> bytes:
     """Slurps feed url.
@@ -186,20 +201,16 @@ def get_feed_items(url: str, timestamp: datetime) -> bytes:
             return response.content
 
         except httpx.HTTPStatusError as error:
-            logger.error("URL: %s, data not retrieved because %s", url, error)
-            if attempt < max_retries - 1:
-                time.sleep(retry_delay)
-                continue
+            _log_failed_attempt(
+                attempt, max_retries, "URL: %s, data not retrieved because %s", url, error
+            )
         except httpx.TimeoutException:
-            logger.error("socket timed out - URL %s", url)
-            if attempt < max_retries - 1:
-                time.sleep(retry_delay)
-                continue
+            _log_failed_attempt(attempt, max_retries, "socket timed out - URL %s", url)
         except httpx.HTTPError as error:
-            logger.error("URL: %s, url error %s", url, error)
-            if attempt < max_retries - 1:
-                time.sleep(retry_delay)
-                continue
+            _log_failed_attempt(attempt, max_retries, "URL: %s, url error %s", url, error)
+
+        if attempt < max_retries - 1:
+            time.sleep(retry_delay)
     return b""
 
 

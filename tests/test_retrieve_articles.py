@@ -135,6 +135,60 @@ class TestRetrieveArticles(unittest.TestCase):
 
     @patch("rss_email.retrieve_articles.time.sleep")
     @patch("rss_email.retrieve_articles.httpx.get")
+    def test_get_feed_items_recovered_failure_does_not_alert(self, mock_get, mock_sleep):
+        """A failed attempt that a retry recovers from must not log at ERROR."""
+        ok = MagicMock()
+        ok.status_code = 200
+        ok.content = b"<rss/>"
+        failures = {
+            "timeout": httpx.ReadTimeout("timed out"),
+            "http error": httpx.ConnectError("refused"),
+        }
+        for name, failure in failures.items():
+            with self.subTest(failure=name):
+                mock_get.reset_mock()
+                mock_sleep.reset_mock()
+                mock_get.side_effect = [failure, ok]
+
+                with self.assertLogs("rss_email.retrieve_articles", level="INFO") as captured:
+                    result = get_feed_items("https://example.com/feed", datetime.now())
+
+                self.assertEqual(result, b"<rss/>")
+                self.assertEqual(mock_get.call_count, 2)
+                self.assertFalse(any(r.levelno >= logging.WARNING for r in captured.records))
+
+    @patch("rss_email.retrieve_articles.time.sleep")
+    @patch("rss_email.retrieve_articles.httpx.get")
+    def test_get_feed_items_all_attempts_failing_alerts_once(self, mock_get, mock_sleep):
+        """When every attempt fails, exactly one ERROR is logged, on the last."""
+        bad = MagicMock()
+        bad.status_code = 500
+        bad.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "boom", request=MagicMock(), response=bad
+        )
+        cases = {
+            "timeout": [httpx.ReadTimeout("timed out")] * 3,
+            "http status": [bad] * 3,
+            "http error": [httpx.ConnectError("refused")] * 3,
+        }
+        for name, side_effect in cases.items():
+            with self.subTest(failure=name):
+                mock_get.reset_mock()
+                mock_sleep.reset_mock()
+                mock_get.side_effect = side_effect
+
+                with self.assertLogs("rss_email.retrieve_articles", level="INFO") as captured:
+                    result = get_feed_items("https://example.com/feed", datetime.now())
+
+                self.assertEqual(result, b"")
+                self.assertEqual(mock_get.call_count, 3)
+                self.assertEqual(mock_sleep.call_count, 2)
+                errors = [r for r in captured.records if r.levelno == logging.ERROR]
+                self.assertEqual(len(errors), 1)
+                self.assertFalse(any(r.levelno == logging.WARNING for r in captured.records))
+
+    @patch("rss_email.retrieve_articles.time.sleep")
+    @patch("rss_email.retrieve_articles.httpx.get")
     def test_get_feed_items_410_skips_without_retry_or_error(self, mock_get, mock_sleep):
         """A 410 Gone means the feed is permanently removed.
 
