@@ -123,7 +123,8 @@ uv run python eval/compare_haiku.py /tmp/batches/batch-20261110-073154.json --gr
     --out /tmp/batches/reports/grouping-1110.json
 ```
 
-When it passes, set `GROUPING_CLAUDE_MODEL` in `lib/rss_lambda_stack.ts` to `claude-haiku-5-5`.
+When it passes, set `GROUPING_CLAUDE_MODEL` in `lib/rss_lambda_stack.ts` to `claude-haiku-5-5` (done
+in November 2026, see Findings).
 Recall against the stored groups is not used here: the stored groups are Haiku 4.5's own output.
 
 Before switching, confirm the Batch API accepts the Haiku 5.5 settings (`output_config.effort`):
@@ -142,7 +143,14 @@ with the original prompt: Haiku 5.5 low effort with the v2 prompt 76% and 79%; m
 85%; Haiku 4.5 with v2 43% and 56%; a repeat of Haiku 4.5 itself 32% and 43% (the noise check, so
 swings of about ten points are noise). At low effort Haiku 5.5 left 2 groups out of a reply on one
 day; at medium none. Haiku 4.5 with v2 left 16 out on one day, so v2 is not a free upgrade on 4.5.
-Production therefore runs Haiku 5.5, medium effort, v2. Not measured, to save credits: v2 against v1
+Production therefore runs Haiku 5.5, medium effort, v2.
+
+Grouping, three real days, `--grouping-only`, judged on pairs (Haiku 5.5 medium against Haiku 4.5): F1
+91% against 25%, 85% against 32%, 69% against 50%; precision 100% on all three. Haiku 4.5 over-merged
+the Nvidia story into one cluster of about 13 articles that the judge called different events, which
+the prompt's strict same-event rule forbids; Haiku 5.5 is conservative (recall 53-83%) and missed some
+real same-event pairs, including one pair with identical titles; Haiku 4.5 also missed identical-title
+pairs on another day. A deterministic pre-merge of identical titles would help both and is not done. Not measured, to save credits: v2 against v1
 on Haiku 5.5, and the effect on the brief itself.
 
 ### Models

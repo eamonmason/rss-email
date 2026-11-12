@@ -55,6 +55,7 @@ import anthropic  # noqa: E402
 from make_fixture import digest_to_text, filter_to_brief_input  # noqa: E402
 from provider import cost_usd  # noqa: E402
 from rss_email.article_grouper import (  # noqa: E402
+    GROUPING_MAX_TOKENS as _GROUPING_MAX_TOKENS,
     create_grouping_prompt,
     parse_grouping_response,
 )
@@ -78,7 +79,7 @@ DEFAULT_VARIANTS = [
     "claude-haiku-5-5:medium@v2",
 ]
 ADJUDICATOR = "claude-sonnet-5-5"
-GROUPING_MAX_TOKENS = 4096  # as in article_grouper
+GROUPING_MAX_TOKENS = _GROUPING_MAX_TOKENS  # as in article_grouper
 CATEGORISE_MAX_TOKENS = 8192  # as in submit_email_batch
 ADJUDICATE_MAX_TOKENS = 4000
 BATCH_SIZE = 25  # CLAUDE_BATCH_SIZE default

@@ -31,6 +31,12 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
+# Reply cap for the grouping call. Haiku 5.5 thinks before it answers and the thinking counts
+# against this: three real days used 2.9k-3.8k tokens, so the old 4096 left under 10% headroom.
+# It is only a ceiling (nothing is billed for unused tokens), so a larger cap costs nothing.
+GROUPING_MAX_TOKENS = 8192
+
+
 def create_grouping_prompt(
     articles: List[Dict[str, Any]], batch_offset: int = 0
 ) -> str:
@@ -165,7 +171,7 @@ def group_articles_with_claude(
 
         response = client.messages.create(
             model=model_name,
-            max_tokens=4096,
+            max_tokens=GROUPING_MAX_TOKENS,
             messages=[{"role": "user", "content": prompt}],
             timeout=api_timeout,
             **effort_params(model_name),

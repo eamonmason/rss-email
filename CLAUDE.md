@@ -98,7 +98,7 @@ local `pip` bundling — acceptable for `synth`/`diff`, never for a real deploy.
 - **models.py**: Shared Pydantic models for consistent data validation across the application
 - **lib/rss_lambda_stack.ts**: Main CDK infrastructure stack defining all AWS resources
 - **cli_article_processor.py**: CLI tool for testing article processing with Claude API locally
-- **brief_generator.py**: Synthesises the companion "RSS Brief" email ("Read these" list, themes, signal strength, cross-cutting signals) from a day's categorised articles via a single streamed Claude Opus 5.5 call (`claude-opus-5-5`; `effort` set in `brief_config.json` - `high`, because at `medium` the model only sometimes counts a societal story from a low-ranked source as major and drops it under the theme caps; server-side refusal fallback enabled). Opus 5.5 always thinks, so read response content by block type and leave `max_tokens` headroom for thinking. Bulk categorisation runs on `claude-haiku-5-5` (medium effort, v2 prompt); grouping stays on `claude-haiku-4-5` until `eval/compare_haiku.py --grouping-only` passes; the podcast narration uses `claude-sonnet-5-5`
+- **brief_generator.py**: Synthesises the companion "RSS Brief" email ("Read these" list, themes, signal strength, cross-cutting signals) from a day's categorised articles via a single streamed Claude Opus 5.5 call (`claude-opus-5-5`; `effort` set in `brief_config.json` - `high`, because at `medium` the model only sometimes counts a societal story from a low-ranked source as major and drops it under the theme caps; server-side refusal fallback enabled). Opus 5.5 always thinks, so read response content by block type and leave `max_tokens` headroom for thinking. Bulk categorisation runs on `claude-haiku-5-5` (medium effort, v2 prompt); grouping also runs on `claude-haiku-5-5` (passed `eval/compare_haiku.py --grouping-only` on three real days); the podcast narration uses `claude-sonnet-5-5`
 - **brief_prompt.py**: Prompt text and editorial rules (selection, length caps, fidelity) for the RSS Brief synthesis call
 - **url_utils.py**: Credential-param stripping (via `w3lib`) and link normalisation shared by ingest and the brief
 - **brief_memory.py**: Persists a rolling window of recent RSS Brief days to S3 so the synthesis prompt can avoid repeating stories and frame multi-day stories as developments — see "Brief Memory" below
@@ -154,8 +154,10 @@ brief (an earlier report had these figures inverted; fixed). Rollback for catego
 original bare category list, byte for byte) and `v2` (definitions for every category in
 `CATEGORY_DEFINITIONS` plus choosing rules). Production sends `DEFAULT_CATEGORY_PROMPT_VERSION`
 (`v2`; env `CATEGORY_PROMPT_VERSION=v1` rolls back). Grouping runs on `CLAUDE_GROUPING_MODEL` (the
-stack's `GROUPING_CLAUDE_MODEL`, currently Haiku 4.5; unset it falls back to `CLAUDE_MODEL`), so it
-moves separately: change that constant once the grouping check passes. If the Batch API rejects the Haiku 5
+stack's `GROUPING_CLAUDE_MODEL`, currently Haiku 5.5; unset it falls back to `CLAUDE_MODEL`), so it
+can be rolled back separately by setting that constant to `claude-haiku-4-5`. The grouping reply cap
+(`article_grouper.GROUPING_MAX_TOKENS`, 8192) leaves room for Haiku 5.5's thinking, which used
+2.9k-3.8k tokens on real days. If the Batch API rejects the Haiku 5
 `output_config.effort` setting, `submit_email_batch` retries once without it.
 
 ### Missing groups
