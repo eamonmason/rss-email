@@ -51,15 +51,29 @@ It needs a real day's `batch-metadata` file (articles plus the groups production
 aws s3 cp s3://<bucket>/batch-metadata/batch-<timestamp>.json /tmp/batch.json
 export ANTHROPIC_API_KEY=sk-...
 uv run python eval/compare_haiku.py /tmp/batch.json --out /tmp/haiku-report.json \
-    --write-fixtures eval/fixtures        # optional: digests for the brief eval
+    --raw-dir /tmp/haiku-raw --write-fixtures eval/fixtures
 ```
 
-It runs the shipping prompts for the Haiku 4.5 baseline and Haiku 5.5 at effort `low` and
-`medium`, then prints parse failures, refusals, `max_tokens` stops, tokens and cost, grouping
-precision/recall against the stored groups, category agreement against the baseline, and the
-disagreements to read by hand. Pass bar: no failures of any kind, category agreement >= 90%,
-grouping recall >= 85%, disagreements judged acceptable. The cost shown is the synchronous
-price; the Batch API halves the categorising part. Run it on several days before deciding.
+Variants default to Haiku 4.5 (baseline), Haiku 4.5 again (`#2`, the noise floor), and Haiku 5.5
+at effort `low` and `medium`. Each re-groups the articles and categorises the stored groups using
+the shipping prompts. Agreement with Haiku 4.5 is not accuracy, so the report adds:
+
+- **Noise floor**: how much Haiku 4.5 disagrees with itself. Candidates are judged against that.
+- **Brief-visible agreement**: only themed and personal categories reach the brief, so agreement
+  is also reported over groups where either side picked one, with a count of groups that move in
+  or out of the brief's categories.
+- **Blind adjudication**: `claude-sonnet-5-5` picks the better category for sampled brief-visible
+  disagreements (options shuffled, no model names). Win rate = (wins + 0.5 x ties) / judged.
+- **Grouping diagnostics**: a reply that makes `parse_grouping_response` fall back to one group
+  per article (unparseable, no `groups` list, or placing under 90% of articles) is reported as a
+  failure, and `--raw-dir` saves every raw reply.
+
+**Decision rule (fixed in advance).** A Haiku 5.5 setting qualifies for a stage only if, on every
+day: no parse fallback, refusal, `max_tokens` stop or missing group; category agreement and
+brief-visible agreement each within 5 points of the Haiku 4.5 noise floor; grouping pair recall
+within 10 points of Haiku 4.5's own recall; adjudication win rate of at least 45%; and the brief
+eval on its written fixture passes every run. Grouping and categorising are judged separately.
+Costs shown are synchronous prices; the Batch API halves the categorising part.
 
 To check the downstream effect, add an `expected_major.json` (curate from the baseline fixture)
 to a written fixture directory, add a `tests:` entry for it, and run the brief eval.

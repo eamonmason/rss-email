@@ -144,6 +144,13 @@ Haiku 5.5 thinks by default and bills thinking as output while Haiku 4.5 rejects
 An empty or refused response counts as a failed request. Do not read `content[0].text` directly.
 The decision to switch the default model is made with `eval/compare_haiku.py` (see `eval/README.md`).
 
+### Missing groups
+
+If the model leaves a group out of a batch reply (or a whole request fails), those articles would
+never reach the digest or the brief. `retrieve_and_send_email._recover_missing_groups` re-asks once
+for the missing groups (at most 50, in synchronous calls of 25, logged as step `categorise_recover`
+in `CLAUDE_USAGE`). It is best-effort and never raises.
+
 ### Brief Memory
 
 The RSS Brief (not the daily digest) remembers recent days so it can avoid
