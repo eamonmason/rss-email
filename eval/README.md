@@ -128,6 +128,11 @@ faithfulness grader gets as "previously covered": the brief is meant to frame a 
 of an earlier day, so facts and dates from that block are allowed, while a claim in neither the digest
 nor the memory still fails. Use `uv run python` for this step so `memory.txt` is written.
 
+`summarise.py` takes several results files and merges them (an earlier baseline run, a re-run of one
+cell, a new variant's run). A grader call that failed with an API error is left out as "ungraded"
+instead of counting against a model, and `--ignore-errors` drops provider-error runs for faults that
+are not the model's, such as running out of credit.
+
 ### Comparing Opus and Sonnet for the brief
 
 ```bash

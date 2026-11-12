@@ -456,3 +456,48 @@ def test_faithfulness_rubric_is_shown_the_memory():
         text = handle.read()
     assert 'memory_text: ""' in text and "{{ memory_text }}" in text
     assert "found in neither the digest nor that text fails" in text
+
+
+def _graded(label, passes, grader_error=False):
+    """A result row with a faithfulness rubric (optionally failed by an API error) and a schema check."""
+    comps = [{"pass": True, "assertion": {"type": "javascript", "value": "file://assertions/schema.cjs"}}]
+    if grader_error:
+        comps.append({"pass": False, "reason": "API call error: Your credit balance is too low",
+                      "assertion": {"type": "llm-rubric", "value": "You are auditing an editorial brief"}})
+    else:
+        comps.append({"pass": passes, "reason": "ok" if passes else "invented",
+                      "assertion": {"type": "llm-rubric", "value": "You are auditing an editorial brief"}})
+    return {"provider": {"label": label}, "failureReason": 0 if all(c["pass"] for c in comps) else 1,
+            "success": all(c["pass"] for c in comps), "cost": 0.2,
+            "response": {"tokenUsage": {"completion": 5000}}, "gradingResult": {"componentResults": comps}}
+
+
+def test_a_grader_api_error_is_left_out_not_counted_as_a_failure():
+    rows = summarise.summarise([_graded("base", True), _graded("base", False, grader_error=True)],
+                               baseline="base")
+    base = rows[0]
+    assert base["counts"]["llm-rubric: You are auditing an editorial brief"] == (1, 1)  # error skipped
+    assert base["ungraded"] == 1
+    assert base["passed"] == 2  # the cell with the grader error still passed what could be graded
+    assert "left out: 1 grader error(s)" in summarise.render(rows)
+
+
+def test_ignore_errors_drops_provider_error_runs_and_reports_them():
+    crashed = {"provider": {"label": "base"}, "failureReason": 2, "error": "credit balance is too low",
+               "success": False}
+    results = [_graded("base", True), crashed]
+    kept = summarise.summarise(results, baseline="base")[0]
+    assert kept["runs"] == 2 and kept["errors"] == 1 and kept["passed"] == 1
+    dropped = summarise.summarise(results, baseline="base", ignore_errors=True)[0]
+    assert dropped["runs"] == 1 and dropped["errors"] == 0 and dropped["dropped_errors"] == 1
+    assert "1 provider-error run(s)" in summarise.render(summarise.summarise(
+        results, baseline="base", ignore_errors=True))
+
+
+def test_several_results_files_are_merged(tmp_path, capsys):
+    first, second = tmp_path / "a.json", tmp_path / "b.json"
+    first.write_text(json.dumps({"results": {"results": [_graded("base", True)]}}))
+    second.write_text(json.dumps({"results": {"results": [_graded("base", True), _graded("cheap", True)]}}))
+    assert summarise.main([str(first), str(second), "--baseline", "base"]) == 0
+    out = capsys.readouterr().out
+    assert "base: 2/2 runs passed all checks" in out and "cheap: 1/1 runs passed all checks" in out
