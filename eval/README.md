@@ -49,7 +49,7 @@ real `batch-metadata` files (see below for fetching them):
 
 ```bash
 mkdir -p /tmp/batches/reports
-for f in /tmp/batches/batch-2*.json; do     # keep reports out of this glob
+for f in /tmp/batches/batch-2*[0-9].json; do   # ends in a digit: skips *.report.json
   uv run python eval/compare_haiku.py "$f" --variants claude-haiku-4-5 --no-adjudicate \
       --write-fixtures eval/fixtures        # categorised with the production Haiku 4.5
 done
