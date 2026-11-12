@@ -253,3 +253,10 @@ def test_evaluate_works_with_a_single_baseline_variant():
     assert results[base.variant.label]["reference"]
     assert results[base.variant.label]["metrics"]["noise_all"] is None
     assert "reference run" in ch.report([base], results, VISIBLE, {})
+
+
+def test_to_fixture_can_match_the_production_brief_input():
+    run = _run("claude-haiku-4-5", FakeClient())
+    run.categories["group_1"] = "Other"  # a category the brief never sees
+    digest = ch.to_fixture(ARTICLES, STORED_GROUPS, run, (["AI/ML", "Business"], ["Cycling"]))
+    assert list(digest) == ["AI/ML"] and [a["title"] for a in digest["AI/ML"]] == ["T0"]

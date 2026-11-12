@@ -38,7 +38,7 @@ module.exports = (output, context) => {
   const idMap = assignIds(digest);
   const resolve = (ref) => (idMap[ref] ? idMap[ref].title : ref);
 
-  // Every article title the brief featured: category themes + personal block.
+  // Every article title the brief featured: category themes, personal block and must-read.
   const surfaced = [];
   for (const body of Object.values(brief.categories || {})) {
     for (const theme of (body.themes || [])) {
@@ -46,6 +46,9 @@ module.exports = (output, context) => {
     }
   }
   for (const t of ((brief.personal || {}).top_stories || [])) surfaced.push(norm(resolve(t)));
+  // "Read these" leads the email, so a story listed there is in front of the reader even
+  // if no theme cites it.
+  for (const item of (brief.must_read || [])) surfaced.push(norm(resolve(String(item.id))));
 
   const expected = JSON.parse(fs.readFileSync(context.vars.expected_major, 'utf-8'));
   const mustCover = expected.must_cover || [];

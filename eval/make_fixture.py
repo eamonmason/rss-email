@@ -5,6 +5,8 @@
         # copy a fixture, relabelling its must-cover stories to deprioritised sources
     python make_fixture.py candidates <batch-metadata.json> [min_feeds]
         # list stories many feeds ran: candidates for a fixture's expected_major.json
+    uv run python make_fixture.py refilter <fixture_dir>...
+        # drop categories the brief never sees (Other, Science, ...) from existing fixtures
     python make_fixture.py sync-tests
         # rewrite the generated tests block in promptfooconfig.yaml from fixtures/*
 
@@ -19,6 +21,8 @@ import re
 import shutil
 import sys
 from typing import Any, Dict, List, Tuple
+
+_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "src")
 
 LOW_RANK_SOURCES = ["Techmeme", "Slashdot", "Google News"]
 
@@ -53,6 +57,32 @@ def relabel_to_low_rank(
             if any(w in title or title in w for w in wanted):
                 item["source"] = LOW_RANK_SOURCES[n % len(LOW_RANK_SOURCES)]
                 n += 1
+    return out
+
+
+def filter_to_brief_input(
+    digest: Dict[str, List[Dict[str, Any]]], themed: List[str], personal: List[str]
+) -> Dict[str, List[Dict[str, Any]]]:
+    """Reduce a digest to what the brief actually receives in production.
+
+    Mirrors ``brief_generator.build_synthesis_input``: only themed then personal categories,
+    in configured order, with sponsored articles dropped. Anything else (Other, Science,
+    Environment...) never reaches the brief, so a fixture that contains it is not faithful.
+    """
+    # Imported here so the other subcommands (sync-tests, candidates) keep working with a
+    # plain `python`; this one needs the project environment (`uv run python`).
+    if _SRC not in sys.path:
+        sys.path.insert(0, _SRC)
+    from rss_email.brief_generator import is_sponsored  # pylint: disable=import-outside-toplevel
+
+    out: Dict[str, List[Dict[str, Any]]] = {}
+    for category in list(themed) + list(personal):
+        items = [
+            item for item in digest.get(category, [])
+            if item.get("title") and not is_sponsored(item["title"], item.get("url", ""))
+        ]
+        if items:
+            out[category] = items
     return out
 
 
@@ -153,6 +183,20 @@ def main(argv: List[str]) -> int:
             print(f"{count} feeds | {title} | {', '.join(feeds)}")
         if not found:
             print(f"no story was covered by {min_feeds}+ feeds; try a lower number")
+        return 0
+    if len(argv) >= 3 and argv[1] == "refilter":
+        if _SRC not in sys.path:
+            sys.path.insert(0, _SRC)
+        from rss_email.brief_generator import load_brief_config  # pylint: disable=import-outside-toplevel
+        config = load_brief_config()
+        for folder in argv[2:]:
+            path = os.path.join(folder, "digest_articles.json")
+            digest = filter_to_brief_input(
+                _load(path), config.get("themed_categories", []), config.get("personal_categories", [])
+            )
+            _write(path, json.dumps(digest, indent=2) + "\n")
+            _write(os.path.join(folder, "digest_text.txt"), digest_to_text(digest))
+            print(f"{folder}: {sum(len(v) for v in digest.values())} articles in {sorted(digest)}")
         return 0
     if len(argv) == 2 and argv[1] == "sync-tests":
         print("updated" if sync_tests() else "already up to date")

@@ -46,7 +46,7 @@ if _SRC not in sys.path:
 # pylint: disable=wrong-import-position
 import anthropic  # noqa: E402
 
-from make_fixture import digest_to_text  # noqa: E402
+from make_fixture import digest_to_text, filter_to_brief_input  # noqa: E402
 from provider import cost_usd  # noqa: E402
 from rss_email.article_grouper import (  # noqa: E402
     create_grouping_prompt,
@@ -414,9 +414,14 @@ def visible_disagreements(
 
 
 def to_fixture(
-    articles: List[Dict[str, Any]], groups: List[List[int]], run: Run
+    articles: List[Dict[str, Any]], groups: List[List[int]], run: Run,
+    brief_categories: Optional[Tuple[List[str], List[str]]] = None,
 ) -> Dict[str, List[Dict[str, str]]]:
-    """Render a variant's categorised groups in the brief-eval fixture shape."""
+    """Render a variant's categorised groups in the brief-eval fixture shape.
+
+    With ``brief_categories`` (themed, personal) the result is reduced to what the brief
+    receives in production (see ``make_fixture.filter_to_brief_input``).
+    """
     digest: Dict[str, List[Dict[str, str]]] = {}
     for n, members in enumerate(groups):
         gid = f"group_{n}"
@@ -430,6 +435,8 @@ def to_fixture(
             "summary": run.summaries.get(gid, ""),
             "source": primary.get("sourceName") or "",
         })
+    if brief_categories is not None:
+        return filter_to_brief_input(digest, *brief_categories)
     return digest
 
 
@@ -618,7 +625,8 @@ def main(argv: List[str]) -> int:  # pylint: disable=too-many-locals
             tag = run.variant.label.replace("claude-", "").replace(":", "-").replace("#", "-")
             folder = os.path.join(args.write_fixtures, f"{date}-{tag}")
             os.makedirs(folder, exist_ok=True)
-            digest = to_fixture(articles, stored_groups, run)
+            digest = to_fixture(articles, stored_groups, run, (
+                config.get("themed_categories", []), config.get("personal_categories", [])))
             with open(os.path.join(folder, "digest_articles.json"), "w", encoding="utf-8") as fh:
                 json.dump(digest, fh, indent=2)
             with open(os.path.join(folder, "digest_text.txt"), "w", encoding="utf-8") as fh:

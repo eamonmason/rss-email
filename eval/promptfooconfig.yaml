@@ -39,6 +39,11 @@ evaluateOptions:
 # truncates the JSON verdict mid-object ("Could not extract JSON from
 # llm-rubric response"), which is not transient.
 defaultTest:
+  vars:
+    # The reader profile the writer was given (employer, role, interests). The faithfulness
+    # rubric must allow references to it; otherwise every "relevance_to_reader" that names
+    # the reader's company is wrongly failed as invented.
+    brief_config: file://../src/rss_email/brief_config.json
   options:
     provider:
       id: anthropic:messages:claude-sonnet-5-5
@@ -57,13 +62,21 @@ defaultTest:
       value: |
         You are auditing an editorial brief that was synthesised from a news digest.
 
-        DIGEST (the only allowed source of facts):
+        DIGEST (the only allowed source of news facts):
         {{digest_text}}
 
-        Grade the brief OUTPUT (JSON). PASS only if every factual claim, number,
-        company, product, and named entity in the brief is supported by the digest
-        above — nothing invented or extrapolated beyond the digest. Minor rewording
-        and summarisation are fine; fabricated specifics are not.
+        READER CONTEXT (the writer was also given this, as a description of who the
+        brief is for; it is NOT a source of news):
+        {{ brief_config | dump }}
+
+        Grade the brief OUTPUT (JSON). PASS only if every news claim, number, company,
+        product, and named entity in the brief is supported by the digest above, with no
+        invented or extrapolated news. References to the reader's own role, employer,
+        interests or responsibilities may rely on the reader context and are allowed (for
+        example naming the reader's employer or their metrics in relevance_to_reader).
+        Claims about any other company or person (for example calling a company the
+        reader's competitor) must still be supported by the digest. Minor rewording and
+        summarisation are fine; fabricated specifics are not.
     - type: llm-rubric
       value: |
         In the brief OUTPUT (JSON), each theme's `relevance_to_reader` must be either

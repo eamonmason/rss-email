@@ -54,9 +54,15 @@ for f in /tmp/batches/batch-2*[0-9].json; do   # ends in a digit: skips *.report
       --write-fixtures eval/fixtures        # categorised with the production Haiku 4.5
 done
 python eval/make_fixture.py candidates /tmp/batches/batch-<timestamp>.json   # stories many feeds ran
+# fixtures written before 2026-11-12 also hold categories the brief never sees (Other, Science...):
+uv run python eval/make_fixture.py refilter eval/fixtures/2026-11-*-haiku-4-5
 # write eval/fixtures/<day>-haiku-4-5/expected_major.json by hand: {"must_cover": ["<exact title>", ...]}
 (cd eval && python make_fixture.py sync-tests)
 ```
+
+`--write-fixtures` now keeps only what production sends the brief (themed and personal categories,
+sponsored dropped), and `refilter` brings older fixtures into line. A story must sit in one of those
+categories to be coverable. `major_coverage` counts a story listed in "Read these" as surfaced.
 
 `candidates` only proposes (distinct feeds covering a story); you choose what counts as major.
 Fixtures built this way contain article titles and summaries from your feeds, like the existing one.

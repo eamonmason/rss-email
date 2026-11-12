@@ -258,3 +258,48 @@ def test_weekly_ci_eval_runs_only_the_production_setting():
     parsed = yaml.safe_load(text)
     triggers = parsed.get("on", parsed.get(True))
     assert triggers["workflow_dispatch"]["inputs"]["matrix"]["default"] is False
+
+
+def test_filter_to_brief_input_matches_what_production_sends():
+    digest = {
+        "Other": [{"title": "Not seen", "url": "https://x/1", "summary": "s", "source": "a"}],
+        "Cycling": [{"title": "Ride", "url": "https://x/2", "summary": "s", "source": "a"}],
+        "AI/ML": [
+            {"title": "Model", "url": "https://x/3", "summary": "s", "source": "a"},
+            {"title": "Ad", "url": "https://x/sponsored/4", "summary": "s", "source": "a"},
+            {"title": "Sponsored: buy", "url": "https://x/5", "summary": "s", "source": "a"},
+        ],
+        "Science": [{"title": "Not seen either", "url": "https://x/6", "summary": "s", "source": "a"}],
+    }
+    out = make_fixture.filter_to_brief_input(digest, ["AI/ML", "Business"], ["Cycling"])
+    assert list(out) == ["AI/ML", "Cycling"]  # themed then personal, config order, others gone
+    assert [a["title"] for a in out["AI/ML"]] == ["Model"]  # sponsored dropped
+
+
+def test_promptfoo_config_gives_the_faithfulness_rubric_the_reader_context():
+    with open(os.path.join(EVAL_DIR, "promptfooconfig.yaml"), encoding="utf-8") as handle:
+        text = handle.read()
+    assert "brief_config: file://../src/rss_email/brief_config.json" in text
+    assert "{{ brief_config | dump }}" in text
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_major_coverage_counts_stories_listed_in_read_these():
+    fixture = "fixtures/2026-06-15/digest_articles.json"
+    with open(os.path.join(EVAL_DIR, fixture), encoding="utf-8") as handle:
+        digest = json.load(handle)
+    with open(os.path.join(EVAL_DIR, "fixtures/2026-06-15/expected_major.json"), encoding="utf-8") as handle:
+        wanted = json.load(handle)["must_cover"]
+    ids = {}
+    n = 0
+    for items in digest.values():
+        for item in items:
+            n += 1
+            ids[item["title"]] = str(n)
+    brief = {"must_read": [{"id": ids[t], "why": "x"} for t in wanted], "categories": {}}
+    script = ("const a=require('./assertions/major_coverage.cjs');"
+              f"console.log(JSON.stringify(a({json.dumps(json.dumps(brief))},"
+              f"{{vars:{{fixture:{json.dumps(fixture)},"
+              "expected_major:'fixtures/2026-06-15/expected_major.json'}})));")
+    out = subprocess.run(["node", "-e", script], cwd=EVAL_DIR, capture_output=True, text=True, check=True)
+    assert json.loads(out.stdout)["pass"] is True
