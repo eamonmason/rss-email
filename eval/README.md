@@ -103,6 +103,38 @@ Costs shown are synchronous prices; the Batch API halves the categorising part.
 To check the downstream effect, add an `expected_major.json` (curate from the baseline fixture)
 to a written fixture directory, add a `tests:` entry for it, and run the brief eval.
 
+### Matching production: memory in the brief prompt
+
+Production's brief input is about 42k tokens (measured from the Console cost export), against about
+13k for a fixture alone, because it also carries 14 days of "previously covered" themes
+(`brief_memory.render_previous_context`). A comparison that leaves that out tests a different
+prompt, so give fixtures their memory:
+
+```bash
+aws s3 cp s3://$BUCKET/brief-memory/memory.json /tmp/memory.json
+uv run python eval/make_fixture.py memory /tmp/memory.json eval/fixtures/2026-11-*-haiku-4-5
+(cd eval && python make_fixture.py sync-tests)
+```
+
+`memory` writes each fixture's `memory.json` (the remembered days strictly before its date, up to 14)
+and prints the rendered size. The memory object only holds the last 14 days as of when it was saved,
+so older fixtures get fewer days than a real run did; the June fixtures get none. The provider sends
+the memory as `previous_context`. `memory_days` in a provider's `config` (default 14, 0 = none) limits
+it to the most recent days, so a trimmed-memory variant is one more provider entry. Not reproduced:
+the repeat-article filter (`seen_links`), because it would shift article ids relative to the assertions.
+
+### Comparing Opus and Sonnet for the brief
+
+```bash
+npm --prefix eval run eval -- --filter-providers '^(opus-5-5/high|sonnet-5-5/high)$' --repeat 2 --output /tmp/brief-cmp.json
+python eval/summarise.py /tmp/brief-cmp.json --baseline opus-5-5/high
+```
+
+The baseline fails some checks itself, so `summarise.py` reports whether each variant is **no worse than
+the baseline** on every check (tolerance 1 run; `--tolerance 0` is stricter) with the counts side by
+side. With memory a brief is about 40k tokens in: roughly $0.33 for Opus plus about $0.055 of grading
+per cell, and about half that for Sonnet 5.5 (estimates). Seven fixtures at 2 repeats is about $8-9.
+
 ### Models
 
 The promptfoo eval runs on the **5.5 family only** (`claude-opus-5-5`, `claude-sonnet-5-5`,
@@ -111,7 +143,7 @@ The promptfoo eval runs on the **5.5 family only** (`claude-opus-5-5`, `claude-s
 the production Haiku 4.5 baseline (`baseline_prices` in `prices.json`) because it is the model
 being replaced.
 
-**CI runs the production setting only.** The weekly `eval.yml` job filters to `opus-5-5/high` with
+**CI runs the production setting only.** The monthly `eval.yml` job filters to `opus-5-5/high` with
 one repeat (about $0.25 per fixture: a measured ~$0.19 brief plus grading), so it stays cheap as
 fixtures are added. To run the whole matrix from CI, start the workflow manually and tick `matrix`.
 
@@ -151,7 +183,7 @@ npm --prefix eval run eval:view  # opens the promptfoo web UI for the last run
 Or, equivalently, from inside `eval/`: `npm ci && ANTHROPIC_API_KEY=sk-... npm run eval`.
 
 Each run makes a handful of Claude calls (one synthesis per fixture + the llm-rubric
-grader), so it is not wired into the per-push CI gate. It runs weekly and on demand via
+grader), so it is not wired into the per-push CI gate. It runs monthly (the 1st) and on demand via
 [`.github/workflows/eval.yml`](../.github/workflows/eval.yml).
 
 In CI a failed run is retried once. Each attempt's results are uploaded separately

@@ -32,9 +32,12 @@ from rss_email.brief_generator import (  # noqa: E402
     load_brief_config,
     synthesize,
 )
+from rss_email.brief_memory import render_previous_context  # noqa: E402
+from rss_email.models import BriefMemory  # noqa: E402
 
 
 _OVERRIDABLE = ("model", "effort", "max_tokens")
+DEFAULT_MEMORY_DAYS = 14  # the production window (brief_memory.DEFAULT_WINDOW_DAYS)
 _PRICES_PATH = os.path.join(os.path.dirname(__file__), "prices.json")
 
 
@@ -80,6 +83,23 @@ def fixture_date(fixture_path: str) -> str:
     return os.path.basename(os.path.dirname(os.path.abspath(fixture_path)))[:10]
 
 
+def load_previous_context(
+    memory_path: Optional[str], date: str, memory_days: int = DEFAULT_MEMORY_DAYS
+) -> str:
+    """Render the "previously covered" block a production run would have had on ``date``.
+
+    ``memory_path`` is a fixture's ``memory.json`` (a serialised ``BriefMemory``). Only days
+    strictly before ``date`` count, and only the most recent ``memory_days`` of them
+    (0 means no memory). Returns ``""`` when there is nothing to render.
+    """
+    if not memory_path or memory_days <= 0 or not os.path.exists(memory_path):
+        return ""
+    with open(memory_path, "r", encoding="utf-8") as handle:
+        memory = BriefMemory.model_validate(json.load(handle))
+    days = sorted((d for d in memory.days if d.date < date), key=lambda d: d.date)
+    return render_previous_context(BriefMemory(days=days[-memory_days:]))
+
+
 def call_api(prompt: str, options: Dict[str, Any], context: Dict[str, Any]):
     """Synthesise a brief from the fixture digest and return it as JSON.
 
@@ -106,7 +126,14 @@ def call_api(prompt: str, options: Dict[str, Any], context: Dict[str, Any]):
     # id) works against fixtures loaded straight from disk.
     ensure_article_ids(synthesis_input)
 
-    config = apply_overrides(load_brief_config(), (options or {}).get("config", {}))
+    provider_config = (options or {}).get("config", {})
+    config = apply_overrides(load_brief_config(), provider_config)
+    # Production sends the last 14 days of themes as "previously covered" context, about two
+    # thirds of the brief's input tokens. A fixture with a memory.json gets the same.
+    memory_days = int(provider_config.get("memory_days", DEFAULT_MEMORY_DAYS))
+    previous_context = load_previous_context(
+        context.get("vars", {}).get("memory_path"), fixture_date(fixture_path), memory_days
+    )
 
     capture = _UsageCapture("brief")
     usage_logger = logging.getLogger("rss_email.usage_log")
@@ -115,7 +142,8 @@ def call_api(prompt: str, options: Dict[str, Any], context: Dict[str, Any]):
     usage_logger.addHandler(capture)
     try:
         brief = synthesize(
-            synthesis_input, config, date=fixture_date(fixture_path)
+            synthesis_input, config, previous_context=previous_context,
+            date=fixture_date(fixture_path),
         )
     finally:
         usage_logger.removeHandler(capture)
@@ -138,5 +166,5 @@ def call_api(prompt: str, options: Dict[str, Any], context: Dict[str, Any]):
         "tokenUsage": usage,
         "cost": cost_usd(config["model"], usage["prompt"], usage["completion"]),
         "metadata": {"model": config["model"], "effort": config.get("effort"),
-                     "api_calls": capture.calls},
+                     "api_calls": capture.calls, "memory_chars": len(previous_context)},
     }

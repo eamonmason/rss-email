@@ -10,7 +10,9 @@ on:
         type: boolean
         default: false
   schedule:
-    - cron: '0 6 * * 1'  # Mondays 06:00 UTC
+    # Monthly (the 1st, 06:00 UTC), not weekly: the weekly run cost about $0.25-0.45 a week (about
+    # a tenth of the pipeline's spend) and retried often on the strict faithfulness check.
+    - cron: '0 6 1 * *'
 
 permissions:
   contents: read
@@ -59,7 +61,7 @@ jobs:
         # passing retry, and a retry is flagged rather than passing silently.
         #
         # Cost control: promptfooconfig.yaml defines a four-variant matrix repeated three
-        # times (a manual cost comparison). The weekly schedule checks only the production
+        # times (a manual cost comparison). The monthly schedule checks only the production
         # setting, once per fixture; tick "matrix" on a manual run to run everything.
         run: |
           args=()

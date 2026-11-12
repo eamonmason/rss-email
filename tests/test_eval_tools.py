@@ -55,8 +55,8 @@ def test_call_api_overrides_config_and_reports_usage(tmp_path):
 
     seen = {}
 
-    def fake_synthesize(_input, config, date=None):
-        seen.update(config=config, date=date)
+    def fake_synthesize(_input, config, previous_context="", date=None):
+        seen.update(config=config, date=date, previous_context=previous_context)
         logging.getLogger("rss_email.usage_log").info(
             "CLAUDE_USAGE step=%s model=%s batch=%s requests=%d "
             "input=%d output=%d cache_write=%d cache_read=%d stop=%s",
@@ -99,19 +99,58 @@ def _row(label, success, cost, completion, assertion_passes):
     }
 
 
-def test_summarise_flags_variant_with_any_failed_run():
+def test_summarise_flags_variant_that_trails_the_baseline():
     rows = summarise.summarise([
         _row("base", True, 0.40, 20000, {"major_coverage.cjs": True}),
         _row("base", True, 0.44, 22000, {"major_coverage.cjs": True}),
         _row("cheap", True, 0.10, 8000, {"major_coverage.cjs": True}),
         _row("cheap", False, 0.12, 9000, {"major_coverage.cjs": False}),
-    ], baseline="base")
+    ], baseline="base", tolerance=0)
     base, cheap = rows
-    assert base["adoptable"] and base["baseline"]
-    assert not cheap["adoptable"]
+    assert base["adoptable"] and base["baseline"] and base["no_worse"]
+    assert not cheap["adoptable"] and not cheap["no_worse"]
     assert cheap["assertions"]["major_coverage.cjs"] == 0.5
     assert cheap["cost_vs_baseline"] == pytest.approx(0.11 / 0.42)
-    assert "NOT SAFE" in summarise.render(rows)
+    text = summarise.render(rows)
+    assert "WORSE THAN BASELINE: major_coverage.cjs 1/2 vs baseline 2/2" in text
+
+
+def _runs(label, results):
+    return [_row(label, all(r.values()), 0.2, 6000, r) for r in results]
+
+
+def test_a_variant_matching_a_noisy_baseline_is_no_worse():
+    """The baseline fails some checks itself; matching it is the bar, not passing everything."""
+    base = _runs("base", [{"schema.cjs": True, "faithful": False},
+                          {"schema.cjs": True, "faithful": True},
+                          {"schema.cjs": True, "faithful": False},
+                          {"schema.cjs": True, "faithful": True}])
+    same = _runs("same", [{"schema.cjs": True, "faithful": True},
+                          {"schema.cjs": True, "faithful": False},
+                          {"schema.cjs": True, "faithful": False},
+                          {"schema.cjs": True, "faithful": True}])
+    rows = summarise.summarise(base + same, baseline="base")
+    assert rows[1]["no_worse"] and not rows[1]["adoptable"]
+    assert "NO WORSE THAN BASELINE" in summarise.render(rows)
+
+
+def test_tolerance_is_in_baseline_runs():
+    base = _runs("base", [{"c": True}] * 4)
+    one_miss = _runs("v", [{"c": True}] * 3 + [{"c": False}])
+    two_miss = _runs("w", [{"c": True}] * 2 + [{"c": False}] * 2)
+    rows = {r["label"]: r for r in summarise.summarise(base + one_miss + two_miss, baseline="base")}
+    assert rows["v"]["no_worse"]  # one run behind is inside the default tolerance of 1
+    assert not rows["w"]["no_worse"]
+    strict = {r["label"]: r for r in summarise.summarise(base + one_miss, baseline="base", tolerance=0)}
+    assert not strict["v"]["no_worse"]
+
+
+def test_provider_errors_count_against_a_variant():
+    base = _runs("base", [{"c": True}] * 3)
+    errored = _runs("v", [{"c": True}] * 3)
+    errored[0]["error"] = "timeout"
+    rows = summarise.summarise(base + errored, baseline="base")
+    assert not rows[1]["no_worse"] and "provider error" in " ".join(rows[1]["worse_checks"])
 
 
 def test_summarise_empty():
@@ -246,7 +285,7 @@ def test_major_coverage_assertion_skips_uncurated_fixtures(expected_major, passe
     assert json.loads(out.stdout)["pass"] is passes
 
 
-def test_weekly_ci_eval_runs_only_the_production_setting():
+def test_scheduled_ci_eval_is_monthly_and_runs_only_the_production_setting():
     """The matrix is a manual cost comparison; the schedule must not run all of it."""
     workflow = os.path.join(EVAL_DIR, os.pardir, ".github", "workflows", "eval.yml")
     with open(workflow, encoding="utf-8") as handle:
@@ -258,6 +297,8 @@ def test_weekly_ci_eval_runs_only_the_production_setting():
     parsed = yaml.safe_load(text)
     triggers = parsed.get("on", parsed.get(True))
     assert triggers["workflow_dispatch"]["inputs"]["matrix"]["default"] is False
+    fields = triggers["schedule"][0]["cron"].split()
+    assert fields[2] != "*" and fields[4] == "*"  # a fixed day of the month: at most monthly
 
 
 def test_filter_to_brief_input_matches_what_production_sends():
@@ -303,3 +344,91 @@ def test_major_coverage_counts_stories_listed_in_read_these():
               "expected_major:'fixtures/2026-06-15/expected_major.json'}})));")
     out = subprocess.run(["node", "-e", script], cwd=EVAL_DIR, capture_output=True, text=True, check=True)
     assert json.loads(out.stdout)["pass"] is True
+
+
+def _memory_day(date, theme="A theme", n_articles=2):
+    return {
+        "date": date,
+        "themes": [{
+            "category": "AI/ML", "theme": theme, "signal_strength": "HIGH", "tldr": "A summary.",
+            "articles": [{"title": f"{theme} article {i}", "link": f"https://x/{date}/{i}"}
+                         for i in range(n_articles)],
+        }],
+        "must_read": [],
+    }
+
+
+def test_memory_for_fixture_keeps_only_earlier_days_up_to_the_cap():
+    memory = {"days": [_memory_day(f"2026-11-{d:02d}") for d in range(1, 21)]}
+    subset = make_fixture.memory_for_fixture(memory, "2026-11-12", max_days=14)
+    dates = [d["date"] for d in subset["days"]]
+    assert dates[-1] == "2026-11-11" and "2026-11-12" not in dates  # strictly before
+    assert len(dates) == 11 and dates[0] == "2026-11-01"  # only 11 exist before the 12th
+    assert len(make_fixture.memory_for_fixture(memory, "2026-11-20", max_days=5)["days"]) == 5
+    assert make_fixture.memory_for_fixture(memory, "2026-06-15")["days"] == []
+
+
+def test_memory_command_writes_memory_json_and_sync_tests_points_at_it(tmp_path):
+    memory_file = tmp_path / "memory.json"
+    memory_file.write_text(json.dumps({"days": [_memory_day("2026-11-10"), _memory_day("2026-11-11")]}))
+    fixtures = tmp_path / "fixtures"
+    fixtures.mkdir()
+    _fixture(fixtures, "2026-11-12-haiku-4-5", curated=False)
+    _fixture(fixtures, "2026-06-15", curated=False)
+
+    assert make_fixture.main(["make_fixture.py", "memory", str(memory_file),
+                              str(fixtures / "2026-11-12-haiku-4-5"), str(fixtures / "2026-06-15")]) == 0
+    written = json.loads((fixtures / "2026-11-12-haiku-4-5" / "memory.json").read_text())
+    assert [d["date"] for d in written["days"]] == ["2026-11-10", "2026-11-11"]
+    assert not (fixtures / "2026-06-15" / "memory.json").exists()  # nothing earlier than June 15
+
+    config = tmp_path / "config.yaml"
+    _config(config)
+    make_fixture.sync_tests(str(config), str(fixtures))
+    text = config.read_text()
+    assert "memory_path: fixtures/2026-11-12-haiku-4-5/memory.json" in text
+    assert text.count("memory_path") == 1
+
+
+def _memory_file(tmp_path, dates):
+    path = tmp_path / "memory.json"
+    path.write_text(json.dumps({"days": [_memory_day(d, theme=f"Theme {d}") for d in dates]}))
+    return str(path)
+
+
+def test_provider_renders_memory_before_the_fixture_date(tmp_path):
+    path = _memory_file(tmp_path, ["2026-11-08", "2026-11-09", "2026-11-10", "2026-11-12"])
+    text = provider.load_previous_context(path, "2026-11-12", 14)
+    assert "## 2026-11-08" in text and "## 2026-11-10" in text
+    assert "2026-11-12" not in text  # the fixture's own day is never in its memory
+    assert "Theme 2026-11-09: A summary." in text and "- Theme 2026-11-09 article 0" in text
+
+
+def test_provider_memory_days_limits_to_the_most_recent(tmp_path):
+    path = _memory_file(tmp_path, ["2026-11-08", "2026-11-09", "2026-11-10"])
+    text = provider.load_previous_context(path, "2026-11-12", 2)
+    assert "2026-11-08" not in text and "2026-11-09" in text and "2026-11-10" in text
+    assert provider.load_previous_context(path, "2026-11-12", 0) == ""
+    assert provider.load_previous_context(None, "2026-11-12", 14) == ""
+    assert provider.load_previous_context(str(tmp_path / "missing.json"), "2026-11-12", 14) == ""
+
+
+def test_call_api_passes_memory_to_synthesis(tmp_path):
+    fixture = tmp_path / "2026-11-12" / "digest_articles.json"
+    fixture.parent.mkdir()
+    fixture.write_text(json.dumps({"AI/ML": [{"title": "t", "url": "u", "summary": "s", "source": "x"}]}))
+    memory = _memory_file(tmp_path, ["2026-11-10", "2026-11-11"])
+    seen = {}
+
+    def fake_synthesize(_input, config, previous_context="", date=None):
+        seen.update(previous_context=previous_context, date=date)
+        return None
+
+    with patch.object(provider, "synthesize", fake_synthesize):
+        provider.call_api("", {"config": {"memory_days": 1}},
+                          {"vars": {"fixture": str(fixture), "memory_path": memory}})
+    assert "2026-11-11" in seen["previous_context"] and "2026-11-10" not in seen["previous_context"]
+    seen.clear()
+    with patch.object(provider, "synthesize", fake_synthesize):
+        provider.call_api("", {}, {"vars": {"fixture": str(fixture)}})
+    assert seen["previous_context"] == ""  # no memory_path: the fixture runs without memory

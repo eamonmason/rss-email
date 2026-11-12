@@ -5,6 +5,8 @@
         # copy a fixture, relabelling its must-cover stories to deprioritised sources
     python make_fixture.py candidates <batch-metadata.json> [min_feeds]
         # list stories many feeds ran: candidates for a fixture's expected_major.json
+    python make_fixture.py memory <memory.json> <fixture_dir>...
+        # give fixtures the "previously covered" memory production would have had that day
     uv run python make_fixture.py refilter <fixture_dir>...
         # drop categories the brief never sees (Other, Science, ...) from existing fixtures
     python make_fixture.py sync-tests
@@ -86,6 +88,20 @@ def filter_to_brief_input(
     return out
 
 
+def memory_for_fixture(memory: Dict[str, Any], fixture_date: str, max_days: int = 14) -> Dict[str, Any]:
+    """The remembered days a production run on ``fixture_date`` would have had.
+
+    Only days strictly before the fixture's date, most recent ``max_days`` (production keeps
+    14). The memory object holds just the last 14 days as of when it was saved, so older
+    fixtures get fewer days than a real run did.
+    """
+    days = sorted(
+        (d for d in memory.get("days", []) if str(d.get("date", "")) < fixture_date),
+        key=lambda d: d["date"],
+    )
+    return {"days": days[-max_days:]}
+
+
 def candidate_stories(meta: Dict[str, Any], min_feeds: int = 3) -> List[Tuple[int, str, List[str]]]:
     """Stored groups covered by at least ``min_feeds`` distinct feeds, most-covered first.
 
@@ -129,6 +145,8 @@ def render_tests(fixtures_dir: str) -> str:
         lines.append(f"      fixture: fixtures/{name}/digest_articles.json")
         if os.path.exists(os.path.join(folder, "expected_major.json")):
             lines.append(f"      expected_major: fixtures/{name}/expected_major.json")
+        if os.path.exists(os.path.join(folder, "memory.json")):
+            lines.append(f"      memory_path: fixtures/{name}/memory.json")
         lines.append(f"      digest_text: file://fixtures/{name}/digest_text.txt")
     return "\n".join(lines)
 
@@ -197,6 +215,28 @@ def main(argv: List[str]) -> int:
             _write(path, json.dumps(digest, indent=2) + "\n")
             _write(os.path.join(folder, "digest_text.txt"), digest_to_text(digest))
             print(f"{folder}: {sum(len(v) for v in digest.values())} articles in {sorted(digest)}")
+        return 0
+    if len(argv) >= 4 and argv[1] == "memory":
+        memory = _load(argv[2])
+        for folder in argv[3:]:
+            date = os.path.basename(os.path.normpath(folder))[:10]
+            subset = memory_for_fixture(memory, date)
+            if not subset["days"]:
+                print(f"{folder}: no remembered days before {date}; left without memory")
+                continue
+            _write(os.path.join(folder, "memory.json"), json.dumps(subset, indent=2) + "\n")
+            size = ""
+            try:  # needs the project environment; the size note is skipped under a plain python
+                if _SRC not in sys.path:
+                    sys.path.insert(0, _SRC)
+                from rss_email.brief_memory import render_previous_context  # pylint: disable=import-outside-toplevel
+                from rss_email.models import BriefMemory  # pylint: disable=import-outside-toplevel
+                chars = len(render_previous_context(BriefMemory.model_validate(subset)))
+                size = f", rendered {chars:,} characters (about {chars // 4:,} tokens)"
+            except ImportError:
+                pass
+            print(f"{folder}: {len(subset['days'])} days ({subset['days'][0]['date']} to "
+                  f"{subset['days'][-1]['date']}){size}")
         return 0
     if len(argv) == 2 and argv[1] == "sync-tests":
         print("updated" if sync_tests() else "already up to date")
