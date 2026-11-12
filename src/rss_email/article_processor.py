@@ -20,6 +20,7 @@ from rss_email.json_repair import (
 )  # Move this import to the top level
 
 from .json_utils import extract_json_from_text
+from .claude_compat import effort_params, response_text as text_of
 from .models import ArticleSource, DEFAULT_CLAUDE_MODEL
 
 # Add to the top imports section
@@ -598,10 +599,11 @@ def _call_claude_with_prompt(
             max_tokens=max_tokens,
             messages=[{"role": "user", "content": prompt}],
             timeout=api_timeout,  # Set API request timeout
+            **effort_params(model_name),
         )
 
         # Parse response text
-        response_text = response.content[0].text.strip()
+        response_text = text_of(response)
 
         # Check for empty response
         if not response_text:
@@ -691,7 +693,7 @@ def _get_max_tokens_for_model(model_name: str) -> int:
     if "claude-sonnet-4" in model_name:
         return 8000  # Conservative limit to prevent truncation
 
-    if "claude-haiku-4" in model_name:
+    if "claude-haiku-4" in model_name or "claude-haiku-5" in model_name:
         return 8192  # Increased to prevent truncation - supports up to 30 articles
 
     if "claude-sonnet" in model_name:

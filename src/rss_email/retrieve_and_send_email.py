@@ -30,6 +30,7 @@ from .brief_memory import (
     seen_links,
 )
 from .models import DEFAULT_CLAUDE_MODEL, ArticleSource
+from .claude_compat import response_text as text_of
 from .usage_log import log_usage
 from .podcast_script import (
     build_narration_input,
@@ -265,7 +266,12 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
                     batch_usage[field] += value if isinstance(value, int) else 0
                 try:
                     # Extract JSON from response
-                    response_text = result.result.message.content[0].text
+                    response_text = text_of(result.result.message)
+                    if not response_text:
+                        raise ValueError(
+                            "empty response (stop_reason="
+                            f"{result.result.message.stop_reason})"
+                        )
 
                     # Try direct JSON parsing first
                     try:

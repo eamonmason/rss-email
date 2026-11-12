@@ -360,3 +360,52 @@ def test_lambda_handler_missing_env_vars():
     }
     with pytest.raises(KeyError):
         lambda_handler(event, None)
+
+
+def _thinking_block():
+    block = MagicMock(spec=["type", "thinking"])
+    block.type = "thinking"
+    block.thinking = "Working it out."
+    return block
+
+
+@patch("rss_email.retrieve_and_send_email.set_last_run")
+@patch("rss_email.retrieve_and_send_email.send_via_ses")
+@patch("rss_email.retrieve_and_send_email.create_html")
+@patch("rss_email.retrieve_and_send_email.anthropic.Anthropic")
+@patch("rss_email.retrieve_and_send_email.boto3.client")
+def test_batch_result_with_leading_thinking_block_and_a_refusal(
+    mock_boto3_client,
+    mock_anthropic,
+    mock_create_html,
+    _mock_send_via_ses,
+    _mock_set_last_run,
+    mock_env,
+    sample_categorized_response,
+):
+    """Haiku 5.5 results open with a thinking block; a refusal has no text at all."""
+    mock_boto3_client.return_value.get_parameter.return_value = {
+        "Parameter": {"Value": "test-api-key"}
+    }
+
+    good = MagicMock()
+    good.result.type = "succeeded"
+    good.result.message.content = [
+        _thinking_block(), MagicMock(text=json.dumps(sample_categorized_response))
+    ]
+    good.custom_id = "email-batch-0"
+
+    refused = MagicMock()
+    refused.result.type = "succeeded"
+    refused.result.message.content = []
+    refused.result.message.stop_reason = "refusal"
+    refused.custom_id = "email-batch-1"
+
+    mock_anthropic.return_value.messages.batches.results.return_value = [good, refused]
+    mock_create_html.return_value = "<html>...</html>"
+
+    result = lambda_handler({"batch_id": "b", "request_counts": {}}, None)
+
+    assert result["status"] == "success"
+    assert result["categories_count"] == 2
+    assert result["failed_requests"] == 1

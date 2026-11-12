@@ -22,6 +22,7 @@ from .article_processor import (
     get_anthropic_api_key,
     optimize_articles_for_claude,
 )
+from .claude_compat import effort_params, response_text as text_of
 from .json_utils import extract_json_from_text
 from .models import DEFAULT_CLAUDE_MODEL
 from .usage_log import log_usage
@@ -163,9 +164,12 @@ def group_articles_with_claude(
             max_tokens=4096,
             messages=[{"role": "user", "content": prompt}],
             timeout=api_timeout,
+            **effort_params(model_name),
         )
 
-        response_text = response.content[0].text.strip()
+        response_text = text_of(response)
+        if not response_text:
+            raise ValueError(f"empty grouping response (stop_reason={response.stop_reason})")
         tokens_used = response.usage.input_tokens + response.usage.output_tokens
         rate_limiter.record_usage(tokens_used)
         log_usage("grouping", model_name, response.usage, stop_reason=response.stop_reason)

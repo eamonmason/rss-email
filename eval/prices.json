@@ -1,8 +1,10 @@
 {
-  "_comment": "USD per million tokens, first-party API. Source: Claude API pricing as cached 2026-11-03. Update when prices change; the eval cost column is only as good as this file.",
+  "_comment": "USD per million tokens, first-party API. Source: Claude API pricing as cached 2026-11-03. The eval uses the 5.5 family only (enforced by tests/test_eval_tools.py). Update when prices change; the eval cost column is only as good as this file.",
   "claude-opus-5-5": {"input": 4.0, "output": 20.0},
   "claude-sonnet-5-5": {"input": 2.0, "output": 10.0},
-  "claude-sonnet-5": {"input": 2.0, "output": 10.0},
   "claude-haiku-5-5": {"input": 0.1, "output": 0.5},
-  "claude-haiku-4-5": {"input": 1.0, "output": 5.0}
+  "baseline_prices": {
+    "_comment": "Models being replaced, kept only so compare_haiku.py can cost the baseline. Not used by the promptfoo eval.",
+    "claude-haiku-4-5": {"input": 1.0, "output": 5.0}
+  }
 }

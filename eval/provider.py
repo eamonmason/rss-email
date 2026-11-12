@@ -61,8 +61,9 @@ class _UsageCapture(logging.Handler):
 def cost_usd(model: str, input_tokens: int, output_tokens: int) -> Optional[float]:
     """Return the USD cost of the given usage, or None if the model has no price."""
     with open(_PRICES_PATH, "r", encoding="utf-8") as handle:
-        price = json.load(handle).get(model)
-    if not price:
+        table = json.load(handle)
+    price = table.get(model) or table.get("baseline_prices", {}).get(model)
+    if not isinstance(price, dict):
         return None
     return (input_tokens * price["input"] + output_tokens * price["output"]) / 1_000_000
 

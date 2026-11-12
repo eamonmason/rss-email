@@ -30,7 +30,7 @@ providers:
 evaluateOptions:
   repeat: 3
 
-# Grader used by llm-rubric assertions. Sonnet 5 rejects temperature/top_p/
+# Grader used by llm-rubric assertions. Sonnet 5.5 rejects temperature/top_p/
 # top_k and thinks adaptively by default, so there is no temperature here.
 # showThinking: false keeps thinking blocks out of the graded output so the
 # JSON verdict parses cleanly. max_tokens is raised well above promptfoo's
@@ -41,7 +41,7 @@ evaluateOptions:
 defaultTest:
   options:
     provider:
-      id: anthropic:messages:claude-sonnet-5
+      id: anthropic:messages:claude-sonnet-5-5
       config:
         showThinking: false
         max_tokens: 16000

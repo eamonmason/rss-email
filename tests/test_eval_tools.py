@@ -4,6 +4,7 @@
 import json
 import logging
 import os
+import re
 import sys
 from unittest.mock import patch
 
@@ -139,3 +140,22 @@ def test_lowrank_fixture_in_repo_is_consistent():
         dst = json.load(handle)
     assert {k: [a["title"] for a in v] for k, v in src.items()} == \
            {k: [a["title"] for a in v] for k, v in dst.items()}
+
+
+LATEST_MODELS = {"claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"}
+_MODEL_ID = re.compile(r"claude-[a-z]+-\d+(?:-\d+)?")
+
+
+def test_eval_config_uses_only_latest_models():
+    """Everything the promptfoo eval runs, graders included, is on the 5.5 family."""
+    with open(os.path.join(EVAL_DIR, "promptfooconfig.yaml"), encoding="utf-8") as handle:
+        found = set(_MODEL_ID.findall(handle.read()))
+    assert found and found <= LATEST_MODELS, found - LATEST_MODELS
+
+
+def test_price_table_uses_only_latest_models_apart_from_baseline():
+    with open(os.path.join(EVAL_DIR, "prices.json"), encoding="utf-8") as handle:
+        table = json.load(handle)
+    models = {k for k in table if not k.startswith("_") and k != "baseline_prices"}
+    assert models == LATEST_MODELS
+    assert set(table["baseline_prices"]) - {"_comment"} == {"claude-haiku-4-5"}

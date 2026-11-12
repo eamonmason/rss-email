@@ -42,6 +42,14 @@ about half that, and each grader call a few cents. The full matrix (4 variants x
 `CLAUDE_USAGE` log or a first run gives real figures. Narrow a run with
 `--filter-providers '^sonnet-5-5/high$' --repeat 1`.
 
+### Models
+
+The promptfoo eval runs on the **5.5 family only** (`claude-opus-5-5`, `claude-sonnet-5-5`,
+`claude-haiku-5-5`), graders included; `tests/test_eval_tools.py` fails if an older id appears in
+`promptfooconfig.yaml` or the price table. The one exception is `compare_haiku.py`, which costs
+the production Haiku 4.5 baseline (`baseline_prices` in `prices.json`) because it is the model
+being replaced.
+
 ### Fixtures for this comparison
 
 - `2026-06-15` - the original real day.

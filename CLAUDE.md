@@ -134,6 +134,16 @@ Every Claude call site logs one `CLAUDE_USAGE step=... model=... input=... outpu
 `usage_log.log_usage` (steps: `grouping`, `categorise_batch` (aggregated, `batch=True`), `brief`,
 `podcast`). Tokens only, no prices. Query CloudWatch for `CLAUDE_USAGE` to see spend by step.
 
+### Haiku 4.5 / 5.5 compatibility
+
+Grouping and categorising are written to run on either `claude-haiku-4-5` (current default) or
+`claude-haiku-5-5`. `claude_compat.response_text` reads the text blocks of a response (Haiku 5.5
+can open with a thinking block, and a refusal has no text), and `claude_compat.effort_params`
+sends `output_config.effort` (`low`, or `CLAUDE_HAIKU_EFFORT`) for Haiku 5 models only, because
+Haiku 5.5 thinks by default and bills thinking as output while Haiku 4.5 rejects the parameter.
+An empty or refused response counts as a failed request. Do not read `content[0].text` directly.
+The decision to switch the default model is made with `eval/compare_haiku.py` (see `eval/README.md`).
+
 ### Brief Memory
 
 The RSS Brief (not the daily digest) remembers recent days so it can avoid

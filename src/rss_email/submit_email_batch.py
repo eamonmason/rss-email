@@ -18,6 +18,7 @@ from .article_processor import (
     create_group_summary_prompt,
     _build_group_payload,
 )
+from .claude_compat import effort_params
 from .models import DEFAULT_CLAUDE_MODEL
 
 logger = logging.getLogger(__name__)
@@ -62,6 +63,7 @@ def create_batch_requests(
                     model=model,
                     max_tokens=8192,
                     messages=[{"role": "user", "content": prompt}],
+                    **effort_params(model),
                 ),
             )
         )
