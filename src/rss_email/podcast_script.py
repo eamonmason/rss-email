@@ -18,6 +18,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 
 from .brief_prompt import FIDELITY_RULE
 from .models import BriefSynthesis
+from .usage_log import log_usage
 
 try:
     import anthropic
@@ -25,6 +26,36 @@ except ImportError:  # pragma: no cover - the layer always ships anthropic
     anthropic = None
 
 logger = logging.getLogger(__name__)
+
+
+# Keep in sync with PODCAST_ENABLED_PARAMETER in lib/rss_lambda_stack.ts.
+PODCAST_ENABLED_PARAMETER = "rss-email-PODCAST_ENABLED"
+
+
+def podcast_enabled() -> bool:
+    """Runtime switch for the podcast; True unless it has been turned off.
+
+    Checked on every run, so flipping it needs no redeploy. The
+    ``PODCAST_ENABLED`` environment variable wins when set (local runs, tests);
+    otherwise the SSM parameter named by ``PODCAST_ENABLED_PARAMETER`` (default
+    ``rss-email-PODCAST_ENABLED``) is read. A missing parameter or any lookup
+    error means enabled, so a config problem never silently drops episodes.
+    """
+    override = os.environ.get("PODCAST_ENABLED")
+    if override is not None:
+        return override.strip().lower() != "false"
+    name = os.environ.get("PODCAST_ENABLED_PARAMETER", PODCAST_ENABLED_PARAMETER)
+    try:
+        value = boto3.client("ssm").get_parameter(Name=name)["Parameter"]["Value"]
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") != "ParameterNotFound":
+            logger.warning("Could not read %s, treating podcast as enabled: %s", name, exc)
+        return True
+    except Exception as exc:  # pylint: disable=broad-except
+        logger.warning("Could not read %s, treating podcast as enabled: %s", name, exc)
+        return True
+    return value.strip().lower() != "false"
+
 
 NARRATION_INPUT_KEY = "podcast/narration-input.json"
 DEFAULT_PODCAST_MODEL = "claude-sonnet-5-5"
@@ -258,15 +289,17 @@ def generate_narration(narration_input: Dict[str, Any], client: Any) -> Optional
     if anthropic is None:
         logger.error("Anthropic library not installed.")
         return None
+    model = os.environ.get("PODCAST_CLAUDE_MODEL", DEFAULT_PODCAST_MODEL)
     try:
         message = client.messages.create(
-            model=os.environ.get("PODCAST_CLAUDE_MODEL", DEFAULT_PODCAST_MODEL),
+            model=model,
             max_tokens=int(os.environ.get("PODCAST_MAX_TOKENS", "8000")),
             messages=[{"role": "user", "content": build_prompt(narration_input)}],
         )
     except (anthropic.APIError, RuntimeError, ValueError) as exc:
         logger.error("Error generating narration with Claude: %s", exc)
         return None
+    log_usage("podcast", model, message.usage, stop_reason=message.stop_reason)
 
     # Read by block type: newer models can return non-text (thinking) blocks first.
     script = "".join(

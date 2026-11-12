@@ -7,12 +7,19 @@ same shape ``build_synthesis_input`` produces), run the shipping
 validated ``BriefSynthesis`` as JSON for the assertions to grade.
 
 Requires ``ANTHROPIC_API_KEY`` in the environment (see ``get_anthropic_api_key``).
+
+The provider's ``config`` block in ``promptfooconfig.yaml`` may override the live
+``brief_config.json`` keys ``model``, ``effort`` and ``max_tokens``, so one eval run
+can compare model/effort variants on identical fixtures. Token usage is captured
+from the ``CLAUDE_USAGE`` log lines the pipeline already emits and returned to
+promptfoo together with a cost computed from ``prices.json``.
 """
 
 import json
+import logging
 import os
 import sys
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 # Make ``rss_email`` importable when promptfoo runs this from the repo root.
 _SRC = os.path.join(os.path.dirname(__file__), os.pardir, "src")
@@ -25,20 +32,88 @@ from rss_email.brief_generator import (  # noqa: E402
     load_brief_config,
     synthesize,
 )
+from rss_email.brief_memory import render_previous_context  # noqa: E402
+from rss_email.models import BriefMemory  # noqa: E402
+
+
+_OVERRIDABLE = ("model", "effort", "max_tokens")
+DEFAULT_MEMORY_DAYS = 14  # the production window (brief_memory.DEFAULT_WINDOW_DAYS)
+_PRICES_PATH = os.path.join(os.path.dirname(__file__), "prices.json")
+
+
+class _UsageCapture(logging.Handler):
+    """Sums input/output tokens from ``log_usage`` records for one step."""
+
+    def __init__(self, step: str):
+        super().__init__(level=logging.INFO)
+        self.step = step
+        self.input_tokens = 0
+        self.output_tokens = 0
+        self.calls = 0
+
+    def emit(self, record: logging.LogRecord) -> None:
+        # log_usage args: step, model, batch, requests, input, output, ...
+        args = record.args
+        if not isinstance(args, tuple) or len(args) < 6 or args[0] != self.step:
+            return
+        self.input_tokens += int(args[4])
+        self.output_tokens += int(args[5])
+        self.calls += 1
+
+
+def cost_usd(model: str, input_tokens: int, output_tokens: int) -> Optional[float]:
+    """Return the USD cost of the given usage, or None if the model has no price."""
+    with open(_PRICES_PATH, "r", encoding="utf-8") as handle:
+        table = json.load(handle)
+    price = table.get(model) or table.get("baseline_prices", {}).get(model)
+    if not isinstance(price, dict):
+        return None
+    return (input_tokens * price["input"] + output_tokens * price["output"]) / 1_000_000
+
+
+def apply_overrides(config: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, Any]:
+    """Return ``config`` with the allowed override keys applied (others ignored)."""
+    merged = dict(config)
+    merged.update({k: v for k, v in (overrides or {}).items() if k in _OVERRIDABLE})
+    return merged
+
+
+def fixture_date(fixture_path: str) -> str:
+    """Date of a fixture, from its directory name (``2026-06-15`` or ``2026-06-15-lowrank``)."""
+    return os.path.basename(os.path.dirname(os.path.abspath(fixture_path)))[:10]
+
+
+def load_previous_context(
+    memory_path: Optional[str], date: str, memory_days: int = DEFAULT_MEMORY_DAYS
+) -> str:
+    """Render the "previously covered" block a production run would have had on ``date``.
+
+    ``memory_path`` is a fixture's ``memory.json`` (a serialised ``BriefMemory``). Only days
+    strictly before ``date`` count, and only the most recent ``memory_days`` of them
+    (0 means no memory). Returns ``""`` when there is nothing to render.
+    """
+    if not memory_path or memory_days <= 0 or not os.path.exists(memory_path):
+        return ""
+    with open(memory_path, "r", encoding="utf-8") as handle:
+        memory = BriefMemory.model_validate(json.load(handle))
+    days = sorted((d for d in memory.days if d.date < date), key=lambda d: d.date)
+    return render_previous_context(BriefMemory(days=days[-memory_days:]))
 
 
 def call_api(prompt: str, options: Dict[str, Any], context: Dict[str, Any]):
     """Synthesise a brief from the fixture digest and return it as JSON.
 
     Args:
-        prompt: Unused — the prompt is built internally by ``build_prompt``.
-        options: promptfoo provider options (unused).
+        prompt: Unused - the prompt is built internally by ``build_prompt``.
+        options: promptfoo provider options; ``options["config"]`` may carry
+            ``model`` / ``effort`` / ``max_tokens`` overrides.
         context: Must contain ``vars.fixture`` (path to the digest fixture).
 
     Returns:
-        ``{"output": <BriefSynthesis JSON>}`` on success, or ``{"error": ...}``.
+        ``{"output": <BriefSynthesis JSON>, "tokenUsage": ..., "cost": ...}`` on
+        success, or ``{"error": ...}``.
     """
-    del prompt, options  # the real prompt is assembled inside synthesize()
+    del prompt  # the real prompt is assembled inside synthesize()
     fixture_path = context.get("vars", {}).get("fixture")
     if not fixture_path:
         return {"error": "no 'fixture' var provided to the provider"}
@@ -51,11 +126,45 @@ def call_api(prompt: str, options: Dict[str, Any], context: Dict[str, Any]):
     # id) works against fixtures loaded straight from disk.
     ensure_article_ids(synthesis_input)
 
-    config = load_brief_config()
-    # Fixtures live under fixtures/<YYYY-MM-DD>/, which is the digest's date.
-    fixture_date = os.path.basename(os.path.dirname(os.path.abspath(fixture_path)))
-    brief = synthesize(synthesis_input, config, date=fixture_date)
-    if brief is None:
-        return {"error": "synthesis returned None (parse/validation/API failure)"}
+    provider_config = (options or {}).get("config", {})
+    config = apply_overrides(load_brief_config(), provider_config)
+    # Production sends the last 14 days of themes as "previously covered" context, about two
+    # thirds of the brief's input tokens. A fixture with a memory.json gets the same.
+    memory_days = int(provider_config.get("memory_days", DEFAULT_MEMORY_DAYS))
+    previous_context = load_previous_context(
+        context.get("vars", {}).get("memory_path"), fixture_date(fixture_path), memory_days
+    )
 
-    return {"output": brief.model_dump_json()}
+    capture = _UsageCapture("brief")
+    usage_logger = logging.getLogger("rss_email.usage_log")
+    previous_level = usage_logger.level
+    usage_logger.setLevel(logging.INFO)
+    usage_logger.addHandler(capture)
+    try:
+        brief = synthesize(
+            synthesis_input, config, previous_context=previous_context,
+            date=fixture_date(fixture_path),
+        )
+    finally:
+        usage_logger.removeHandler(capture)
+        usage_logger.setLevel(previous_level)
+
+    usage = {
+        "prompt": capture.input_tokens,
+        "completion": capture.output_tokens,
+        "total": capture.input_tokens + capture.output_tokens,
+    }
+    if brief is None:
+        return {
+            "error": "synthesis returned None (parse/validation/API failure)",
+            "tokenUsage": usage,
+            "cost": cost_usd(config["model"], usage["prompt"], usage["completion"]),
+        }
+
+    return {
+        "output": brief.model_dump_json(),
+        "tokenUsage": usage,
+        "cost": cost_usd(config["model"], usage["prompt"], usage["completion"]),
+        "metadata": {"model": config["model"], "effort": config.get("effort"),
+                     "api_calls": capture.calls, "memory_chars": len(previous_context)},
+    }

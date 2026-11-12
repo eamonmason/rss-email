@@ -268,3 +268,26 @@ def test_maybe_send_brief_saves_narration_input(mock_load, mock_generate, _send,
     bucket, narration = mock_narration.call_args.args
     assert bucket == "bucket"
     assert narration["must_read"][0]["why"] == "Important."
+
+
+@patch("rss_email.retrieve_and_send_email.save_narration_input")
+@patch("rss_email.retrieve_and_send_email.save_memory")
+@patch("rss_email.retrieve_and_send_email.send_via_ses")
+@patch("rss_email.retrieve_and_send_email.generate_brief_full")
+@patch("rss_email.retrieve_and_send_email.load_memory")
+def test_maybe_send_brief_skips_narration_input_when_podcast_disabled(
+    mock_load, mock_generate, mock_send, _save, mock_narration, monkeypatch
+):
+    """With PODCAST_ENABLED=false the brief still sends but no narration input is saved."""
+    monkeypatch.setenv("PODCAST_ENABLED", "false")
+    brief = BriefSynthesis(
+        must_read=[{"id": "1", "why": "Important."}],
+        categories={"AI/ML": {"themes": [_theme("A", ["1"])]}},
+    )
+    mock_load.return_value = BriefMemory()
+    mock_generate.return_value = MagicMock(html="<p>x</p>", synthesis=brief, article_index=INDEX)
+
+    _maybe_send_brief({"AI/ML": []}, MagicMock(), "to@x", "from@x", "bucket")
+
+    mock_send.assert_called_once()
+    mock_narration.assert_not_called()

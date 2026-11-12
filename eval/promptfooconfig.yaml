@@ -7,11 +7,30 @@ description: RSS Brief fidelity (brief vs digest)
 
 # The system under test is the real Python synthesis pipeline.
 # Paths are relative to this eval/ directory (where promptfoo runs).
+# Each entry runs the same fixtures through the real pipeline with different
+# model/effort settings (provider.py applies `config` over brief_config.json).
+# The first entry is the production baseline; summarise.py compares the rest to it.
+# Narrow a run with:  --filter-providers '^opus-5-5/high$'   and   --repeat 1
 providers:
   - id: file://provider.py
-    label: rss-brief
+    label: opus-5-5/high
+    config: {model: claude-opus-5-5, effort: high}
+  - id: file://provider.py
+    label: opus-5-5/medium
+    config: {model: claude-opus-5-5, effort: medium}
+  - id: file://provider.py
+    label: sonnet-5-5/high
+    config: {model: claude-sonnet-5-5, effort: high}
+  - id: file://provider.py
+    label: sonnet-5-5/medium
+    config: {model: claude-sonnet-5-5, effort: medium}
 
-# Grader used by llm-rubric assertions. Sonnet 5 rejects temperature/top_p/
+# Model output varies run to run (a story dropped one time in three is exactly the
+# failure to catch), so every cell is repeated. Override with --repeat N.
+evaluateOptions:
+  repeat: 3
+
+# Grader used by llm-rubric assertions. Sonnet 5.5 rejects temperature/top_p/
 # top_k and thinks adaptively by default, so there is no temperature here.
 # showThinking: false keeps thinking blocks out of the graded output so the
 # JSON verdict parses cleanly. max_tokens is raised well above promptfoo's
@@ -20,9 +39,18 @@ providers:
 # truncates the JSON verdict mid-object ("Could not extract JSON from
 # llm-rubric response"), which is not transient.
 defaultTest:
+  vars:
+    # The reader profile the writer was given (employer, role, interests). The faithfulness
+    # rubric must allow references to it; otherwise every "relevance_to_reader" that names
+    # the reader's company is wrongly failed as invented.
+    brief_config: file://../src/rss_email/brief_config.json
+    # The earlier days' themes the brief was shown (a fixture's memory.txt, if it has one). The
+    # faithfulness rubric must allow references to them: the brief is meant to frame a story as
+    # a development of an earlier day, and those facts are not in today's digest.
+    memory_text: ""
   options:
     provider:
-      id: anthropic:messages:claude-sonnet-5
+      id: anthropic:messages:claude-sonnet-5-5
       config:
         showThinking: false
         max_tokens: 16000
@@ -38,13 +66,28 @@ defaultTest:
       value: |
         You are auditing an editorial brief that was synthesised from a news digest.
 
-        DIGEST (the only allowed source of facts):
+        DIGEST (the only allowed source of news facts):
         {{digest_text}}
 
-        Grade the brief OUTPUT (JSON). PASS only if every factual claim, number,
-        company, product, and named entity in the brief is supported by the digest
-        above — nothing invented or extrapolated beyond the digest. Minor rewording
-        and summarisation are fine; fabricated specifics are not.
+        READER CONTEXT (the writer was also given this, as a description of who the
+        brief is for; it is NOT a source of news):
+        {{ brief_config | dump }}
+
+        PREVIOUSLY COVERED (earlier days' briefs, which the writer was also given so it can
+        frame a story as a development of one of them; this is background, NOT a source
+        for today's news; it may be empty):
+        {{ memory_text }}
+
+        Grade the brief OUTPUT (JSON). PASS only if every news claim, number, company,
+        product, and named entity in the brief is supported by the digest above, with no
+        invented or extrapolated news. Pointers back to earlier coverage (for example
+        "since 10 November's report that...") may rely on the previously-covered text,
+        including its dates; a claim found in neither the digest nor that text fails. References to the reader's own role, employer,
+        interests or responsibilities may rely on the reader context and are allowed (for
+        example naming the reader's employer or their metrics in relevance_to_reader).
+        Claims about any other company or person (for example calling a company the
+        reader's competitor) must still be supported by the digest. Minor rewording and
+        summarisation are fine; fabricated specifics are not.
     - type: llm-rubric
       value: |
         In the brief OUTPUT (JSON), each theme's `relevance_to_reader` must be either
@@ -52,10 +95,19 @@ defaultTest:
         architecture leader in financial-data infrastructure). PASS unless some
         `relevance_to_reader` is clearly forced or fabricated for an unrelated story.
 
-# One test per saved digest+brief fixture. Add more dated fixtures over time.
+# One test per fixture directory under fixtures/. Do not edit by hand: add a fixture
+# directory (see README "Add a fixture") and run `python make_fixture.py sync-tests`.
+# A fixture with an expected_major.json also gets the major_coverage check.
 tests:
+# BEGIN GENERATED TESTS (make_fixture.py sync-tests)
   - description: 2026-06-15 digest
     vars:
       fixture: fixtures/2026-06-15/digest_articles.json
       expected_major: fixtures/2026-06-15/expected_major.json
       digest_text: file://fixtures/2026-06-15/digest_text.txt
+  - description: 2026-06-15-lowrank digest, major stories from low-ranked sources
+    vars:
+      fixture: fixtures/2026-06-15-lowrank/digest_articles.json
+      expected_major: fixtures/2026-06-15-lowrank/expected_major.json
+      digest_text: file://fixtures/2026-06-15-lowrank/digest_text.txt
+# END GENERATED TESTS

@@ -31,12 +31,21 @@ const RSS_RULE_SET_NAME = 'RSSRuleSet';
 const LAST_RUN_PARAMETER = 'rss-email-lastrun';
 
 const PODCAST_CLOUDFRONT_DOMAIN_PARAMETER = 'rss-podcast-cloudfront-domain';
+// Runtime on/off switch for the podcast, read by the Lambdas on every run (no
+// redeploy to flip it). A plain String parameter, created by hand; absent or
+// anything other than 'false' means on. Keep in sync with
+// PODCAST_ENABLED_PARAMETER in src/rss_email/podcast_script.py.
+const PODCAST_ENABLED_PARAMETER = 'rss-email-PODCAST_ENABLED';
 const ANTHROPIC_API_KEY_PARAMETER = 'rss-email-anthropic-api-key';
 // SecureString, created by hand; the Mastodon source is skipped if absent.
 const MASTODON_TOKEN_PARAMETER = 'rss-email-mastodon-token';
 
 // Keep in sync with DEFAULT_CLAUDE_MODEL in src/rss_email/models.py
-const DEFAULT_CLAUDE_MODEL = 'claude-haiku-4-5';
+const DEFAULT_CLAUDE_MODEL = 'claude-haiku-5-5';
+// Grouping has its own model so it can move separately from categorising. It passed
+// `eval/compare_haiku.py --grouping-only` on three real days in November 2026 (see
+// eval/README.md); set this back to 'claude-haiku-4-5' to roll grouping back on its own.
+const GROUPING_CLAUDE_MODEL = 'claude-haiku-5-5';
 // Narration quality matters more than cost for one call a day.
 const PODCAST_CLAUDE_MODEL = 'claude-sonnet-5-5';
 // Must be one of the voices baked into docker/podcast/Dockerfile (PODCAST_VOICES).
@@ -285,6 +294,7 @@ export class RSSEmailStack extends cdk.Stack {
         RSS_KEY: KEY,
         ANTHROPIC_API_KEY_PARAMETER: ANTHROPIC_API_KEY_PARAMETER,
         CLAUDE_MODEL: DEFAULT_CLAUDE_MODEL,
+        CLAUDE_GROUPING_MODEL: GROUPING_CLAUDE_MODEL,
         LAST_RUN_PARAMETER: LAST_RUN_PARAMETER,
         CLAUDE_BATCH_SIZE: '25',
       },
@@ -582,11 +592,14 @@ def lambda_handler(event, context):
     // Subscribe Lambda to SNS topic
     receive_topic.addSubscription(new sns_subscriptions.LambdaSubscription(manualTriggerFunction));
 
-    // Add SSM permission for CloudFront domain parameter
+    // Add SSM permission for the CloudFront domain and podcast switch parameters
     role.addToPolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
       actions: ['ssm:GetParameter'],
-      resources: [`arn:aws:ssm:*:*:parameter/${PODCAST_CLOUDFRONT_DOMAIN_PARAMETER}`],
+      resources: [
+        `arn:aws:ssm:*:*:parameter/${PODCAST_CLOUDFRONT_DOMAIN_PARAMETER}`,
+        `arn:aws:ssm:*:*:parameter/${PODCAST_ENABLED_PARAMETER}`,
+      ],
     }));
 
     // Add CloudFront invalidation permissions

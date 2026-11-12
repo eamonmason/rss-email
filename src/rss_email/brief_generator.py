@@ -41,6 +41,7 @@ from .models import (
     PersonalBlock,
 )
 from .url_utils import normalise_link, strip_credential_params
+from .usage_log import log_usage
 
 logger = logging.getLogger(__name__)
 
@@ -424,12 +425,13 @@ def synthesize(
     api_timeout = int(os.environ.get("CLAUDE_API_TIMEOUT", "120"))
 
     effort = config.get("effort", DEFAULT_SYNTHESIS_EFFORT)
+    max_tokens = int(config.get("max_tokens", SYNTHESIS_MAX_TOKENS))
 
     for attempt in (1, 2):
         try:
             with client.beta.messages.stream(
                 model=model,
-                max_tokens=SYNTHESIS_MAX_TOKENS,
+                max_tokens=max_tokens,
                 output_config={"effort": effort},
                 betas=[REFUSAL_FALLBACK_BETA],
                 fallbacks="default",
@@ -437,6 +439,7 @@ def synthesize(
                 timeout=api_timeout,
             ) as stream:
                 message = stream.get_final_message()
+            log_usage("brief", model, message.usage, stop_reason=message.stop_reason)
             if message.stop_reason == "refusal":
                 # Fallbacks already ran server-side; retrying won't help.
                 logger.error(
@@ -447,7 +450,7 @@ def synthesize(
             if message.stop_reason == "max_tokens":
                 logger.warning(
                     "Brief synthesis hit max_tokens=%d (attempt %d)",
-                    SYNTHESIS_MAX_TOKENS,
+                    max_tokens,
                     attempt,
                 )
                 continue

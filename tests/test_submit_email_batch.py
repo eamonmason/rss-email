@@ -248,3 +248,95 @@ def test_lambda_handler_missing_env_vars():
     # Execute and verify KeyError is raised
     with pytest.raises(KeyError):
         lambda_handler({}, None)
+
+
+def _bad_request(message):
+    import anthropic  # pylint: disable=import-outside-toplevel
+    import httpx2  # pylint: disable=import-outside-toplevel
+
+    request = httpx2.Request("POST", "https://api.anthropic.com/v1/messages/batches")
+    response = httpx2.Response(400, request=request)
+    return anthropic.BadRequestError(message, response=response, body=None)
+
+
+@patch("rss_email.submit_email_batch.build_groups_for_articles")
+@patch("rss_email.submit_email_batch.anthropic.Anthropic")
+@patch("rss_email.submit_email_batch.boto3.client")
+@patch("rss_email.submit_email_batch.filter_items")
+@patch("rss_email.submit_email_batch.get_feed_file")
+@patch("rss_email.submit_email_batch.get_last_run")
+def test_batch_rejecting_effort_is_retried_without_it(
+    mock_get_last_run,
+    mock_get_feed_file,
+    mock_filter_items,
+    mock_boto3_client,
+    mock_anthropic,
+    mock_build_groups,
+    mock_env,
+    sample_articles,
+    monkeypatch,
+):
+    """If the Batch API refuses output_config for Haiku 5, the day's batch is still submitted."""
+    monkeypatch.setenv("CLAUDE_MODEL", "claude-haiku-5-5")
+    mock_get_last_run.return_value = datetime(2025, 12, 26, 0, 0, 0)
+    mock_get_feed_file.return_value = "<rss>...</rss>"
+    mock_filter_items.return_value = sample_articles
+    mock_build_groups.return_value = [[0], [1]]
+    mock_boto3_client.return_value.get_parameter.return_value = {"Parameter": {"Value": "k"}}
+    accepted = MagicMock()
+    accepted.id = "batch-ok"
+    create = mock_anthropic.return_value.messages.batches.create
+    create.side_effect = [_bad_request("requests.0.params.output_config: not permitted"), accepted]
+
+    result = lambda_handler({}, None)
+
+    assert result["batch_id"] == "batch-ok" and create.call_count == 2
+    first, second = (call.kwargs["requests"][0]["params"] for call in create.call_args_list)
+    assert first["output_config"] == {"effort": "medium"}
+    assert "output_config" not in second
+
+
+@patch("rss_email.submit_email_batch.build_groups_for_articles")
+@patch("rss_email.submit_email_batch.anthropic.Anthropic")
+@patch("rss_email.submit_email_batch.boto3.client")
+@patch("rss_email.submit_email_batch.filter_items")
+@patch("rss_email.submit_email_batch.get_feed_file")
+@patch("rss_email.submit_email_batch.get_last_run")
+def test_unrelated_bad_request_is_not_retried(
+    mock_get_last_run,
+    mock_get_feed_file,
+    mock_filter_items,
+    mock_boto3_client,
+    mock_anthropic,
+    mock_build_groups,
+    mock_env,
+    sample_articles,
+    monkeypatch,
+):
+    """Only an effort rejection triggers the retry; other 400s still surface."""
+    monkeypatch.setenv("CLAUDE_MODEL", "claude-haiku-5-5")
+    mock_get_last_run.return_value = datetime(2025, 12, 26, 0, 0, 0)
+    mock_get_feed_file.return_value = "<rss>...</rss>"
+    mock_filter_items.return_value = sample_articles
+    mock_build_groups.return_value = [[0], [1]]
+    mock_boto3_client.return_value.get_parameter.return_value = {"Parameter": {"Value": "k"}}
+    create = mock_anthropic.return_value.messages.batches.create
+    create.side_effect = _bad_request("Your credit balance is too low")
+
+    with pytest.raises(Exception, match="credit balance"):
+        lambda_handler({}, None)
+    assert create.call_count == 1
+
+
+def test_batch_prompt_version_defaults_to_v2_and_can_roll_back_to_v1(monkeypatch):
+    """Production sends the v2 categorisation prompt; CATEGORY_PROMPT_VERSION=v1 rolls it back."""
+    from rss_email.submit_email_batch import create_batch_requests  # pylint: disable=import-outside-toplevel
+
+    articles = [{"title": "T", "description": "d", "link": "https://x/1", "pubDate": "now"}]
+    batches = [[("group_0", [0])]]
+    monkeypatch.delenv("CATEGORY_PROMPT_VERSION", raising=False)
+    new = create_batch_requests(batches, articles, "claude-haiku-5-5")[0]["params"]["messages"][0]["content"]
+    assert "HOW TO CHOOSE A CATEGORY" in new
+    monkeypatch.setenv("CATEGORY_PROMPT_VERSION", "v1")
+    old = create_batch_requests(batches, articles, "claude-haiku-5-5")[0]["params"]["messages"][0]["content"]
+    assert "in priority order" in old and "HOW TO CHOOSE" not in old

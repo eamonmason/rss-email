@@ -4,7 +4,8 @@ import json
 import logging
 import os
 from datetime import datetime
-from typing import Any, Dict, List, Tuple
+from types import SimpleNamespace
+from typing import Any, Dict, List, Optional, Tuple
 
 import anthropic
 import boto3
@@ -14,7 +15,10 @@ from .email_articles import send_via_ses, create_html, set_last_run
 from .article_processor import (
     ProcessedArticle,
     _article_to_source,
+    _build_group_payload,
     _iter_category_entries,
+    category_prompt_version,
+    create_group_summary_prompt,
     first_comments,
 )
 from .brief_generator import generate_brief_full
@@ -28,8 +32,15 @@ from .brief_memory import (
     save_memory,
     seen_links,
 )
-from .models import ArticleSource
-from .podcast_script import build_narration_input, save_narration_input
+from .models import DEFAULT_CLAUDE_MODEL, ArticleSource
+from .claude_compat import effort_params, response_text as text_of
+from .json_utils import extract_json_from_text
+from .usage_log import log_usage
+from .podcast_script import (
+    build_narration_input,
+    podcast_enabled,
+    save_narration_input,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -85,8 +96,13 @@ def build_processed_articles_from_groups(
     categorized_data: Dict[str, Any],
     original_articles: List[Dict[str, Any]],
     groups: List[List[int]],
+    seen_gids_out: Optional[set] = None,
 ) -> Dict[str, List[ProcessedArticle]]:
-    """Convert Claude's group-summary response into ProcessedArticle objects."""
+    """Convert Claude's group-summary response into ProcessedArticle objects.
+
+    ``seen_gids_out`` (optional) collects the ids of the groups the response covered,
+    so the caller can tell which groups the model left out.
+    """
     enriched: Dict[str, List[ProcessedArticle]] = {}
     pairs = _iter_category_entries(categorized_data)
 
@@ -104,6 +120,8 @@ def build_processed_articles_from_groups(
             logger.warning("Group index %d out of range", group_idx)
             continue
         seen_gids.add(gid)
+        if seen_gids_out is not None:
+            seen_gids_out.add(gid)
         indices = groups[group_idx]
         if not indices:
             continue
@@ -122,6 +140,58 @@ def build_processed_articles_from_groups(
         ))
 
     return enriched
+
+
+MAX_RECOVERY_GROUPS = 50  # bounds the extra spend if a whole batch failed
+RECOVERY_BATCH_SIZE = 25
+
+
+def _recover_missing_groups(
+    client: anthropic.Anthropic,
+    model: str,
+    original_articles: List[Dict[str, Any]],
+    groups: List[List[int]],
+    covered_gids: set,
+    all_categories: Dict[str, List[Dict]],
+) -> None:
+    """Re-ask once for groups the batch results left out, so no story silently vanishes.
+
+    A model can omit a group from its reply (or a whole request can fail); without this
+    those articles never reach the digest or the brief. Best-effort and bounded: at most
+    ``MAX_RECOVERY_GROUPS`` groups, in synchronous calls of ``RECOVERY_BATCH_SIZE``. Never raises.
+    """
+    missing = [n for n in range(len(groups)) if f"group_{n}" not in covered_gids and groups[n]]
+    if not missing:
+        return
+    logger.warning("%d of %d groups missing from batch results; recovering", len(missing), len(groups))
+    for start in range(0, min(len(missing), MAX_RECOVERY_GROUPS), RECOVERY_BATCH_SIZE):
+        chunk = missing[start:min(start + RECOVERY_BATCH_SIZE, MAX_RECOVERY_GROUPS)]
+        try:
+            payloads = [
+                _build_group_payload(f"group_{n}", groups[n], original_articles) for n in chunk
+            ]
+            response = client.messages.create(
+                model=model,
+                max_tokens=8192,
+                messages=[{
+                    "role": "user",
+                    "content": create_group_summary_prompt(payloads, version=category_prompt_version()),
+                }],
+                **effort_params(model),
+            )
+            log_usage("categorise_recover", model, response.usage,
+                      stop_reason=response.stop_reason, requests=1)
+            text = text_of(response)
+            data = extract_json_from_text(text, required_fields=["categories"]) if text else None
+            if not data:
+                logger.warning("Recovery call returned nothing usable for %d groups", len(chunk))
+                continue
+            recovered = build_processed_articles_from_groups(
+                data, original_articles, groups, seen_gids_out=covered_gids
+            )
+            merge_categories(all_categories, recovered)
+        except Exception as exc:  # pylint: disable=broad-except
+            logger.warning("Recovery call failed (%d groups stay missing): %s", len(chunk), exc)
 
 
 def _maybe_send_digest(
@@ -189,10 +259,11 @@ def _maybe_send_brief(
             save_memory(bucket, updated_memory, memory_key)
 
             # The podcast stage narrates this same brief; best-effort like the memory save.
-            save_narration_input(
-                bucket,
-                build_narration_input(result.synthesis, result.article_index, today),
-            )
+            if podcast_enabled():
+                save_narration_input(
+                    bucket,
+                    build_narration_input(result.synthesis, result.article_index, today),
+                )
     except Exception as exc:  # pylint: disable=broad-except
         logger.error("Brief generation/send failed (digest already sent): %s", exc)
 
@@ -246,12 +317,25 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
         # Stream results
         all_categories: Dict[str, List[Dict]] = {}
         failed_requests = []
+        covered_gids: set = set()
+        batch_usage = {"input_tokens": 0, "output_tokens": 0}
+        batch_requests = 0
+        batch_model = os.environ.get("CLAUDE_MODEL", DEFAULT_CLAUDE_MODEL)
 
         for result in client.messages.batches.results(batch_id):
             if result.result.type == "succeeded":
+                batch_requests += 1
+                for field in batch_usage:
+                    value = getattr(result.result.message.usage, field, 0)
+                    batch_usage[field] += value if isinstance(value, int) else 0
                 try:
                     # Extract JSON from response
-                    response_text = result.result.message.content[0].text
+                    response_text = text_of(result.result.message)
+                    if not response_text:
+                        raise ValueError(
+                            "empty response (stop_reason="
+                            f"{result.result.message.stop_reason})"
+                        )
 
                     # Try direct JSON parsing first
                     try:
@@ -286,6 +370,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
                                 categorized_data,
                                 original_articles,
                                 groups,
+                                seen_gids_out=covered_gids,
                             )
                             merge_categories(all_categories, enriched_categories)
                         else:
@@ -309,6 +394,19 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
                     result.result.type,
                 )
                 failed_requests.append(result)
+
+        if original_articles and groups:
+            _recover_missing_groups(
+                client, batch_model, original_articles, groups, covered_gids, all_categories
+            )
+
+        log_usage(
+            "categorise_batch",
+            batch_model,
+            SimpleNamespace(**batch_usage),
+            batch=True,
+            requests=batch_requests,
+        )
 
         # Log results
         logger.info(

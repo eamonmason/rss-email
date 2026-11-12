@@ -4,8 +4,15 @@ name: Brief Fidelity Eval
 # gate: it makes live Claude calls (costs credits), so it runs weekly and on demand.
 on:
   workflow_dispatch:
+    inputs:
+      matrix:
+        description: 'Run the full model/effort matrix (several dollars) instead of the production setting only'
+        type: boolean
+        default: false
   schedule:
-    - cron: '0 6 * * 1'  # Mondays 06:00 UTC
+    # Monthly (the 1st, 06:00 UTC), not weekly: the weekly run cost about $0.25-0.45 a week (about
+    # a tenth of the pipeline's spend) and retried often on the strict faithfulness check.
+    - cron: '0 6 1 * *'
 
 permissions:
   contents: read
@@ -52,10 +59,18 @@ jobs:
         # promptfoo grader-parse failure unrelated to brief quality. Each attempt
         # writes its own file so a failed first attempt isn't overwritten by a
         # passing retry, and a retry is flagged rather than passing silently.
+        #
+        # Cost control: promptfooconfig.yaml defines a four-variant matrix repeated three
+        # times (a manual cost comparison). The monthly schedule checks only the production
+        # setting, once per fixture; tick "matrix" on a manual run to run everything.
         run: |
-          npm run eval -- --output eval-results-1.json && exit 0
+          args=()
+          if [ "${{ inputs.matrix }}" != "true" ]; then
+            args=(--filter-providers '^opus-5-5/high$' --repeat 1)
+          fi
+          npm run eval -- "${args[@]}" --output eval-results-1.json && exit 0
           echo "::warning title=Brief eval retried::First attempt failed (see the attempt 1 annotations); retrying once"
-          npm run eval -- --output eval-results-2.json
+          npm run eval -- "${args[@]}" --output eval-results-2.json
 
       - name: Annotate failed assertions
         # The console table only says [FAIL]; the reason is in the results JSON.

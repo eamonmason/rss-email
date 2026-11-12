@@ -200,3 +200,28 @@ def _maybe_run_claude_integration() -> Optional[Dict[str, Any]]:
     if result:
         return json.loads(result.model_dump_json())
     return None
+
+
+def test_categorisation_prompt_v2_defines_every_category_and_how_to_choose():
+    from rss_email.article_processor import (  # pylint: disable=import-outside-toplevel
+        CATEGORY_DEFINITIONS,
+        PRIORITY_CATEGORIES,
+    )
+
+    payloads = [{"group_id": "group_0", "members": [{"title": "T", "description": "d", "pubdate": "p"}]}]
+    prompt = create_group_summary_prompt(payloads)
+    assert list(CATEGORY_DEFINITIONS) == PRIORITY_CATEGORIES
+    for name, text in CATEGORY_DEFINITIONS.items():
+        assert f"- {name}: {text}" in prompt
+    assert "HOW TO CHOOSE A CATEGORY" in prompt and "main subject" in prompt
+    assert "prefer tech-related" not in prompt  # the ambiguous v1 instruction is gone
+    assert '"group_count": 1' in prompt and "EXACTLY 1 group entries" in prompt
+    assert '"verification": "processed_all_groups"' in prompt  # output format unchanged
+
+
+def test_categorisation_prompt_v1_is_still_the_original():
+    payloads = [{"group_id": "group_0", "members": [{"title": "T", "description": "d", "pubdate": "p"}]}]
+    prompt = create_group_summary_prompt(payloads, version="v1")
+    assert "CATEGORIES (in priority order; prefer tech-related when applicable):" in prompt
+    assert "Technology, AI/ML, Cybersecurity, Programming" in prompt
+    assert "HOW TO CHOOSE" not in prompt

@@ -1032,3 +1032,15 @@ def test_cli_dry_run_writes_file(tmp_path):
 
     assert output_file.read_text(encoding="utf-8") == "<brief-html/>"
     mock_send.assert_not_called()
+
+
+def test_synthesize_max_tokens_is_configurable():
+    """brief_config.json "max_tokens" overrides the 32k default (eval and cost tuning)."""
+    client = make_client([json.dumps(VALID_SYNTHESIS)])
+    synthesize(
+        {"AI/ML": [{"title": "x", "url": "u", "summary": "s"}]},
+        {**SYNTH_CONFIG, "max_tokens": 20000},
+        client=client,
+    )
+    _, kwargs = client.beta.messages.stream.call_args
+    assert kwargs["max_tokens"] == 20000

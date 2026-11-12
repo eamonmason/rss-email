@@ -68,3 +68,12 @@ def test_stage_failure_raises(env, collaborators, stage, message):
 
     with pytest.raises(RuntimeError, match=message):
         generate_podcast.lambda_handler({}, None)
+
+
+def test_disabled_skips_without_touching_anything(env, collaborators, monkeypatch):
+    monkeypatch.setenv("PODCAST_ENABLED", "False")
+    result = generate_podcast.lambda_handler({}, None)
+    assert result == {"status": "skipped", "audio_generated": False}
+    collaborators["load"].assert_not_called()
+    collaborators["narrate"].assert_not_called()
+    collaborators["tts"].assert_not_called()

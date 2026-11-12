@@ -17,6 +17,7 @@ from rss_email.models import (
     PersonalBlock,
 )
 from rss_email.podcast_script import (
+    podcast_enabled,
     build_narration_input,
     build_prompt,
     clean_script,
@@ -177,3 +178,42 @@ def test_generate_narration_cleans_and_warns(caplog):
 
     assert script == "A testament, of sorts."
     assert "testament" in caplog.text
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [("true", True), ("", True), ("false", False), (" FALSE ", False)],
+)
+def test_podcast_enabled_env_override(monkeypatch, value, expected):
+    monkeypatch.setenv("PODCAST_ENABLED", value)
+    assert podcast_enabled() is expected
+
+
+def _ssm_returning(value=None, error_code=None):
+    client = MagicMock()
+    if error_code:
+        client.get_parameter.side_effect = ClientError(
+            {"Error": {"Code": error_code, "Message": "x"}}, "GetParameter"
+        )
+    else:
+        client.get_parameter.return_value = {"Parameter": {"Value": value}}
+    return patch("rss_email.podcast_script.boto3.client", return_value=client), client
+
+
+@pytest.mark.parametrize(
+    "value, expected", [("false", False), ("False ", False), ("true", True)]
+)
+def test_podcast_enabled_reads_ssm_at_runtime(monkeypatch, value, expected):
+    monkeypatch.delenv("PODCAST_ENABLED")
+    patcher, client = _ssm_returning(value)
+    with patcher:
+        assert podcast_enabled() is expected
+    client.get_parameter.assert_called_once_with(Name="rss-email-PODCAST_ENABLED")
+
+
+@pytest.mark.parametrize("error_code", ["ParameterNotFound", "AccessDeniedException"])
+def test_podcast_enabled_defaults_on_when_parameter_unreadable(monkeypatch, error_code):
+    monkeypatch.delenv("PODCAST_ENABLED")
+    patcher, _ = _ssm_returning(error_code=error_code)
+    with patcher:
+        assert podcast_enabled() is True

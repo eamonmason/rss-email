@@ -22,11 +22,19 @@ from .article_processor import (
     get_anthropic_api_key,
     optimize_articles_for_claude,
 )
+from .claude_compat import effort_params, response_text as text_of
 from .json_utils import extract_json_from_text
 from .models import DEFAULT_CLAUDE_MODEL
+from .usage_log import log_usage
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+
+# Reply cap for the grouping call. Haiku 5.5 thinks before it answers and the thinking counts
+# against this: three real days used 2.9k-3.8k tokens, so the old 4096 left under 10% headroom.
+# It is only a ceiling (nothing is billed for unused tokens), so a larger cap costs nothing.
+GROUPING_MAX_TOKENS = 8192
 
 
 def create_grouping_prompt(
@@ -154,19 +162,27 @@ def group_articles_with_claude(
         client = anthropic.Anthropic(api_key=get_anthropic_api_key())
         prompt = create_grouping_prompt(articles)
 
-        model_name = os.environ.get("CLAUDE_MODEL", DEFAULT_CLAUDE_MODEL)
+        # CLAUDE_GROUPING_MODEL lets grouping move to another model independently of the
+        # categorising batch (CLAUDE_MODEL); unset, both use CLAUDE_MODEL.
+        model_name = os.environ.get("CLAUDE_GROUPING_MODEL") or os.environ.get(
+            "CLAUDE_MODEL", DEFAULT_CLAUDE_MODEL
+        )
         api_timeout = int(os.environ.get("CLAUDE_API_TIMEOUT", "120"))
 
         response = client.messages.create(
             model=model_name,
-            max_tokens=4096,
+            max_tokens=GROUPING_MAX_TOKENS,
             messages=[{"role": "user", "content": prompt}],
             timeout=api_timeout,
+            **effort_params(model_name),
         )
 
-        response_text = response.content[0].text.strip()
+        response_text = text_of(response)
+        if not response_text:
+            raise ValueError(f"empty grouping response (stop_reason={response.stop_reason})")
         tokens_used = response.usage.input_tokens + response.usage.output_tokens
         rate_limiter.record_usage(tokens_used)
+        log_usage("grouping", model_name, response.usage, stop_reason=response.stop_reason)
 
         return parse_grouping_response(response_text, len(articles))
 
