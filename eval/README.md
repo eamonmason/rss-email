@@ -16,6 +16,42 @@ shipping code rather than a copy of the prompt.
 | faithfulness | llm-rubric | Every claim/number/entity in the brief is supported by the digest — nothing fabricated. |
 | relevance | llm-rubric | `relevance_to_reader` is null or genuinely tied to the profile, never forced. |
 
+## Comparing models and effort (cost work)
+
+`promptfooconfig.yaml` runs the **same fixtures through the real pipeline** under several
+`providers` (`opus-5-5/high` = production baseline, `opus-5-5/medium`, `sonnet-5-5/high`,
+`sonnet-5-5/medium`). `provider.py` applies each provider's `config` (`model`, `effort`,
+`max_tokens`) over `brief_config.json`, captures token usage from the pipeline's
+`CLAUDE_USAGE` log lines and reports cost from `prices.json` (update it when prices change).
+Every cell is repeated 3 times (`evaluateOptions.repeat`), because a brief that drops a major
+story one run in three is the failure to catch.
+
+```bash
+npm --prefix eval run eval -- --output results.json          # full matrix
+python eval/summarise.py eval/results.json --baseline opus-5-5/high
+```
+
+`summarise.py` prints, per variant, runs passed, per-assertion pass rate, mean output tokens,
+mean cost and cost relative to baseline. **Adopt a cheaper variant only if it passes every run**
+on every fixture. Then change `brief_config.json` (`model`, `effort`, `max_tokens`).
+
+Cost: one cell is a synthesis plus two grader calls. Roughly, an Opus synthesis is
+~10k input / 15-25k output tokens (about $0.35-0.55 at $4/$20 per million), a Sonnet 5.5 one
+about half that, and each grader call a few cents. The full matrix (4 variants x 2 fixtures x
+3 repeats = 24 cells) is therefore in the region of $6-10; those are estimates until the
+`CLAUDE_USAGE` log or a first run gives real figures. Narrow a run with
+`--filter-providers '^sonnet-5-5/high$' --repeat 1`.
+
+### Fixtures for this comparison
+
+- `2026-06-15` - the original real day.
+- `2026-06-15-lowrank` - the same day with the must-cover stories relabelled to deprioritised
+  sources (`make_fixture.py lowrank`). It stresses the case that failed at medium effort. It is a
+  perturbation of real data, not a new day: capture more real days (below) for broader coverage.
+
+`python make_fixture.py text <fixture_dir>` regenerates `digest_text.txt` from
+`digest_articles.json`.
+
 ## Dependencies
 
 promptfoo lives in **this directory's own** `package.json` / `package-lock.json`, separate

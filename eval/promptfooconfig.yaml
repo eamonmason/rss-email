@@ -7,9 +7,28 @@ description: RSS Brief fidelity (brief vs digest)
 
 # The system under test is the real Python synthesis pipeline.
 # Paths are relative to this eval/ directory (where promptfoo runs).
+# Each entry runs the same fixtures through the real pipeline with different
+# model/effort settings (provider.py applies `config` over brief_config.json).
+# The first entry is the production baseline; summarise.py compares the rest to it.
+# Narrow a run with:  --filter-providers '^opus-5-5/high$'   and   --repeat 1
 providers:
   - id: file://provider.py
-    label: rss-brief
+    label: opus-5-5/high
+    config: {model: claude-opus-5-5, effort: high}
+  - id: file://provider.py
+    label: opus-5-5/medium
+    config: {model: claude-opus-5-5, effort: medium}
+  - id: file://provider.py
+    label: sonnet-5-5/high
+    config: {model: claude-sonnet-5-5, effort: high}
+  - id: file://provider.py
+    label: sonnet-5-5/medium
+    config: {model: claude-sonnet-5-5, effort: medium}
+
+# Model output varies run to run (a story dropped one time in three is exactly the
+# failure to catch), so every cell is repeated. Override with --repeat N.
+evaluateOptions:
+  repeat: 3
 
 # Grader used by llm-rubric assertions. Sonnet 5 rejects temperature/top_p/
 # top_k and thinks adaptively by default, so there is no temperature here.
@@ -59,3 +78,11 @@ tests:
       fixture: fixtures/2026-06-15/digest_articles.json
       expected_major: fixtures/2026-06-15/expected_major.json
       digest_text: file://fixtures/2026-06-15/digest_text.txt
+  # Same day, but every must-cover story comes from a deprioritised
+  # source (three relabelled by make_fixture.py; the fourth already was). Guards the failure seen at lower effort: a
+  # major story from a low-ranked source dropped under the theme caps.
+  - description: 2026-06-15 digest, major stories from low-ranked sources
+    vars:
+      fixture: fixtures/2026-06-15-lowrank/digest_articles.json
+      expected_major: fixtures/2026-06-15-lowrank/expected_major.json
+      digest_text: file://fixtures/2026-06-15-lowrank/digest_text.txt

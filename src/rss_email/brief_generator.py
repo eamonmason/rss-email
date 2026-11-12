@@ -425,12 +425,13 @@ def synthesize(
     api_timeout = int(os.environ.get("CLAUDE_API_TIMEOUT", "120"))
 
     effort = config.get("effort", DEFAULT_SYNTHESIS_EFFORT)
+    max_tokens = int(config.get("max_tokens", SYNTHESIS_MAX_TOKENS))
 
     for attempt in (1, 2):
         try:
             with client.beta.messages.stream(
                 model=model,
-                max_tokens=SYNTHESIS_MAX_TOKENS,
+                max_tokens=max_tokens,
                 output_config={"effort": effort},
                 betas=[REFUSAL_FALLBACK_BETA],
                 fallbacks="default",
@@ -449,7 +450,7 @@ def synthesize(
             if message.stop_reason == "max_tokens":
                 logger.warning(
                     "Brief synthesis hit max_tokens=%d (attempt %d)",
-                    SYNTHESIS_MAX_TOKENS,
+                    max_tokens,
                     attempt,
                 )
                 continue
