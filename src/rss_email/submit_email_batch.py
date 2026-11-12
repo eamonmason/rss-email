@@ -17,6 +17,7 @@ from .article_processor import (
     build_groups_for_articles,
     create_group_summary_prompt,
     _build_group_payload,
+    category_prompt_version,
 )
 from .claude_compat import effort_params
 from .models import DEFAULT_CLAUDE_MODEL
@@ -43,6 +44,7 @@ def create_batch_requests(
     group_batches: List[List[tuple]],
     articles: List[Dict[str, Any]],
     model: str,
+    use_effort: bool = True,
 ) -> List[Request]:
     """
     Create one Message Batch request per group-batch.
@@ -51,11 +53,13 @@ def create_batch_requests(
         group_batches: Output of _split_groups_into_batches.
         articles: Original article list (for resolving group member content).
         model: Claude model ID.
+        use_effort: Send ``output_config.effort`` for models that take it (Haiku 5). The
+            handler turns this off to retry if the Batch API rejects the parameter.
     """
     requests = []
     for idx, batch in enumerate(group_batches):
         payloads = [_build_group_payload(gid, indices, articles) for gid, indices in batch]
-        prompt = create_group_summary_prompt(payloads)
+        prompt = create_group_summary_prompt(payloads, version=category_prompt_version())
         requests.append(
             Request(
                 custom_id=f"email-batch-{idx}",
@@ -63,7 +67,7 @@ def create_batch_requests(
                     model=model,
                     max_tokens=8192,
                     messages=[{"role": "user", "content": prompt}],
-                    **effort_params(model),
+                    **(effort_params(model) if use_effort else {}),
                 ),
             )
         )
@@ -150,8 +154,18 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
         client = anthropic.Anthropic(api_key=api_key)
         requests = create_batch_requests(group_batches, filtered_items, model)
 
-        # Submit batch
-        message_batch = client.messages.batches.create(requests=requests)
+        # Submit batch. If the Batch API rejects the effort setting (Haiku 5 models), retry once
+        # without it rather than losing the day's digest: the model then thinks by default,
+        # which costs a little more but still works (the reader handles thinking blocks).
+        try:
+            message_batch = client.messages.batches.create(requests=requests)
+        except anthropic.BadRequestError as exc:
+            detail = str(exc).lower()
+            if not effort_params(model) or not ("effort" in detail or "output_config" in detail):
+                raise
+            logger.warning("Batch API rejected the effort setting (%s); retrying without it", exc)
+            requests = create_batch_requests(group_batches, filtered_items, model, use_effort=False)
+            message_batch = client.messages.batches.create(requests=requests)
 
         logger.info(
             "Submitted batch %s with %d requests for %d articles",

@@ -53,8 +53,8 @@ from rss_email.article_grouper import (  # noqa: E402
     parse_grouping_response,
 )
 from rss_email.article_processor import (  # noqa: E402
-    PRIORITY_CATEGORIES,
     _build_group_payload,
+    category_guide,
     create_group_summary_prompt,
 )
 from rss_email.brief_generator import load_brief_config  # noqa: E402
@@ -63,11 +63,13 @@ from rss_email.json_utils import extract_json_from_text  # noqa: E402
 from rss_email.submit_email_batch import _split_groups_into_batches  # noqa: E402
 
 BASELINE = "claude-haiku-4-5"
+# The baseline is what production ran before the v2 prompt: Haiku 4.5 with the v1 prompt.
 DEFAULT_VARIANTS = [
-    BASELINE,
-    f"{BASELINE}#2",  # second baseline run: the noise floor
-    "claude-haiku-5-5:low",
-    "claude-haiku-5-5:medium",
+    f"{BASELINE}@v1",
+    f"{BASELINE}@v1#2",  # second baseline run: the noise floor
+    f"{BASELINE}@v2",  # the new prompt on the old model: is the gain the prompt or the model?
+    "claude-haiku-5-5:low@v2",
+    "claude-haiku-5-5:medium@v2",
 ]
 ADJUDICATOR = "claude-sonnet-5-5"
 GROUPING_MAX_TOKENS = 4096  # as in article_grouper
@@ -80,6 +82,7 @@ CATEGORY_TOLERANCE = 0.05  # candidate agreement may trail 4.5's self-agreement 
 GROUPING_TOLERANCE = 0.10  # same, for grouping pair recall
 MIN_WIN_RATE = 0.45  # blind adjudication, (wins + 0.5 * ties) / n
 MIN_GROUPING_COVERAGE = 0.90  # share of articles a grouping reply must actually place
+GROUPING_F1_TOLERANCE = 0.05  # pair F1 (judged) may trail the baseline's by this much
 # Used only when no second baseline run is available to measure the noise floor.
 FALLBACK_CATEGORY_AGREEMENT = 0.90
 FALLBACK_GROUPING_RECALL = 0.85
@@ -87,24 +90,31 @@ FALLBACK_GROUPING_RECALL = 0.85
 
 @dataclass
 class Variant:
-    """A model plus optional effort and tag, e.g. ``claude-haiku-5-5:low`` or ``...#2``."""
+    """A model, optional effort, categorisation prompt and tag.
+
+    ``model[:effort][@prompt][#tag]``, e.g. ``claude-haiku-5-5:low@v2`` or
+    ``claude-haiku-4-5@v1#2``. ``prompt`` is ``v1`` (the original) or ``v2`` (the default).
+    """
 
     model: str
     effort: Optional[str] = None
     tag: Optional[str] = None
+    prompt: Optional[str] = None
 
     @property
     def label(self) -> str:
         """Display name."""
         base = f"{self.model}:{self.effort}" if self.effort else self.model
+        base = f"{base}@{self.prompt}" if self.prompt else base
         return f"{base}#{self.tag}" if self.tag else base
 
     @classmethod
     def parse(cls, text: str) -> "Variant":
-        """Parse ``model[:effort][#tag]``."""
+        """Parse ``model[:effort][@prompt][#tag]``."""
         body, _, tag = text.partition("#")
+        body, _, prompt = body.partition("@")
         model, _, effort = body.partition(":")
-        return cls(model, effort or None, tag or None)
+        return cls(model, effort or None, tag or None, prompt or None)
 
     def params(self) -> Dict[str, Any]:
         """Extra request parameters for this variant."""
@@ -118,6 +128,7 @@ class Run:
     variant: Variant
     groups: Optional[List[List[int]]] = None
     grouping_fallback: Optional[str] = None  # why the grouping reply was unusable
+    grouping_skipped: bool = False  # --skip-grouping: the stored groups were used
     nonsingleton_groups: int = 0
     categories: Dict[str, str] = field(default_factory=dict)  # group_id -> category
     summaries: Dict[str, str] = field(default_factory=dict)  # group_id -> summary
@@ -262,10 +273,15 @@ def verdict(run: Run, metrics: Dict[str, Optional[float]]) -> List[str]:
         bar = floor(metrics.get(noise_key), FALLBACK_CATEGORY_AGREEMENT, CATEGORY_TOLERANCE)
         if value is not None and value < bar:
             reasons.append(f"{label} {value:.0%} < {bar:.0%}")
-    recall = metrics.get("recall")
-    recall_bar = floor(metrics.get("noise_recall"), FALLBACK_GROUPING_RECALL, GROUPING_TOLERANCE)
-    if recall is not None and recall < recall_bar:
-        reasons.append(f"grouping recall {recall:.0%} < {recall_bar:.0%}")
+    f1, base_f1 = metrics.get("f1"), metrics.get("base_f1")
+    if f1 is not None and base_f1 is not None:
+        if f1 < base_f1 - GROUPING_F1_TOLERANCE:
+            reasons.append(f"grouping pair F1 {f1:.2f} < baseline {base_f1:.2f} - {GROUPING_F1_TOLERANCE}")
+    else:
+        recall = metrics.get("recall")
+        recall_bar = floor(metrics.get("noise_recall"), FALLBACK_GROUPING_RECALL, GROUPING_TOLERANCE)
+        if recall is not None and recall < recall_bar:
+            reasons.append(f"grouping recall {recall:.0%} < {recall_bar:.0%}")
     wins = metrics.get("win_rate")
     if wins is not None and wins < MIN_WIN_RATE:
         reasons.append(f"adjudication win rate {wins:.0%} < {MIN_WIN_RATE:.0%}")
@@ -320,8 +336,8 @@ def run_categorise(
     """Categorise and summarise the given groups in batches of 25, as production does."""
     for batch in _split_groups_into_batches(groups, BATCH_SIZE):
         payloads = [_build_group_payload(gid, idx, articles) for gid, idx in batch]
-        text = _call(client, run, "categorise", create_group_summary_prompt(payloads),
-                     CATEGORISE_MAX_TOKENS)
+        prompt = create_group_summary_prompt(payloads, version=run.variant.prompt or "v2")
+        text = _call(client, run, "categorise", prompt, CATEGORISE_MAX_TOKENS)
         data = extract_json_from_text(text, required_fields=["categories"]) if text else None
         if data is None:
             run.parse_failures += 1
@@ -346,8 +362,9 @@ def build_adjudication_prompt(items: List[Dict[str, Any]]) -> str:
     return (
         "You are checking how RSS articles were categorised. For each article below, two "
         "categories were proposed (option_a and option_b). Decide which one fits the article "
-        "better, judged only on the article itself. Answer TIE if both are equally reasonable.\n\n"
-        f"Available categories: {', '.join(PRIORITY_CATEGORIES)}\n\n"
+        "better under the category definitions below, judged only on the article itself. "
+        "Answer TIE if both are equally reasonable.\n\n"
+        f"CATEGORIES:\n{category_guide()}\n\n"
         "Return ONLY valid JSON, no markdown: "
         '{"choices": [{"id": "<id>", "choice": "A" | "B" | "TIE"}]} with one entry per article.\n\n'
         f"Articles:\n{json.dumps(items, indent=2)}\n"
@@ -361,12 +378,14 @@ def adjudicate(
     groups: List[List[int]],
     rng: random.Random,
     usage: Optional[List[int]] = None,
+    verdicts_out: Optional[List[Dict[str, str]]] = None,
 ) -> Dict[str, int]:
     """Blind-judge ``(group_id, category_x, category_y)`` pairs.
 
     The two categories are shown in random order. Returns counts ``{"x", "y", "tie",
     "invalid"}`` keyed by which side won, regardless of display order. ``usage`` (a two-item
-    list) accumulates input/output tokens.
+    list) accumulates input/output tokens; ``verdicts_out`` collects one
+    ``{group_id, x, y, winner}`` per item so patterns can be read, not only counted.
     """
     counts = {"x": 0, "y": 0, "tie": 0, "invalid": 0}
     for start in range(0, len(pairs), BATCH_SIZE):
@@ -392,14 +411,17 @@ def adjudicate(
         for entry in (data or {}).get("choices", []):  # pylint: disable=no-member
             if isinstance(entry, dict):
                 answers[entry.get("id")] = str(entry.get("choice", "")).upper()
-        for gid, _, _ in chunk:
+        for gid, cat_x, cat_y in chunk:
             choice = answers.get(gid)
             if choice == "TIE":
-                counts["tie"] += 1
+                winner = "tie"
             elif choice in ("A", "B"):
-                counts["x" if (choice == "A") == x_is_a[gid] else "y"] += 1
+                winner = "x" if (choice == "A") == x_is_a[gid] else "y"
             else:
-                counts["invalid"] += 1
+                winner = "invalid"
+            counts[winner] += 1
+            if verdicts_out is not None:
+                verdicts_out.append({"group_id": gid, "x": cat_x, "y": cat_y, "winner": winner})
     return counts
 
 
@@ -408,6 +430,88 @@ def visible_disagreements(
 ) -> List[Tuple[str, str, str]]:
     """Disagreements where either category is brief-visible and the candidate answered."""
     return [d for d in diffs if (d[1] in visible or d[2] in visible) and d[2] != "<missing>"]
+
+
+# ---------- grouping, judged on pairs ----------
+
+
+def build_pair_prompt(items: List[Dict[str, Any]]) -> str:
+    """Prompt asking whether two articles report the same specific news event. Names no model."""
+    return (
+        "For each pair of RSS articles below, decide whether the two articles report the SAME "
+        "SPECIFIC NEWS EVENT: the same product launch, study, breach, earnings report, hire or "
+        "incident. Articles that merely share a topic, industry or theme are NOT the same event, "
+        "and neither are different angles or follow-ups on a subject unless they report the same "
+        "announcement.\n\n"
+        'Return ONLY valid JSON, no markdown: {"answers": [{"id": "<id>", "same_event": true | '
+        "false}]} with one entry per pair.\n\n"
+        f"Pairs:\n{json.dumps(items, indent=2)}\n"
+    )
+
+
+def judge_pairs(
+    client: Any,
+    pairs: List[FrozenSet[int]],
+    articles: List[Dict[str, Any]],
+    usage: Optional[List[int]] = None,
+) -> Dict[FrozenSet[int], Optional[bool]]:
+    """Judge whether each article pair is the same event. ``None`` means no usable answer."""
+    judged: Dict[FrozenSet[int], Optional[bool]] = {}
+    for start in range(0, len(pairs), BATCH_SIZE):
+        chunk = pairs[start:start + BATCH_SIZE]
+        items = []
+        for n, pair in enumerate(chunk):
+            first, second = sorted(pair)
+            items.append({
+                "id": f"pair_{n}",
+                "article_1": {"title": articles[first].get("title", ""),
+                              "description": articles[first].get("description", "")[:300]},
+                "article_2": {"title": articles[second].get("title", ""),
+                              "description": articles[second].get("description", "")[:300]},
+            })
+        message = client.messages.create(
+            model=ADJUDICATOR,
+            max_tokens=ADJUDICATE_MAX_TOKENS,
+            messages=[{"role": "user", "content": build_pair_prompt(items)}],
+            output_config={"effort": "low"},
+        )
+        if usage is not None:
+            usage[0] += message.usage.input_tokens
+            usage[1] += message.usage.output_tokens
+        data = extract_json_from_text(response_text(message), required_fields=["answers"])
+        answers = {}
+        for entry in (data or {}).get("answers", []):  # pylint: disable=no-member
+            if isinstance(entry, dict) and isinstance(entry.get("same_event"), bool):
+                answers[entry.get("id")] = entry["same_event"]
+        for n, pair in enumerate(chunk):
+            judged[pair] = answers.get(f"pair_{n}")
+    return judged
+
+
+def pair_scores(
+    base_pairs: Set[FrozenSet[int]],
+    cand_pairs: Set[FrozenSet[int]],
+    judged: Dict[FrozenSet[int], Optional[bool]],
+) -> Dict[str, Dict[str, Optional[float]]]:
+    """Precision, recall and F1 of each grouping against the judge-confirmed pairs.
+
+    A pair both groupings made is taken as confirmed; a pair only one made is confirmed only if
+    the judge said so (an unanswered pair counts as not confirmed). Recall is against the union
+    of confirmed pairs, so it only says which model found more of the real same-event pairs
+    either of them found.
+    """
+    confirmed = {p for p in base_pairs & cand_pairs}
+    confirmed |= {p for p, same in judged.items() if same}
+
+    def score(pairs: Set[FrozenSet[int]]) -> Dict[str, Optional[float]]:
+        hit = len(pairs & confirmed)
+        precision = hit / len(pairs) if pairs else None
+        recall = hit / len(confirmed) if confirmed else None
+        f1 = (2 * precision * recall / (precision + recall)
+              if precision and recall else (0.0 if precision is not None and recall is not None else None))
+        return {"precision": precision, "recall": recall, "f1": f1, "pairs": len(pairs)}
+
+    return {"baseline": score(base_pairs), "candidate": score(cand_pairs)}
 
 
 # ---------- output ----------
@@ -453,16 +557,25 @@ def evaluate(
     stored_groups: List[List[int]],
     visible: Set[str],
     adjudications: Dict[str, Dict[str, int]],
+    verdicts: Optional[Dict[str, List[Dict[str, str]]]] = None,
+    pairs: Optional[Dict[str, Dict[str, Dict[str, Optional[float]]]]] = None,
 ) -> Dict[str, Dict[str, Any]]:
-    """Compute metrics and the decision-rule verdict for every run against ``runs[0]``."""
+    """Compute metrics and the decision-rule verdict for every run against ``runs[0]``.
+
+    ``verdicts`` are the judge's per-item results and ``pairs`` the judged grouping scores,
+    both keyed by variant label.
+    """
     base = runs[0]
-    noise_run = next((r for r in runs[1:] if r.variant.model == base.variant.model), None)
+    # The noise run repeats the baseline exactly: same model, effort and prompt.
+    noise_run = next(
+        (r for r in runs[1:] if (r.variant.model, r.variant.effort, r.variant.prompt)
+         == (base.variant.model, base.variant.effort, base.variant.prompt)), None)
     noise_all = noise_vis = None
     if noise_run:
         noise_all = category_agreement(base.categories, noise_run.categories)[0]
         noise_vis = visible_agreement(base.categories, noise_run.categories, visible)[0]
     noise_recall = None
-    if base.groups is not None:
+    if base.groups is not None and not base.grouping_skipped:
         noise_recall = grouping_agreement(stored_groups, base.groups)["recall"]
 
     results: Dict[str, Dict[str, Any]] = {}
@@ -470,17 +583,22 @@ def evaluate(
         label = run.variant.label
         agree, diffs = category_agreement(base.categories, run.categories)
         vis, flips = visible_agreement(base.categories, run.categories, visible)
-        grouping = grouping_agreement(stored_groups, run.groups) if run.groups is not None else {}
+        grouping = (grouping_agreement(stored_groups, run.groups)
+                    if run.groups is not None and not run.grouping_skipped else {})
         counts = adjudications.get(label)
+        scored = (pairs or {}).get(label)
         metrics = {
             "cat_all": agree, "noise_all": noise_all, "cat_vis": vis, "noise_vis": noise_vis,
             "recall": grouping.get("recall"), "noise_recall": noise_recall,
             "win_rate": win_rate(counts) if counts else None,
+            "f1": scored["candidate"]["f1"] if scored else None,
+            "base_f1": scored["baseline"]["f1"] if scored else None,
         }
         is_reference = run is base or run is noise_run
         results[label] = {
             "metrics": metrics, "visible_flips": flips, "diffs": diffs,
-            "grouping": grouping, "adjudication": counts,
+            "grouping": grouping, "adjudication": counts, "pair_scores": scored,
+            "verdicts": (verdicts or {}).get(label, []),
             "failures": [] if is_reference else verdict(run, metrics),
             "reference": is_reference,
         }
@@ -508,10 +626,21 @@ def report(
             f"mean summary {mean_words(run.summaries) or 0:.0f} words, "
             f"multi-article groups {run.nonsingleton_groups}"
         )
-        lines.append(
-            f"   grouping recall vs stored {_pct(metrics['recall'])}"
-            + (f", FALLBACK: {run.grouping_fallback}" if run.grouping_fallback else "")
-        )
+        if run.grouping_skipped:
+            lines.append("   grouping: skipped (stored groups used)")
+        else:
+            lines.append(
+                f"   grouping recall vs stored {_pct(metrics['recall'])}"
+                + (f", FALLBACK: {run.grouping_fallback}" if run.grouping_fallback else "")
+            )
+        scored = res.get("pair_scores")
+        if scored:
+            b, c = scored["baseline"], scored["candidate"]
+            lines.append(
+                f"   grouping judged on pairs: precision {_pct(c['precision'])}, recall "
+                f"{_pct(c['recall'])}, F1 {_pct(c['f1'])}  (baseline F1 {_pct(b['f1'])}, "
+                f"{c['pairs']} pairs vs {b['pairs']})"
+            )
         if run.variant.label != runs[0].variant.label:
             lines.append(
                 f"   category agreement {_pct(metrics['cat_all'])} (brief-visible "
@@ -530,8 +659,12 @@ def report(
             lines.append("   QUALIFIES" if not res["failures"]
                          else "   DOES NOT QUALIFY: " + "; ".join(res["failures"]))
             shown = visible_disagreements(res["diffs"], visible) or res["diffs"]
+            judge = {v["group_id"]: v["winner"] for v in res.get("verdicts", [])}
+            mark = {"x": "judge: baseline", "y": "judge: candidate", "tie": "judge: tie",
+                    "invalid": "judge: ?"}
             for gid, was, now in shown[:25]:
-                lines.append(f"     {gid}: {was} -> {now}  | {names.get(gid, '')[:70]}")
+                lines.append(f"     {gid}: {was} -> {now}  [{mark.get(judge.get(gid), 'not judged')}]"
+                             f"  | {names.get(gid, '')[:70]}")
     base_metrics = next((r for r in results.values() if r["metrics"]["noise_all"] is not None), None)
     if base_metrics:
         m = base_metrics["metrics"]
@@ -564,6 +697,8 @@ def main(argv: List[str]) -> int:  # pylint: disable=too-many-locals
     parser.add_argument("--write-fixtures", metavar="DIR",
                         help="write each variant's categorised digest as a brief-eval fixture")
     parser.add_argument("--no-adjudicate", action="store_true", help="skip the blind adjudication")
+    parser.add_argument("--skip-grouping", action="store_true",
+                        help="use the stored groups instead of re-grouping (cheaper prompt-tuning rounds)")
     parser.add_argument("--adjudication-sample", type=int, default=100,
                         help="max disagreements judged per candidate (default 100)")
     args = parser.parse_args(argv)
@@ -587,13 +722,18 @@ def main(argv: List[str]) -> int:  # pylint: disable=too-many-locals
     for variant in variants:
         run = Run(variant)
         print(f"running {variant.label} ...", file=sys.stderr)
-        run_grouping(client, run, articles)
+        if args.skip_grouping:
+            run.groups, run.grouping_skipped = stored_groups, True
+        else:
+            run_grouping(client, run, articles)
         run_categorise(client, run, articles, stored_groups)
         runs.append(run)
 
     base = runs[0]
     rng = random.Random(0)
     adjudications: Dict[str, Dict[str, int]] = {}
+    verdicts: Dict[str, List[Dict[str, str]]] = {}
+    pair_results: Dict[str, Dict[str, Dict[str, Optional[float]]]] = {}
     adjudicator_usage = [0, 0]
     if not args.no_adjudicate:
         for run in runs[1:]:
@@ -604,12 +744,25 @@ def main(argv: List[str]) -> int:  # pylint: disable=too-many-locals
             if pairs:
                 print(f"adjudicating {len(pairs)} disagreements for {run.variant.label} ...",
                       file=sys.stderr)
+                verdicts[run.variant.label] = []
                 adjudications[run.variant.label] = adjudicate(
-                    client, pairs, articles, stored_groups, rng, adjudicator_usage
+                    client, pairs, articles, stored_groups, rng, adjudicator_usage,
+                    verdicts[run.variant.label],
                 )
+        if not args.skip_grouping and base.groups is not None:
+            base_pairs = pair_set(base.groups)
+            for run in runs[1:]:
+                if run.groups is None:
+                    continue
+                cand_pairs = pair_set(run.groups)
+                differing = sorted(base_pairs ^ cand_pairs, key=sorted)
+                if len(differing) > args.adjudication_sample:
+                    differing = rng.sample(differing, args.adjudication_sample)
+                judged = judge_pairs(client, differing, articles, adjudicator_usage) if differing else {}
+                pair_results[run.variant.label] = pair_scores(base_pairs, cand_pairs, judged)
 
     names = {f"group_{n}": articles[g[0]].get("title", "") for n, g in enumerate(stored_groups)}
-    results = evaluate(runs, stored_groups, visible, adjudications)
+    results = evaluate(runs, stored_groups, visible, adjudications, verdicts, pair_results)
     print(report(runs, results, visible, names))
     adjudicator_cost = cost_usd(ADJUDICATOR, adjudicator_usage[0], adjudicator_usage[1])
     if adjudicator_cost:

@@ -260,3 +260,116 @@ def test_to_fixture_can_match_the_production_brief_input():
     run.categories["group_1"] = "Other"  # a category the brief never sees
     digest = ch.to_fixture(ARTICLES, STORED_GROUPS, run, (["AI/ML", "Business"], ["Cycling"]))
     assert list(digest) == ["AI/ML"] and [a["title"] for a in digest["AI/ML"]] == ["T0"]
+
+
+def test_variant_syntax_carries_the_prompt_version():
+    v = ch.Variant.parse("claude-haiku-5-5:low@v2#b")
+    assert (v.model, v.effort, v.prompt, v.tag) == ("claude-haiku-5-5", "low", "v2", "b")
+    assert v.label == "claude-haiku-5-5:low@v2#b"
+    assert ch.Variant.parse("claude-haiku-4-5@v1").label == "claude-haiku-4-5@v1"
+    assert ch.Variant.parse("claude-haiku-4-5").prompt is None  # None means the v2 default
+
+
+def test_categorise_sends_the_variants_prompt_version():
+    for variant, needle in (("claude-haiku-4-5@v1", "in priority order"), ("claude-haiku-4-5@v2", "HOW TO CHOOSE"),
+                            ("claude-haiku-4-5", "HOW TO CHOOSE")):
+        client = FakeClient()
+        run = ch.Run(ch.Variant.parse(variant))
+        ch.run_categorise(client, run, ARTICLES, STORED_GROUPS)
+        assert needle in client.calls[0]["messages"][0]["content"]
+
+
+def test_the_noise_run_repeats_the_baseline_exactly_not_just_its_model():
+    base = _run("claude-haiku-4-5@v1", FakeClient())
+    new_prompt = _run("claude-haiku-4-5@v2", FakeClient(flip_group_1=True))
+    noise = _run("claude-haiku-4-5@v1#2", FakeClient())
+    results = ch.evaluate([base, new_prompt, noise], STORED_GROUPS, VISIBLE, {})
+    assert results["claude-haiku-4-5@v1#2"]["reference"]
+    assert not results["claude-haiku-4-5@v2"]["reference"]  # a different prompt is judged, not a reference
+    assert results["claude-haiku-4-5@v2"]["metrics"]["noise_all"] == 1.0  # measured from the real repeat
+
+
+def test_judge_prompt_carries_the_category_guide_and_no_model_names():
+    prompt = ch.build_adjudication_prompt([{"id": "g", "article": [], "option_a": "AI/ML", "option_b": "Business"}])
+    assert "HOW TO CHOOSE A CATEGORY" in prompt and "- Business: Company finances" in prompt
+    assert "haiku" not in prompt.lower() and "claude" not in prompt.lower()
+
+
+def test_adjudicate_records_per_item_verdicts():
+    pairs = [("group_0", "Truth", "Wrong"), ("group_1", "Wrong", "Truth")]
+    verdicts = []
+    ch.adjudicate(FakeClient(), pairs, ARTICLES, STORED_GROUPS, random.Random(5), None, verdicts)
+    assert {v["group_id"]: v["winner"] for v in verdicts} == {"group_0": "x", "group_1": "y"}
+    assert verdicts[0]["x"] == "Truth" and verdicts[0]["y"] == "Wrong"
+
+
+class PairJudge(FakeClient):
+    """Says pair_N is the same event when both titles end in the same digit."""
+
+    def create(self, **kwargs):
+        prompt = kwargs["messages"][0]["content"]
+        if "SAME SPECIFIC NEWS EVENT" not in prompt:
+            return super().create(**kwargs)
+        pairs = json.loads(prompt.split("Pairs:\n", 1)[1])
+        answers = [{"id": p["id"], "same_event": p["article_1"]["title"][-1] == p["article_2"]["title"][-1]}
+                   for p in pairs]
+        return SimpleNamespace(content=[SimpleNamespace(type="text", text=json.dumps({"answers": answers}))],
+                               stop_reason="end_turn", usage=SimpleNamespace(input_tokens=5, output_tokens=5))
+
+
+def test_judged_pairs_and_scores():
+    articles = [{"title": f"Story {n}", "description": "d"} for n in (1, 1, 2, 2, 3)]
+    articles[1]["title"] = "Story 1"   # 0 and 1 are one event; 2 and 3 are one event; 4 stands alone
+    base_pairs = {frozenset({0, 1})}                    # found one real pair, missed the other
+    cand_pairs = {frozenset({0, 1}), frozenset({2, 3}), frozenset({1, 4})}  # found both, plus a wrong one
+    differing = sorted(base_pairs ^ cand_pairs, key=sorted)
+    judged = ch.judge_pairs(PairJudge(), differing, articles)
+    assert judged[frozenset({2, 3})] is True and judged[frozenset({1, 4})] is False
+    scores = ch.pair_scores(base_pairs, cand_pairs, judged)
+    assert scores["baseline"]["precision"] == 1.0 and scores["baseline"]["recall"] == pytest.approx(0.5)
+    assert scores["candidate"]["precision"] == pytest.approx(2 / 3) and scores["candidate"]["recall"] == 1.0
+    assert scores["candidate"]["f1"] == pytest.approx(0.8)
+
+
+def test_unanswered_pairs_do_not_count_as_confirmed():
+    scores = ch.pair_scores({frozenset({0, 1})}, {frozenset({0, 1}), frozenset({2, 3})},
+                            {frozenset({2, 3}): None})
+    assert scores["candidate"]["precision"] == 0.5
+
+
+def test_verdict_uses_the_judged_pair_f1_when_present():
+    run = ch.Run(ch.Variant("claude-haiku-5-5"), groups=[[0]])
+    worse = {"cat_all": 0.8, "noise_all": 0.8, "cat_vis": 0.8, "noise_vis": 0.8, "recall": 0.1,
+             "noise_recall": 1.0, "win_rate": 0.6, "f1": 0.60, "base_f1": 0.80}
+    assert any("pair F1 0.60 < baseline 0.80" in r for r in ch.verdict(run, worse))
+    fine = {**worse, "f1": 0.78}
+    assert not ch.verdict(run, fine)  # stored recall is ignored once pairs were judged
+
+
+def test_skipped_grouping_is_reported_and_not_scored():
+    base = _run("claude-haiku-4-5@v1", FakeClient())
+    cand = ch.Run(ch.Variant.parse("claude-haiku-5-5:low@v2"), groups=STORED_GROUPS, grouping_skipped=True)
+    ch.run_categorise(FakeClient(), cand, ARTICLES, STORED_GROUPS)
+    results = ch.evaluate([base, cand], STORED_GROUPS, VISIBLE, {})
+    assert results[cand.variant.label]["metrics"]["recall"] is None
+    assert "grouping: skipped" in ch.report([base, cand], results, VISIBLE, {})
+
+
+def test_check_batch_reports_acceptance_and_rejection():
+    import check_batch  # pylint: disable=import-outside-toplevel
+    from unittest.mock import MagicMock  # pylint: disable=import-outside-toplevel
+
+    client = MagicMock()
+    client.messages.batches.create.return_value = SimpleNamespace(id="batch_1")
+    assert check_batch.check(client, "claude-haiku-5-5") == "accepted"
+    client.messages.batches.cancel.assert_called_once_with("batch_1")
+    params = client.messages.batches.create.call_args.kwargs["requests"][0]["params"]
+    assert params["output_config"] == {"effort": "low"}
+
+    import anthropic  # pylint: disable=import-outside-toplevel
+    import httpx2  # pylint: disable=import-outside-toplevel
+
+    response = httpx2.Response(400, request=httpx2.Request("POST", "https://x"))
+    client.messages.batches.create.side_effect = anthropic.BadRequestError(
+        "output_config not permitted", response=response, body=None)
+    assert check_batch.check(client, "claude-haiku-5-5").startswith("rejected: output_config")

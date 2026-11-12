@@ -47,6 +47,65 @@ PRIORITY_CATEGORIES = [
 ]
 
 
+# What each category means for the RSS Brief, which only ever sees the themed categories
+# (AI/ML, Technology, Cybersecurity, Business, Programming, Politics) and Cycling. Used by the
+# v2 categorisation prompt and by eval/compare_haiku.py's blind judge, so the policy is in one
+# place. Insertion order matches PRIORITY_CATEGORIES.
+CATEGORY_DEFINITIONS = {
+    "Technology": (
+        "Hardware, cloud and infrastructure, platforms, networks, consumer devices and "
+        "internet services, when the story is not mainly about AI, security or code."
+    ),
+    "AI/ML": (
+        "Stories whose main subject is AI itself: model releases and capabilities, AI "
+        "research, products from AI labs, AI safety or policy about models. A story that "
+        "merely uses, mentions or is built on AI is NOT AI/ML."
+    ),
+    "Cybersecurity": (
+        "Vulnerabilities, exploits, breaches, attacks, malware, privacy and security "
+        "research, and security tooling."
+    ),
+    "Programming": (
+        "Developer tools, programming languages, software engineering practice, open source "
+        "projects, and code or architecture write-ups."
+    ),
+    "Science": "Scientific research and discoveries outside computing.",
+    "Business": (
+        "Company finances and strategy: funding rounds, valuations, earnings, deals, layoffs, "
+        "markets, pricing and the economics of an industry, whatever the sector (an AI "
+        "startup raising money is Business)."
+    ),
+    "Politics": (
+        "Government and public affairs: legislation, regulation, courts, elections, "
+        "geopolitics, export controls and national security. A technology controversy whose "
+        "main angle is legal, regulatory or national-security is Politics."
+    ),
+    "Health": "Medicine, public health and wellbeing.",
+    "Environment": "Climate, energy transition, nature and sustainability.",
+    "Entertainment": "Music, celebrities, culture and live events.",
+    "Gaming": "Video games, gaming hardware and the games industry.",
+    "Cycling": "Professional cycling and cycling gear: races, teams, riders and equipment.",
+    "Media/TV/Film": "Television, film, streaming and the media industry as the main subject.",
+    "Other": "Only when no other category fits; use sparingly.",
+}
+
+CATEGORY_CHOICE_RULES = """\
+HOW TO CHOOSE A CATEGORY:
+- Decide by the story's main subject, not by an incidental mention of a technology or company.
+- If two categories could fit, pick the one that matches the story's main angle: money ->
+  Business; law, government or national security -> Politics; a flaw or an attack ->
+  Cybersecurity; a model or an AI capability -> AI/ML; how software is built -> Programming;
+  devices, cloud and platforms -> Technology.
+- Prefer a specific category to Other, but never force a fit: use Other only when nothing
+  above applies."""
+
+
+def category_guide() -> str:
+    """The category definitions and choosing rules as prompt text."""
+    lines = [f"- {name}: {text}" for name, text in CATEGORY_DEFINITIONS.items()]
+    return "\n".join(lines) + "\n\n" + CATEGORY_CHOICE_RULES
+
+
 class ProcessedArticle(BaseModel):
     """Logical article with categorization, summary, and one or more sources."""
 
@@ -229,10 +288,75 @@ def _build_group_payload(
     return {"group_id": group_id, "members": members}
 
 
+# Which categorisation prompt production sends. Stays "v1" (the original) until the v2 prompt
+# has passed the gates in eval/README.md on real days; the switch is then this one constant, and
+# CATEGORY_PROMPT_VERSION overrides it per deployment (e.g. to roll back without a code change).
+DEFAULT_CATEGORY_PROMPT_VERSION = "v1"
+
+
+def category_prompt_version() -> str:
+    """The categorisation prompt version for this run (``CATEGORY_PROMPT_VERSION`` or default)."""
+    return os.environ.get("CATEGORY_PROMPT_VERSION") or DEFAULT_CATEGORY_PROMPT_VERSION
+
+
+_SUMMARY_OUTPUT_FORMAT = """{
+  "categories": {
+    "category_name": [
+      {
+        "group_id": "group_X",
+        "title": "canonical title",
+        "summary": "2-3 sentence summary",
+        "category": "category_name"
+      }
+    ]
+  },
+  "group_count": {GROUP_COUNT},
+  "verification": "processed_all_groups"
+}"""
+
+
 def create_group_summary_prompt(
     group_payloads: List[Dict[str, Any]],
+    version: str = "v2",
 ) -> str:
-    """Prompt Claude to assign one category + one summary per pre-formed group."""
+    """Prompt Claude to assign one category + one summary per pre-formed group.
+
+    ``v2`` (default) defines each category and how to choose between them, and works for any
+    model. ``v1`` is the original bare priority list; it is kept only so ``eval/compare_haiku.py``
+    can reproduce the prompt production ran before v2.
+    """
+    if version == "v1":
+        return _group_summary_prompt_v1(group_payloads)
+    group_count = len(group_payloads)
+    return f"""You are categorizing and summarizing {group_count} groups of RSS articles.
+
+Each group represents ONE logical news story; some groups contain a single
+article, others contain multiple articles that all cover the same event from
+different feeds. You must return EXACTLY {group_count} group entries, with no
+group omitted or duplicated.
+
+INSTRUCTIONS:
+1. For each group, pick the best single canonical title (prefer the clearest
+   wording from the members).
+2. Write a 2-3 sentence summary that covers the event, drawing on every
+   member's title and description.
+3. Assign exactly one category from the list below.
+
+CATEGORIES:
+{category_guide()}
+
+OUTPUT FORMAT (return ONLY valid JSON, no markdown, no backticks, no commentary):
+{_SUMMARY_OUTPUT_FORMAT.replace("{GROUP_COUNT}", str(group_count))}
+
+Groups to process:
+{json.dumps(group_payloads, indent=2)}
+"""
+
+
+def _group_summary_prompt_v1(
+    group_payloads: List[Dict[str, Any]],
+) -> str:
+    """The original categorisation prompt, byte for byte (see ``create_group_summary_prompt``)."""
     group_count = len(group_payloads)
     return f"""You are categorizing and summarizing {group_count} groups of RSS articles.
 

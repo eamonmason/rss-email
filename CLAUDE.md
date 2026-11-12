@@ -144,6 +144,16 @@ Haiku 5.5 thinks by default and bills thinking as output while Haiku 4.5 rejects
 An empty or refused response counts as a failed request. Do not read `content[0].text` directly.
 The decision to switch the default model is made with `eval/compare_haiku.py` (see `eval/README.md`).
 
+### Categorisation prompt versions and models
+
+`article_processor.create_group_summary_prompt(payloads, version)` has two versions: `v1` (the
+original bare category list, byte for byte) and `v2` (definitions for every category in
+`CATEGORY_DEFINITIONS` plus choosing rules). Production sends `DEFAULT_CATEGORY_PROMPT_VERSION`
+(currently `v1`; env `CATEGORY_PROMPT_VERSION` overrides it) until v2 passes the gates in
+`eval/README.md`. Grouping can run on a different model from the categorising batch via
+`CLAUDE_GROUPING_MODEL` (falls back to `CLAUDE_MODEL`). If the Batch API rejects the Haiku 5
+`output_config.effort` setting, `submit_email_batch` retries once without it.
+
 ### Missing groups
 
 If the model leaves a group out of a batch reply (or a whole request fails), those articles would

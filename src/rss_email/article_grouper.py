@@ -156,7 +156,11 @@ def group_articles_with_claude(
         client = anthropic.Anthropic(api_key=get_anthropic_api_key())
         prompt = create_grouping_prompt(articles)
 
-        model_name = os.environ.get("CLAUDE_MODEL", DEFAULT_CLAUDE_MODEL)
+        # CLAUDE_GROUPING_MODEL lets grouping move to another model independently of the
+        # categorising batch (CLAUDE_MODEL); unset, both use CLAUDE_MODEL.
+        model_name = os.environ.get("CLAUDE_GROUPING_MODEL") or os.environ.get(
+            "CLAUDE_MODEL", DEFAULT_CLAUDE_MODEL
+        )
         api_timeout = int(os.environ.get("CLAUDE_API_TIMEOUT", "120"))
 
         response = client.messages.create(

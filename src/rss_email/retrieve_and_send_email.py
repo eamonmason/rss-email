@@ -17,6 +17,7 @@ from .article_processor import (
     _article_to_source,
     _build_group_payload,
     _iter_category_entries,
+    category_prompt_version,
     create_group_summary_prompt,
     first_comments,
 )
@@ -172,7 +173,10 @@ def _recover_missing_groups(
             response = client.messages.create(
                 model=model,
                 max_tokens=8192,
-                messages=[{"role": "user", "content": create_group_summary_prompt(payloads)}],
+                messages=[{
+                    "role": "user",
+                    "content": create_group_summary_prompt(payloads, version=category_prompt_version()),
+                }],
                 **effort_params(model),
             )
             log_usage("categorise_recover", model, response.usage,

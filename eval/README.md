@@ -67,83 +67,55 @@ categories to be coverable. `major_coverage` counts a story listed in "Read thes
 `candidates` only proposes (distinct feeds covering a story); you choose what counts as major.
 Fixtures built this way contain article titles and summaries from your feeds, like the existing one.
 
-### Haiku 4.5 -> 5.5 assessment (grouping and categorising)
+### Haiku 4.5 -> 5.5 (classification prompt v2)
 
-`compare_haiku.py` decides whether the production Haiku stages can move to `claude-haiku-5-5`.
-It needs a real day's `batch-metadata` file (articles plus the groups production used):
+The original categorisation prompt (**v1**) gave the model a bare category list "in priority order;
+prefer tech-related when applicable". Haiku 5.5 follows that literally (anything mentioning AI becomes
+AI/ML), and Haiku 4.5 made clear errors of its own (Nvidia stories filed under Media/TV/Film, which
+the brief never sees). **v2** (`article_processor.CATEGORY_DEFINITIONS`) defines every category and
+how to choose between them, built around what the brief needs. Production stays on v1
+(`DEFAULT_CATEGORY_PROMPT_VERSION`, override `CATEGORY_PROMPT_VERSION`) until v2 passes the gates
+below; the switch is then that one constant.
 
-```bash
-aws s3 cp s3://<bucket>/batch-metadata/batch-<timestamp>.json /tmp/batch.json
-export ANTHROPIC_API_KEY=sk-...
-uv run python eval/compare_haiku.py /tmp/batch.json --out /tmp/haiku-report.json \
-    --raw-dir /tmp/haiku-raw --write-fixtures eval/fixtures
-```
-
-Variants default to Haiku 4.5 (baseline), Haiku 4.5 again (`#2`, the noise floor), and Haiku 5.5
-at effort `low` and `medium`. Each re-groups the articles and categorises the stored groups using
-the shipping prompts. Agreement with Haiku 4.5 is not accuracy, so the report adds:
-
-- **Noise floor**: how much Haiku 4.5 disagrees with itself. Candidates are judged against that.
-- **Brief-visible agreement**: only themed and personal categories reach the brief, so agreement
-  is also reported over groups where either side picked one, with a count of groups that move in
-  or out of the brief's categories.
-- **Blind adjudication**: `claude-sonnet-5-5` picks the better category for sampled brief-visible
-  disagreements (options shuffled, no model names). Win rate = (wins + 0.5 x ties) / judged.
-- **Grouping diagnostics**: a reply that makes `parse_grouping_response` fall back to one group
-  per article (unparseable, no `groups` list, or placing under 90% of articles) is reported as a
-  failure, and `--raw-dir` saves every raw reply.
-
-**Decision rule (fixed in advance).** A Haiku 5.5 setting qualifies for a stage only if, on every
-day: no parse fallback, refusal, `max_tokens` stop or missing group; category agreement and
-brief-visible agreement each within 5 points of the Haiku 4.5 noise floor; grouping pair recall
-within 10 points of Haiku 4.5's own recall; adjudication win rate of at least 45%; and the brief
-eval on its written fixture passes every run. Grouping and categorising are judged separately.
-Costs shown are synchronous prices; the Batch API halves the categorising part.
-
-To check the downstream effect, add an `expected_major.json` (curate from the baseline fixture)
-to a written fixture directory, add a `tests:` entry for it, and run the brief eval.
-
-### Matching production: memory in the brief prompt
-
-Production's brief input is about 42k tokens (measured from the Console cost export), against about
-13k for a fixture alone, because it also carries 14 days of "previously covered" themes
-(`brief_memory.render_previous_context`). A comparison that leaves that out tests a different
-prompt, so give fixtures their memory:
+`compare_haiku.py` variants are `model[:effort][@prompt][#tag]`. The defaults are `4.5@v1` (what
+production runs now), `4.5@v1#2` (its own noise floor), `4.5@v2` (is a gain the prompt or the model?),
+`5.5:low@v2` and `5.5:medium@v2`. Each prompt-tuning round, on three days:
 
 ```bash
-aws s3 cp s3://$BUCKET/brief-memory/memory.json /tmp/memory.json
-uv run python eval/make_fixture.py memory /tmp/memory.json eval/fixtures/2026-11-*-haiku-4-5
-(cd eval && python make_fixture.py sync-tests)
+mkdir -p /tmp/batches/reports
+for f in /tmp/batches/batch-2026111[01]-*[0-9].json /tmp/batches/batch-20261109-*[0-9].json; do
+  uv run python eval/compare_haiku.py "$f" --skip-grouping \
+      --out "/tmp/batches/reports/$(basename "${f%.json}").json" \
+      | tee "/tmp/batches/reports/$(basename "${f%.json}").txt"
+done
 ```
 
-`memory` writes each fixture's `memory.json` (the remembered days strictly before its date, up to 14)
-and prints the rendered size. The memory object only holds the last 14 days as of when it was saved,
-so older fixtures get fewer days than a real run did; the June fixtures get none. The provider sends
-the memory as `previous_context`. `memory_days` in a provider's `config` (default 14, 0 = none) limits
-it to the most recent days, so a trimmed-memory variant is one more provider entry. Not reproduced:
-the repeat-article filter (`seen_links`), because it would shift article ids relative to the assertions.
+`--skip-grouping` reuses the stored groups, so the round measures the prompt and model on identical
+groups (about $2 a round by estimate). Reports use a blind judge (Sonnet 5.5, options shuffled, no
+model names) that is shown the same category definitions, so it grades against the intended policy; it
+prints which side won on each disagreement, so patterns can be read, not only counted. Because the
+judge uses v2's definitions, also read a sample of the disagreements yourself.
 
-`memory` also writes `memory.txt` (the same text, rendered the way the provider renders it), which the
-faithfulness grader gets as "previously covered": the brief is meant to frame a story as a development
-of an earlier day, so facts and dates from that block are allowed, while a claim in neither the digest
-nor the memory still fails. Use `uv run python` for this step so `memory.txt` is written.
+**Classification gate:** no parse failures, refusals, truncations or missing groups; pooled judge win
+rate of `5.5@v2` against `4.5@v1` of at least 50% with no day under 45%; brief-visible agreement
+within 5 points of 4.5's own noise floor. Then regenerate one fixture per day from `5.5@v2` with
+`--write-fixtures` and run the baseline brief eval on it, so any change in what reaches the brief
+shows in `major_coverage`.
 
-`summarise.py` takes several results files and merges them (an earlier baseline run, a re-run of one
-cell, a new variant's run). A grader call that failed with an API error is left out as "ungraded"
-instead of counting against a model, and `--ignore-errors` drops provider-error runs for faults that
-are not the model's, such as running out of credit.
+**Grouping** is judged separately (omit `--skip-grouping`, one or two days): for pairs one grouping
+made and the other did not, the judge answers "same specific news event?", and the report gives each
+model's pair precision, recall against judge-confirmed pairs and F1. Gate: 5.5's F1 within 0.05 of
+4.5's or better. Recall against the stored groups is shown but not used when pairs were judged, because
+the stored groups are Haiku 4.5's own output.
 
-### Comparing Opus and Sonnet for the brief
+Before switching, confirm the Batch API accepts the Haiku 5.5 settings (`output_config.effort`):
 
 ```bash
-npm --prefix eval run eval -- --filter-providers '^(opus-5-5/high|sonnet-5-5/high)$' --repeat 2 --output /tmp/brief-cmp.json
-python eval/summarise.py /tmp/brief-cmp.json --baseline opus-5-5/high
+uv run python eval/check_batch.py      # creates a one-request batch, then cancels it
 ```
 
-The baseline fails some checks itself, so `summarise.py` reports whether each variant is **no worse than
-the baseline** on every check (tolerance 1 run; `--tolerance 0` is stricter) with the counts side by
-side. With memory a brief is about 40k tokens in: roughly $0.33 for Opus plus about $0.055 of grading
-per cell, and about half that for Sonnet 5.5 (estimates). Seven fixtures at 2 repeats is about $8-9.
+If the API ever rejects it in production, `submit_email_batch` retries once without the setting
+instead of failing the day.
 
 ### Models
 

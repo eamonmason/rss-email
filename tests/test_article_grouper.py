@@ -151,3 +151,23 @@ def test_group_articles_with_claude_disabled_returns_singletons(monkeypatch):
     result = group_articles_with_claude(_articles(), ClaudeRateLimiter())
 
     assert result == [[0], [1], [2]]
+
+
+@patch("rss_email.article_grouper.anthropic.Anthropic")
+@patch("rss_email.article_grouper.get_anthropic_api_key", return_value="test-key")
+def test_grouping_model_can_differ_from_the_categorising_model(_key, mock_anthropic, monkeypatch):
+    monkeypatch.setenv("CLAUDE_MODEL", "claude-haiku-5-5")
+    monkeypatch.setenv("CLAUDE_GROUPING_MODEL", "claude-haiku-4-5")
+    client = mock_anthropic.return_value
+    response = MagicMock()
+    response.content = [MagicMock(text=json.dumps({"groups": [["article_0"], ["article_1"], ["article_2"]]}))]
+    response.usage.input_tokens = response.usage.output_tokens = 10
+    client.messages.create.return_value = response
+
+    group_articles_with_claude(_articles(), ClaudeRateLimiter())
+    assert client.messages.create.call_args.kwargs["model"] == "claude-haiku-4-5"
+    assert "output_config" not in client.messages.create.call_args.kwargs  # 4.5 takes no effort
+
+    monkeypatch.delenv("CLAUDE_GROUPING_MODEL")
+    group_articles_with_claude(_articles(), ClaudeRateLimiter())
+    assert client.messages.create.call_args.kwargs["model"] == "claude-haiku-5-5"
