@@ -24,6 +24,7 @@ from .article_processor import (
 )
 from .json_utils import extract_json_from_text
 from .models import DEFAULT_CLAUDE_MODEL
+from .usage_log import log_usage
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -167,6 +168,7 @@ def group_articles_with_claude(
         response_text = response.content[0].text.strip()
         tokens_used = response.usage.input_tokens + response.usage.output_tokens
         rate_limiter.record_usage(tokens_used)
+        log_usage("grouping", model_name, response.usage, stop_reason=response.stop_reason)
 
         return parse_grouping_response(response_text, len(articles))
 

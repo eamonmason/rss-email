@@ -4,6 +4,7 @@ import json
 import logging
 import os
 from datetime import datetime
+from types import SimpleNamespace
 from typing import Any, Dict, List, Tuple
 
 import anthropic
@@ -28,8 +29,13 @@ from .brief_memory import (
     save_memory,
     seen_links,
 )
-from .models import ArticleSource
-from .podcast_script import build_narration_input, save_narration_input
+from .models import DEFAULT_CLAUDE_MODEL, ArticleSource
+from .usage_log import log_usage
+from .podcast_script import (
+    build_narration_input,
+    podcast_enabled,
+    save_narration_input,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -189,10 +195,11 @@ def _maybe_send_brief(
             save_memory(bucket, updated_memory, memory_key)
 
             # The podcast stage narrates this same brief; best-effort like the memory save.
-            save_narration_input(
-                bucket,
-                build_narration_input(result.synthesis, result.article_index, today),
-            )
+            if podcast_enabled():
+                save_narration_input(
+                    bucket,
+                    build_narration_input(result.synthesis, result.article_index, today),
+                )
     except Exception as exc:  # pylint: disable=broad-except
         logger.error("Brief generation/send failed (digest already sent): %s", exc)
 
@@ -246,9 +253,16 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
         # Stream results
         all_categories: Dict[str, List[Dict]] = {}
         failed_requests = []
+        batch_usage = {"input_tokens": 0, "output_tokens": 0}
+        batch_requests = 0
+        batch_model = os.environ.get("CLAUDE_MODEL", DEFAULT_CLAUDE_MODEL)
 
         for result in client.messages.batches.results(batch_id):
             if result.result.type == "succeeded":
+                batch_requests += 1
+                for field in batch_usage:
+                    value = getattr(result.result.message.usage, field, 0)
+                    batch_usage[field] += value if isinstance(value, int) else 0
                 try:
                     # Extract JSON from response
                     response_text = result.result.message.content[0].text
@@ -309,6 +323,14 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
                     result.result.type,
                 )
                 failed_requests.append(result)
+
+        log_usage(
+            "categorise_batch",
+            batch_model,
+            SimpleNamespace(**batch_usage),
+            batch=True,
+            requests=batch_requests,
+        )
 
         # Log results
         logger.info(

@@ -41,6 +41,7 @@ from .models import (
     PersonalBlock,
 )
 from .url_utils import normalise_link, strip_credential_params
+from .usage_log import log_usage
 
 logger = logging.getLogger(__name__)
 
@@ -437,6 +438,7 @@ def synthesize(
                 timeout=api_timeout,
             ) as stream:
                 message = stream.get_final_message()
+            log_usage("brief", model, message.usage, stop_reason=message.stop_reason)
             if message.stop_reason == "refusal":
                 # Fallbacks already ran server-side; retrying won't help.
                 logger.error(

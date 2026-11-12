@@ -128,6 +128,12 @@ local `pip` bundling — acceptable for `synth`/`diff`, never for a real deploy.
 - `EMAIL_RECIPIENTS`: Comma-separated list of recipient emails
 - `AWS_ACCOUNT_ID` & `AWS_REGION`: AWS deployment configuration
 
+### Token usage logging
+
+Every Claude call site logs one `CLAUDE_USAGE step=... model=... input=... output=...` line via
+`usage_log.log_usage` (steps: `grouping`, `categorise_batch` (aggregated, `batch=True`), `brief`,
+`podcast`). Tokens only, no prices. Query CloudWatch for `CLAUDE_USAGE` to see spend by step.
+
 ### Brief Memory
 
 The RSS Brief (not the daily digest) remembers recent days so it can avoid
@@ -498,6 +504,25 @@ except ImportError:
 ```
 
 ## Podcast Development Patterns
+
+### Switching it off
+
+The podcast is switched at run time, not at deploy time, so no redeploy is needed. Both
+`retrieve_and_send_email` (which saves the narration input) and `generate_podcast` call
+`podcast_script.podcast_enabled()`, which reads the SSM String parameter
+`rss-email-PODCAST_ENABLED` on every run (the `PODCAST_ENABLED` env var overrides it for local
+runs and tests):
+
+```bash
+aws ssm put-parameter --name rss-email-PODCAST_ENABLED --value false --type String --overwrite
+```
+
+Use `--value true` (or delete the parameter) to turn it back on. A missing parameter or a read
+error means enabled. When off, no narration input is saved, `generate_podcast` returns a clean
+skip before any Claude, TTS or S3 work, and the Step Functions stage still runs but does almost
+nothing. The infrastructure (Lambda, image, CloudFront, feed) stays deployed, so published
+episodes keep working. The Lambda role is granted `ssm:GetParameter` on that parameter in
+`lib/rss_lambda_stack.ts`.
 
 ### Overview
 

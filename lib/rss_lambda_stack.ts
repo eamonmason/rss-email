@@ -31,6 +31,11 @@ const RSS_RULE_SET_NAME = 'RSSRuleSet';
 const LAST_RUN_PARAMETER = 'rss-email-lastrun';
 
 const PODCAST_CLOUDFRONT_DOMAIN_PARAMETER = 'rss-podcast-cloudfront-domain';
+// Runtime on/off switch for the podcast, read by the Lambdas on every run (no
+// redeploy to flip it). A plain String parameter, created by hand; absent or
+// anything other than 'false' means on. Keep in sync with
+// PODCAST_ENABLED_PARAMETER in src/rss_email/podcast_script.py.
+const PODCAST_ENABLED_PARAMETER = 'rss-email-PODCAST_ENABLED';
 const ANTHROPIC_API_KEY_PARAMETER = 'rss-email-anthropic-api-key';
 // SecureString, created by hand; the Mastodon source is skipped if absent.
 const MASTODON_TOKEN_PARAMETER = 'rss-email-mastodon-token';
@@ -582,11 +587,14 @@ def lambda_handler(event, context):
     // Subscribe Lambda to SNS topic
     receive_topic.addSubscription(new sns_subscriptions.LambdaSubscription(manualTriggerFunction));
 
-    // Add SSM permission for CloudFront domain parameter
+    // Add SSM permission for the CloudFront domain and podcast switch parameters
     role.addToPolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
       actions: ['ssm:GetParameter'],
-      resources: [`arn:aws:ssm:*:*:parameter/${PODCAST_CLOUDFRONT_DOMAIN_PARAMETER}`],
+      resources: [
+        `arn:aws:ssm:*:*:parameter/${PODCAST_CLOUDFRONT_DOMAIN_PARAMETER}`,
+        `arn:aws:ssm:*:*:parameter/${PODCAST_ENABLED_PARAMETER}`,
+      ],
     }));
 
     // Add CloudFront invalidation permissions

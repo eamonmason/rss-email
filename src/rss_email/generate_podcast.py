@@ -11,7 +11,11 @@ from botocore.exceptions import ClientError
 
 from .article_processor import get_anthropic_api_key
 from .podcast_generator import get_cloudfront_domain, update_podcast_feed, upload_to_s3
-from .podcast_script import generate_narration, load_narration_input
+from .podcast_script import (
+    generate_narration,
+    load_narration_input,
+    podcast_enabled,
+)
 from .podcast_tts import synthesize_speech
 
 logger = logging.getLogger(__name__)
@@ -42,6 +46,10 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:  # py
     today or the episode is already published; raises on any real failure so
     Step Functions can alert.
     """
+    if not podcast_enabled():
+        logger.info("Podcast disabled (PODCAST_ENABLED=false); skipping")
+        return {"status": "skipped", "audio_generated": False}
+
     bucket = os.environ["BUCKET"]
     today = datetime.now().strftime("%Y-%m-%d")
 
