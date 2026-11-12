@@ -237,3 +237,19 @@ def test_to_fixture_shape_matches_brief_eval():
     digest = ch.to_fixture(ARTICLES, STORED_GROUPS, run)
     assert set(digest["AI/ML"][0]) == {"title", "url", "summary", "source"}
     assert [a["title"] for a in digest["AI/ML"]] == ["T0", "T2"]
+
+
+def test_a_non_batch_metadata_file_gets_a_clear_error(tmp_path, capsys):
+    report = tmp_path / "batch-1.report.json"
+    report.write_text(json.dumps({"claude-haiku-4-5": {"calls": 1}}))
+    with pytest.raises(SystemExit):
+        ch.main([str(report)])
+    assert "not a batch-metadata file" in capsys.readouterr().err
+
+
+def test_evaluate_works_with_a_single_baseline_variant():
+    base = _run("claude-haiku-4-5", FakeClient())
+    results = ch.evaluate([base], STORED_GROUPS, VISIBLE, {})
+    assert results[base.variant.label]["reference"]
+    assert results[base.variant.label]["metrics"]["noise_all"] is None
+    assert "reference run" in ch.report([base], results, VISIBLE, {})

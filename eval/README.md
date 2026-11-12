@@ -42,6 +42,25 @@ about half that, and each grader call a few cents. The full matrix (4 variants x
 `CLAUDE_USAGE` log or a first run gives real figures. Narrow a run with
 `--filter-providers '^sonnet-5-5/high$' --repeat 1`.
 
+### Building real-day fixtures for the brief comparison
+
+The brief is the expensive call, so the model/effort decision needs more than one real day. From
+real `batch-metadata` files (see below for fetching them):
+
+```bash
+mkdir -p /tmp/batches/reports
+for f in /tmp/batches/batch-2*.json; do     # keep reports out of this glob
+  uv run python eval/compare_haiku.py "$f" --variants claude-haiku-4-5 --no-adjudicate \
+      --write-fixtures eval/fixtures        # categorised with the production Haiku 4.5
+done
+python eval/make_fixture.py candidates /tmp/batches/batch-<timestamp>.json   # stories many feeds ran
+# write eval/fixtures/<day>-haiku-4-5/expected_major.json by hand: {"must_cover": ["<exact title>", ...]}
+(cd eval && python make_fixture.py sync-tests)
+```
+
+`candidates` only proposes (distinct feeds covering a story); you choose what counts as major.
+Fixtures built this way contain article titles and summaries from your feeds, like the existing one.
+
 ### Haiku 4.5 -> 5.5 assessment (grouping and categorising)
 
 `compare_haiku.py` decides whether the production Haiku stages can move to `claude-haiku-5-5`.
@@ -156,4 +175,7 @@ The quickest way to capture one is from a live run:
 uv run python src/cli_brief_generator.py --dry-run --days 1 --debug
 ```
 
-Then add a matching `tests:` entry in `promptfooconfig.yaml`.
+Then run `python make_fixture.py sync-tests` (from `eval/`), which regenerates the `tests:` block
+in `promptfooconfig.yaml` from the `fixtures/*` directories. A fixture without an
+`expected_major.json` is still graded (schema, source ranking, faithfulness, relevance); only the
+`major_coverage` check is skipped until it is curated.

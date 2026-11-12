@@ -3,6 +3,10 @@
     python make_fixture.py text <fixture_dir>      # write digest_text.txt from digest_articles.json
     python make_fixture.py lowrank <src_dir> <dst_dir>
         # copy a fixture, relabelling its must-cover stories to deprioritised sources
+    python make_fixture.py candidates <batch-metadata.json> [min_feeds]
+        # list stories many feeds ran: candidates for a fixture's expected_major.json
+    python make_fixture.py sync-tests
+        # rewrite the generated tests block in promptfooconfig.yaml from fixtures/*
 
 ``lowrank`` is a deliberate perturbation of a real day, not new data: the stories
 and summaries are unchanged, only ``source`` changes. It targets the known failure
@@ -11,9 +15,10 @@ mode where a major story from a low-ranked source is dropped under the theme cap
 
 import json
 import os
+import re
 import shutil
 import sys
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 LOW_RANK_SOURCES = ["Techmeme", "Slashdot", "Google News"]
 
@@ -51,6 +56,67 @@ def relabel_to_low_rank(
     return out
 
 
+def candidate_stories(meta: Dict[str, Any], min_feeds: int = 3) -> List[Tuple[int, str, List[str]]]:
+    """Stored groups covered by at least ``min_feeds`` distinct feeds, most-covered first.
+
+    A story many feeds ran is a defensible "major story" candidate. This only proposes:
+    a person picks which ones go in ``expected_major.json``.
+    """
+    articles = meta["articles"]
+    found = []
+    for members in meta["groups"]:
+        feeds = sorted({articles[i].get("sourceName") or "?" for i in members if i < len(articles)})
+        if len(feeds) >= min_feeds:
+            found.append((len(feeds), articles[members[0]].get("title", ""), feeds))
+    return sorted(found, key=lambda item: (-item[0], item[1]))
+
+
+FIXTURES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures")
+CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "promptfooconfig.yaml")
+BEGIN_TESTS = "# BEGIN GENERATED TESTS (make_fixture.py sync-tests)"
+END_TESTS = "# END GENERATED TESTS"
+
+
+def render_tests(fixtures_dir: str) -> str:
+    """The promptfoo ``tests:`` entries for every fixture directory, in name order.
+
+    Writes ``digest_text.txt`` for a fixture that lacks one. ``expected_major`` is only set when
+    the fixture has a curated file.
+    """
+    lines = []
+    for name in sorted(os.listdir(fixtures_dir)):
+        folder = os.path.join(fixtures_dir, name)
+        if not os.path.isfile(os.path.join(folder, "digest_articles.json")):
+            continue
+        text_path = os.path.join(folder, "digest_text.txt")
+        if not os.path.exists(text_path):
+            _write(text_path, digest_to_text(_load(os.path.join(folder, "digest_articles.json"))))
+        description = f"{name} digest"
+        if name.endswith("-lowrank"):
+            description += ", major stories from low-ranked sources"
+        lines.append(f"  - description: {description}")
+        lines.append("    vars:")
+        lines.append(f"      fixture: fixtures/{name}/digest_articles.json")
+        if os.path.exists(os.path.join(folder, "expected_major.json")):
+            lines.append(f"      expected_major: fixtures/{name}/expected_major.json")
+        lines.append(f"      digest_text: file://fixtures/{name}/digest_text.txt")
+    return "\n".join(lines)
+
+
+def sync_tests(config_path: str = CONFIG_PATH, fixtures_dir: str = FIXTURES_DIR) -> bool:
+    """Rewrite the generated block of ``config_path``. Returns True if the file changed."""
+    with open(config_path, "r", encoding="utf-8") as handle:
+        text = handle.read()
+    pattern = re.compile(re.escape(BEGIN_TESTS) + r".*?" + re.escape(END_TESTS), re.DOTALL)
+    if not pattern.search(text):
+        raise ValueError(f"{config_path} has no '{BEGIN_TESTS}' ... '{END_TESTS}' block")
+    block = f"{BEGIN_TESTS}\n{render_tests(fixtures_dir)}\n{END_TESTS}"
+    updated = pattern.sub(lambda _: block, text)
+    if updated != text:
+        _write(config_path, updated)
+    return updated != text
+
+
 def _load(path: str) -> Any:
     with open(path, "r", encoding="utf-8") as handle:
         return json.load(handle)
@@ -79,6 +145,17 @@ def main(argv: List[str]) -> int:
         shutil.copyfile(
             os.path.join(src, "expected_major.json"), os.path.join(dst, "expected_major.json")
         )
+        return 0
+    if len(argv) in (3, 4) and argv[1] == "candidates":
+        min_feeds = int(argv[3]) if len(argv) == 4 else 3
+        found = candidate_stories(_load(argv[2]), min_feeds)
+        for count, title, feeds in found:
+            print(f"{count} feeds | {title} | {', '.join(feeds)}")
+        if not found:
+            print(f"no story was covered by {min_feeds}+ feeds; try a lower number")
+        return 0
+    if len(argv) == 2 and argv[1] == "sync-tests":
+        print("updated" if sync_tests() else "already up to date")
         return 0
     print(__doc__)
     return 2

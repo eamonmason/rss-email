@@ -5,6 +5,8 @@ import json
 import logging
 import os
 import re
+import shutil
+import subprocess
 import sys
 from unittest.mock import patch
 
@@ -159,3 +161,86 @@ def test_price_table_uses_only_latest_models_apart_from_baseline():
     models = {k for k in table if not k.startswith("_") and k != "baseline_prices"}
     assert models == LATEST_MODELS
     assert set(table["baseline_prices"]) - {"_comment"} == {"claude-haiku-4-5"}
+
+
+def _meta():
+    def article(i, source):
+        return {"title": f"Story {i}", "sourceName": source}
+    articles = [article(0, "A"), article(1, "B"), article(2, "C"), article(3, "A"),
+                article(4, "A"), article(5, "B"), article(6, "A")]
+    return {"articles": articles, "groups": [[0, 1, 2], [3], [4, 5], [6, 3]]}
+
+
+def test_candidate_stories_ranks_by_distinct_feeds():
+    found = make_fixture.candidate_stories(_meta(), min_feeds=2)
+    assert [(c, t) for c, t, _ in found] == [(3, "Story 0"), (2, "Story 4")]
+    assert found[0][2] == ["A", "B", "C"]
+    # one feed repeating itself is not "many feeds ran it"
+    assert make_fixture.candidate_stories(_meta(), min_feeds=3)[0][1] == "Story 0"
+    assert [t for _, t, _ in make_fixture.candidate_stories(_meta(), min_feeds=3)] == ["Story 0"]
+
+
+def _fixture(root, name, curated):
+    folder = root / name
+    folder.mkdir()
+    (folder / "digest_articles.json").write_text(json.dumps(
+        {"AI/ML": [{"title": "t", "url": "u", "summary": "s", "source": "x"}]}))
+    if curated:
+        (folder / "expected_major.json").write_text('{"must_cover": ["t"]}')
+
+
+def _config(path):
+    path.write_text(
+        "tests:\n" + make_fixture.BEGIN_TESTS + "\n  - old\n" + make_fixture.END_TESTS + "\nafter: 1\n")
+
+
+def test_sync_tests_generates_entries_writes_digest_text_and_is_idempotent(tmp_path):
+    fixtures = tmp_path / "fixtures"
+    fixtures.mkdir()
+    _fixture(fixtures, "2026-11-10-haiku-4-5", curated=False)
+    _fixture(fixtures, "2026-11-11-haiku-4-5", curated=True)
+    (fixtures / "not-a-fixture").mkdir()
+    config = tmp_path / "config.yaml"
+    _config(config)
+
+    assert make_fixture.sync_tests(str(config), str(fixtures)) is True
+    text = config.read_text()
+    assert "fixture: fixtures/2026-11-10-haiku-4-5/digest_articles.json" in text
+    assert "expected_major: fixtures/2026-11-11-haiku-4-5/expected_major.json" in text
+    assert "expected_major: fixtures/2026-11-10-haiku-4-5" not in text  # not curated yet
+    assert "not-a-fixture" not in text and "- old" not in text and text.endswith("after: 1\n")
+    assert (fixtures / "2026-11-10-haiku-4-5" / "digest_text.txt").read_text().startswith("## AI/ML")
+    assert make_fixture.sync_tests(str(config), str(fixtures)) is False
+
+
+def test_sync_tests_needs_the_markers(tmp_path):
+    config = tmp_path / "config.yaml"
+    config.write_text("tests: []\n")
+    with pytest.raises(ValueError):
+        make_fixture.sync_tests(str(config), str(tmp_path))
+
+
+def test_committed_config_matches_the_fixtures_directory():
+    """If a fixture is added or curated without running sync-tests, this fails."""
+    with open(make_fixture.CONFIG_PATH, encoding="utf-8") as handle:
+        config = handle.read()
+    expected = (f"{make_fixture.BEGIN_TESTS}\n"
+                f"{make_fixture.render_tests(make_fixture.FIXTURES_DIR)}\n{make_fixture.END_TESTS}")
+    assert expected in config
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+@pytest.mark.parametrize("expected_major, passes", [
+    (None, True),  # not curated: not checked
+    ("fixtures/2026-06-15/expected_major.json", False),  # curated: an empty brief misses them
+])
+def test_major_coverage_assertion_skips_uncurated_fixtures(expected_major, passes):
+    variables = {"fixture": "fixtures/2026-06-15/digest_articles.json"}
+    if expected_major:
+        variables["expected_major"] = expected_major
+    script = ("const a=require('./assertions/major_coverage.cjs');"
+              "console.log(JSON.stringify(a(JSON.stringify({categories:{}}),"
+              f"{{vars:{json.dumps(variables)}}})));")
+    out = subprocess.run(["node", "-e", script], cwd=EVAL_DIR, capture_output=True, text=True,
+                         check=True)
+    assert json.loads(out.stdout)["pass"] is passes

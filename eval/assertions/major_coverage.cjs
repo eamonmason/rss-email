@@ -26,6 +26,14 @@ function assignIds(digest) {
 
 module.exports = (output, context) => {
   const brief = JSON.parse(output);
+
+  // A fixture can be added before its must-cover list is curated; then there is
+  // nothing to check here (the other assertions still run).
+  const expectedPath = context.vars.expected_major;
+  if (!expectedPath || !fs.existsSync(expectedPath)) {
+    return { pass: true, score: 1, reason: 'no curated must-cover list for this fixture (not checked)' };
+  }
+
   const digest = JSON.parse(fs.readFileSync(context.vars.fixture, 'utf-8'));
   const idMap = assignIds(digest);
   const resolve = (ref) => (idMap[ref] ? idMap[ref].title : ref);

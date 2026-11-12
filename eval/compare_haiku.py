@@ -563,6 +563,11 @@ def main(argv: List[str]) -> int:  # pylint: disable=too-many-locals
 
     with open(args.metadata, "r", encoding="utf-8") as handle:
         meta = json.load(handle)
+    if not isinstance(meta, dict) or "articles" not in meta or "groups" not in meta:
+        parser.error(
+            f"{args.metadata} is not a batch-metadata file (expected 'articles' and 'groups'); "
+            "use the files from s3://<bucket>/batch-metadata/ and keep reports elsewhere"
+        )
     articles, stored_groups = meta["articles"], meta["groups"]
     variants = [Variant.parse(v) for v in args.variants]
     if variants[0].model != BASELINE:

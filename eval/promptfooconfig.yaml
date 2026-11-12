@@ -71,18 +71,19 @@ defaultTest:
         architecture leader in financial-data infrastructure). PASS unless some
         `relevance_to_reader` is clearly forced or fabricated for an unrelated story.
 
-# One test per saved digest+brief fixture. Add more dated fixtures over time.
+# One test per fixture directory under fixtures/. Do not edit by hand: add a fixture
+# directory (see README "Add a fixture") and run `python make_fixture.py sync-tests`.
+# A fixture with an expected_major.json also gets the major_coverage check.
 tests:
+# BEGIN GENERATED TESTS (make_fixture.py sync-tests)
   - description: 2026-06-15 digest
     vars:
       fixture: fixtures/2026-06-15/digest_articles.json
       expected_major: fixtures/2026-06-15/expected_major.json
       digest_text: file://fixtures/2026-06-15/digest_text.txt
-  # Same day, but every must-cover story comes from a deprioritised
-  # source (three relabelled by make_fixture.py; the fourth already was). Guards the failure seen at lower effort: a
-  # major story from a low-ranked source dropped under the theme caps.
-  - description: 2026-06-15 digest, major stories from low-ranked sources
+  - description: 2026-06-15-lowrank digest, major stories from low-ranked sources
     vars:
       fixture: fixtures/2026-06-15-lowrank/digest_articles.json
       expected_major: fixtures/2026-06-15-lowrank/expected_major.json
       digest_text: file://fixtures/2026-06-15-lowrank/digest_text.txt
+# END GENERATED TESTS
