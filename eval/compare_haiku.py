@@ -744,13 +744,17 @@ def report_grouping(
         lines.append("   PASS" if not failures[label] else "   FAIL: " + "; ".join(failures[label]))
         cand_pairs = pair_set(run.groups) if run.groups is not None else set()
         verdicts = judged.get(label, {})
+        said = {True: "same event", False: "different events", None: "not judged"}
+        order = {True: 0, None: 1, False: 2}  # confirmed real pairs first: they are what matters
         for owner, pairs in (("only this variant", cand_pairs - base_pairs),
                              (f"only {base.variant.label}", base_pairs - cand_pairs)):
-            for pair in sorted(pairs, key=sorted)[:limit]:
+            tally = {k: sum(1 for p in pairs if verdicts.get(p) is k) for k in (True, False, None)}
+            lines.append(f"   {owner}: {len(pairs)} pair(s): judged same event {tally[True]}, "
+                         f"different events {tally[False]}, not judged {tally[None]}")
+            for pair in sorted(pairs, key=lambda p: (order[verdicts.get(p)], sorted(p)))[:limit]:
                 first, second = sorted(pair)
-                answer = verdicts.get(pair)
-                said = {True: "same event", False: "different events", None: "not judged"}[answer]
-                lines.append(f"     {owner}: [{said}]  {articles[first].get('title', '')[:60]}  +  "
+                lines.append(f"     {owner}: [{said[verdicts.get(pair)]}]  "
+                             f"{articles[first].get('title', '')[:60]}  +  "
                              f"{articles[second].get('title', '')[:60]}")
     return "\n".join(lines), failures
 

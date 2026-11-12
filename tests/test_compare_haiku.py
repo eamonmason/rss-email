@@ -466,3 +466,15 @@ def test_grouping_only_reports_an_unusable_reply_as_a_failure(tmp_path, monkeypa
 def test_grouping_only_cannot_write_fixtures(tmp_path):
     with pytest.raises(SystemExit):
         ch.main([_grouping_metadata(tmp_path), "--grouping-only", "--write-fixtures", str(tmp_path)])
+
+
+def test_grouping_report_counts_each_side_and_lists_confirmed_pairs_first(tmp_path, monkeypatch, capsys):
+    # Haiku 4.5 merges everything (one real pair, many false ones); Haiku 5.5 keeps only the real pair.
+    client = GroupingFake({"claude-haiku-4-5": [[0, 1, 2, 3, 4]], "claude-haiku-5-5": [[0, 1], [2], [3], [4]]})
+    monkeypatch.setattr(ch.anthropic, "Anthropic", lambda: client)
+    ch.main([_grouping_metadata(tmp_path), "--grouping-only"])
+    out = capsys.readouterr().out
+    assert "only claude-haiku-4-5: 9 pair(s): judged same event 1, different events 8, not judged 0" in out
+    assert "only this variant: 0 pair(s)" in out
+    lines = [ln for ln in out.splitlines() if ln.startswith("     only claude-haiku-4-5:")]
+    assert "[same event]" in lines[0] and all("[different events]" in ln for ln in lines[1:])
