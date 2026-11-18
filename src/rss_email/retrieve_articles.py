@@ -103,19 +103,31 @@ def _throttle_host(url: str) -> None:
         _host_last_start[key] = time.monotonic()
 
 
-def _log_failed_attempt(attempt: int, max_retries: int, message: str, *log_args) -> None:
+def _log_failed_attempt(
+    attempt: int, max_retries: int, url: str, summary: str, final_message: str, *final_args
+) -> None:
     """Log a failed fetch attempt, alerting only when it was the last one.
 
     Errors are logged at INFO while retries remain, because a transient failure
     that a later attempt recovers from should not page on-call. WARNING is not
     used: the ErrorWarningCount metric filter counts it as well as ERROR.
+
+    That filter matches the words "error" and "warning" anywhere in a line,
+    whatever its level, and httpx's exception text contains "Client error" /
+    "Server error". The retry line therefore carries only ``summary``, a short
+    description free of those words, and not the exception text. The full
+    exception is logged by the final ERROR if every attempt fails.
     """
     if attempt < max_retries - 1:
         logger.info(
-            "Attempt %d/%d failed, retrying: " + message, attempt + 1, max_retries, *log_args
+            "Attempt %d/%d failed, retrying: URL: %s, %s",
+            attempt + 1,
+            max_retries,
+            url,
+            summary,
         )
     else:
-        logger.error(message, *log_args)
+        logger.error(final_message, *final_args)
 
 
 @pydantic.validate_call(validate_return=True)
@@ -202,12 +214,28 @@ def get_feed_items(url: str, timestamp: datetime) -> bytes:
 
         except httpx.HTTPStatusError as error:
             _log_failed_attempt(
-                attempt, max_retries, "URL: %s, data not retrieved because %s", url, error
+                attempt,
+                max_retries,
+                url,
+                f"HTTP {error.response.status_code}",
+                "URL: %s, data not retrieved because %s",
+                url,
+                error,
             )
         except httpx.TimeoutException:
-            _log_failed_attempt(attempt, max_retries, "socket timed out - URL %s", url)
+            _log_failed_attempt(
+                attempt, max_retries, url, "timed out", "socket timed out - URL %s", url
+            )
         except httpx.HTTPError as error:
-            _log_failed_attempt(attempt, max_retries, "URL: %s, url error %s", url, error)
+            _log_failed_attempt(
+                attempt,
+                max_retries,
+                url,
+                "connection problem",
+                "URL: %s, url error %s",
+                url,
+                error,
+            )
 
         if attempt < max_retries - 1:
             time.sleep(retry_delay)

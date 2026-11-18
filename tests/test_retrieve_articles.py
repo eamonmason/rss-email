@@ -9,6 +9,7 @@ Some code duplication with test_article_data.py is intentional for test isolatio
 
 import logging
 import json
+import re
 import subprocess
 import sys
 import unittest
@@ -156,6 +157,49 @@ class TestRetrieveArticles(unittest.TestCase):
                 self.assertEqual(result, b"<rss/>")
                 self.assertEqual(mock_get.call_count, 2)
                 self.assertFalse(any(r.levelno >= logging.WARNING for r in captured.records))
+
+    @patch("rss_email.retrieve_articles.time.sleep")
+    @patch("rss_email.retrieve_articles.httpx.get")
+    def test_get_feed_items_retry_lines_avoid_alarm_terms(self, mock_get, mock_sleep):
+        """Retry lines must not contain words the ErrorWarningCount filter matches.
+
+        The CloudWatch metric filter counts any line containing these terms,
+        whatever its level, and httpx's exception text says "Client error".
+        """
+        alarm_terms = {"ERROR", "WARNING", "Error", "Warning", "error", "warning"}
+
+        def response(status):
+            resp = MagicMock()
+            resp.status_code = status
+            request = httpx.Request("GET", "https://example.com/feed")
+            real = httpx.Response(status, request=request)
+            resp.raise_for_status.side_effect = real.raise_for_status
+            return resp
+
+        cases = {
+            "client error": [response(404)] * 3,
+            "server error": [response(500)] * 3,
+            "timeout": [httpx.ReadTimeout("timed out")] * 3,
+            "connect error": [httpx.ConnectError("refused")] * 3,
+        }
+        for name, side_effect in cases.items():
+            with self.subTest(failure=name):
+                mock_get.reset_mock()
+                mock_get.side_effect = side_effect
+
+                with self.assertLogs("rss_email.retrieve_articles", level="INFO") as captured:
+                    get_feed_items("https://example.com/feed", datetime.now())
+
+                retries = [r for r in captured.records if r.levelno == logging.INFO]
+                self.assertEqual(len(retries), 2)
+                for record in retries:
+                    message = record.getMessage()
+                    self.assertIn("retrying", message)
+                    tokens = set(re.split(r"[^A-Za-z0-9]+", message))
+                    self.assertFalse(tokens & alarm_terms, message)
+                # The final failure still alerts, with the full exception text.
+                errors = [r for r in captured.records if r.levelno == logging.ERROR]
+                self.assertEqual(len(errors), 1)
 
     @patch("rss_email.retrieve_articles.time.sleep")
     @patch("rss_email.retrieve_articles.httpx.get")
