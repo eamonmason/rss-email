@@ -852,7 +852,7 @@ wheels = [
 
 [[package]]
 name = "prospector"
-version = "1.18.0"
+version = "1.20.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "dodgy" },
@@ -870,9 +870,9 @@ dependencies = [
     { name = "setoptconf-tmp" },
     { name = "toml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/44/5f/1b8094118f48a7193e74d3eb3e08338dac6055e9885b6c573fa9b9934674/prospector-1.18.0.tar.gz", hash = "sha256:e0d3d8f8601dd86064a120aca93d91bfe30a35b2241ebd84279738d3a1f2f87c", size = 71077, upload-time = "2026-02-03T12:55:55.38Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/44/7e/33fbdd7d453ebf834adf2c61f86bcbe5cf1e9dd23247a46b7b66bfde5dbc/prospector-1.20.1.tar.gz", hash = "sha256:7b6af1e6715962483adc0e4887a0a08ae23dd40727eb0f4fad4214dee804e0ff", size = 72188, upload-time = "2026-11-17T13:29:54.537Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a1/2e/19538be9b5885e18f0b386ee2f90bbf3f86b6122cc299659887857dc41f4/prospector-1.18.0-py3-none-any.whl", hash = "sha256:7ec348c69df9c93e524f75ce98700ea8843b43782c71183fece9c6d7c3598fb9", size = 96239, upload-time = "2026-02-03T12:55:54.25Z" },
+    { url = "https://files.pythonhosted.org/packages/e9/f9/42e1547ccd2d658ec655861c91297360264714cb775b7ad3dfb3ab5ae56a/prospector-1.20.1-py3-none-any.whl", hash = "sha256:1dc9c8eeab1f70aa4ff4e7747d31376226303495c2cc27727d5cdfb950c0cca9", size = 98102, upload-time = "2026-11-17T13:29:53.262Z" },
 ]
 
 [[package]]
