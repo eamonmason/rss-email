@@ -18,7 +18,7 @@
   "dependencies": {
     "@aws-sdk/client-sns": "^3.1173.0",
     "aws-cdk": "^2.1149.0",
-    "aws-cdk-lib": "^2.277.0",
+    "aws-cdk-lib": "^2.278.0",
     "constructs": "^10.x",
     "dotenv": "^18.x",
     "fast-xml-parser": "^5.12.1",
