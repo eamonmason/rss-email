@@ -2,7 +2,7 @@
 # weights on disk, so they are downloaded once here and read offline at runtime.
 # Only the Apache-2.0 phonon-31m-en weights are used (the 40M models are CC BY-NC).
 # Build context is the repository root (see lib/rss_lambda_stack.ts).
-FROM public.ecr.aws/lambda/python:3.13
+FROM public.ecr.aws/lambda/python:3.15
 
 COPY --from=ghcr.io/astral-sh/uv:0.8.0 /uv /bin/uv
 
